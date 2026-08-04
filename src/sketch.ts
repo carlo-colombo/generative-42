@@ -1,15 +1,17 @@
 import p5 from "p5";
 import type { Generation } from "./types";
-import {averageColorInArea, type Point} from "./color"
+import { DRAWS } from "./draws";
 
 export function createSketch(gen: Generation) {
   let font: p5.Font;
   let img: p5.Image;
 
+  const drawFn = DRAWS[gen.draw] ?? DRAWS["random-rect"];
+
   const sketch = (p: p5) => {
     p.preload = () => {
       font = p.loadFont("/fonts/SpaceMono-Regular.ttf");
-      img = p.loadImage("/assets/door.jpg");
+      img = p.loadImage(gen.image);
     };
 
     p.setup = () => {
@@ -23,29 +25,7 @@ export function createSketch(gen: Generation) {
     };
 
     p.draw = () => {
-      //p.image(img, 0, 0);
-      p.noStroke()
-
-      for (let i = 0; i < 20000; i++) {
-        const x = p.random(img.width);
-        const y = p.random(img.height);
-        const w = p.random(img.width/20)/2;
-        const h = p.random(img.height/20)/2;
-
-        const corners: [Point, Point, Point, Point] = [
-          {x: x-w, y: y-h},
-          {x: x+w, y: y-h},
-          {x: x-w, y: y+h},
-          {x: x+w, y: y+h},
-        ]
-
-        const avg = averageColorInArea(img, corners, 1000)
-
-        p.fill(avg.r, avg.g, avg.b, p.random()*255)
-        p.stroke(avg.r, avg.g, avg.b)
-        p.rect(x,y, w*2, h*2)
-      }
-
+      drawFn({ p, img, text: gen.text, seed: gen.seed });
 
       p.textAlign(p.LEFT);
       p.fill(255);
@@ -54,19 +34,18 @@ export function createSketch(gen: Generation) {
       p.textSize(24);
       p.text(`seed: ${gen.seed}`, 20, 40);
 
-
       p.textSize(375);
       p.textAlign(p.RIGHT);
       p.stroke(255);
       const lineX = p.width * 0.95;
-      const text = 'ATTENZIONE\nAL\nLEOPARDO';
-      const lines = text.split('\n').length;
+      const text = gen.text.toUpperCase();
+      const lines = text.split("\n").length;
       const blockHeight =
         p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
       const y = p.height / 2 - blockHeight / 2 + p.textAscent();
       p.text(text, lineX, y);
 
-      p.noLoop()
+      p.noLoop();
     };
   };
 

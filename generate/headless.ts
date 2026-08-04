@@ -3,7 +3,7 @@ import { execSync, spawn } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import type { Generation } from "../src/types";
+import { DEFAULT_GENERATION, type Generation } from "../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -16,7 +16,7 @@ function getGenerations(): Generation[] {
   if (args.includes("--all")) {
     const gens: Generation[] = [];
     for (let seed = 1; seed <= 10; seed++) {
-      gens.push({ seed });
+      gens.push({ ...DEFAULT_GENERATION, seed });
     }
     return gens;
   }
@@ -24,7 +24,7 @@ function getGenerations(): Generation[] {
   const seedArg = args.find((a) => a.startsWith("--seed="));
   const seed = seedArg ? parseInt(seedArg.split("=")[1]) : 1;
 
-  return [{ seed }];
+  return [{ ...DEFAULT_GENERATION, seed }];
 }
 
 function startPreviewServer(): Promise<void> {
