@@ -59,11 +59,12 @@ export function createSketch(gen: Generation) {
       p.textAlign(p.RIGHT);
       p.stroke(255);
       const lineX = p.width * 0.95;
-      const lines = 4;
+      const text = 'ATTENZIONE\nAL\nLEOPARDO';
+      const lines = text.split('\n').length;
       const blockHeight =
         p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
       const y = p.height / 2 - blockHeight / 2 + p.textAscent();
-      p.text('BEWARE\nOF\nTHE\nLEOPARD', lineX, y);
+      p.text(text, lineX, y);
 
       p.noLoop()
     };
