@@ -1,6 +1,7 @@
 import p5 from "p5";
 import { createSketch, downloadImage } from "./sketch";
 import { DRAWS } from "./draws";
+import { FONTS, DEFAULT_FONT } from "./fonts";
 import { DEFAULT_GENERATION } from "./types";
 import type { Generation } from "./types";
 import "./style.css";
@@ -12,6 +13,19 @@ function getGenerationFromURL(): Generation {
     image: params.get("image") ?? DEFAULT_GENERATION.image,
     draw: params.get("draw") ?? DEFAULT_GENERATION.draw,
     text: params.get("text") ?? DEFAULT_GENERATION.text,
+    textAlign:
+      (params.get("textAlign") as Generation["textAlign"]) ??
+      DEFAULT_GENERATION.textAlign,
+    textVAlign:
+      (params.get("textVAlign") as Generation["textVAlign"]) ??
+      DEFAULT_GENERATION.textVAlign,
+    textSize: parseInt(
+      params.get("textSize") ?? String(DEFAULT_GENERATION.textSize)
+    ),
+    font: params.get("font") ?? DEFAULT_GENERATION.font,
+    textOpacity: parseInt(
+      params.get("textOpacity") ?? String(DEFAULT_GENERATION.textOpacity)
+    ),
   };
 }
 
@@ -37,6 +51,11 @@ function applyGeneration(gen: Generation) {
   url.searchParams.set("image", gen.image);
   url.searchParams.set("draw", gen.draw);
   url.searchParams.set("text", gen.text);
+  url.searchParams.set("textAlign", gen.textAlign);
+  url.searchParams.set("textVAlign", gen.textVAlign);
+  url.searchParams.set("textSize", String(gen.textSize));
+  url.searchParams.set("font", gen.font);
+  url.searchParams.set("textOpacity", String(gen.textOpacity));
   window.location.href = url.toString();
 }
 
@@ -81,6 +100,80 @@ function createUI(gen: Generation) {
     textInput.value = textInput.value.toUpperCase();
   });
 
+  const alignLabel = document.createElement("label");
+  alignLabel.textContent = "Text alignment";
+  alignLabel.htmlFor = "align-select";
+  const alignSelect = document.createElement("select");
+  alignSelect.id = "align-select";
+  alignSelect.name = "textAlign";
+  for (const a of ["left", "center", "right"] as const) {
+    const opt = document.createElement("option");
+    opt.value = a;
+    opt.textContent = a;
+    alignSelect.appendChild(opt);
+  }
+  alignSelect.value = gen.textAlign;
+
+  const valignLabel = document.createElement("label");
+  valignLabel.textContent = "Vertical alignment";
+  valignLabel.htmlFor = "valign-select";
+  const valignSelect = document.createElement("select");
+  valignSelect.id = "valign-select";
+  valignSelect.name = "textVAlign";
+  for (const a of ["top", "center", "bottom"] as const) {
+    const opt = document.createElement("option");
+    opt.value = a;
+    opt.textContent = a;
+    valignSelect.appendChild(opt);
+  }
+  valignSelect.value = gen.textVAlign;
+
+  const sizeLabel = document.createElement("label");
+  sizeLabel.textContent = "Font size";
+  sizeLabel.htmlFor = "size-input";
+  const sizeInput = document.createElement("input");
+  sizeInput.id = "size-input";
+  sizeInput.type = "number";
+  sizeInput.min = "10";
+  sizeInput.max = "3000";
+  sizeInput.step = "5";
+  sizeInput.value = String(gen.textSize);
+
+  const fontLabel = document.createElement("label");
+  fontLabel.textContent = "Font";
+  fontLabel.htmlFor = "font-select";
+  const fontSelect = document.createElement("select");
+  fontSelect.id = "font-select";
+  fontSelect.name = "font";
+  for (const f of FONTS) {
+    const opt = document.createElement("option");
+    opt.value = f.path;
+    opt.textContent = f.label;
+    fontSelect.appendChild(opt);
+  }
+  fontSelect.value = FONTS.some((f) => f.path === gen.font)
+    ? gen.font
+    : DEFAULT_FONT;
+
+  const opacityLabel = document.createElement("label");
+  opacityLabel.textContent = "Text opacity";
+  opacityLabel.htmlFor = "opacity-input";
+  const opacityRow = document.createElement("div");
+  opacityRow.className = "slider-row";
+  const opacityInput = document.createElement("input");
+  opacityInput.id = "opacity-input";
+  opacityInput.type = "range";
+  opacityInput.min = "0";
+  opacityInput.max = "100";
+  opacityInput.step = "1";
+  opacityInput.value = String(gen.textOpacity);
+  const opacityValue = document.createElement("span");
+  opacityValue.textContent = `${gen.textOpacity}%`;
+  opacityInput.addEventListener("input", () => {
+    opacityValue.textContent = `${opacityInput.value}%`;
+  });
+  opacityRow.append(opacityInput, opacityValue);
+
   const seedRow = document.createElement("div");
   seedRow.className = "seed-row";
   const seedDisplay = document.createElement("span");
@@ -100,6 +193,13 @@ function createUI(gen: Generation) {
     gen.image = imageSelect.value;
     gen.draw = drawSelect.value;
     gen.text = textInput.value.toUpperCase();
+    gen.textAlign = alignSelect.value as Generation["textAlign"];
+    gen.textVAlign = valignSelect.value as Generation["textVAlign"];
+    gen.textSize =
+      parseInt(sizeInput.value, 10) || DEFAULT_GENERATION.textSize;
+    gen.font = fontSelect.value;
+    gen.textOpacity =
+      parseInt(opacityInput.value, 10) || DEFAULT_GENERATION.textOpacity;
     applyGeneration(gen);
   };
 
@@ -117,6 +217,16 @@ function createUI(gen: Generation) {
     drawSelect,
     textLabel,
     textInput,
+    alignLabel,
+    alignSelect,
+    valignLabel,
+    valignSelect,
+    sizeLabel,
+    sizeInput,
+    fontLabel,
+    fontSelect,
+    opacityLabel,
+    opacityRow,
     seedRow,
     generate,
     download

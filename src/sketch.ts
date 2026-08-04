@@ -10,7 +10,7 @@ export function createSketch(gen: Generation) {
 
   const sketch = (p: p5) => {
     p.preload = () => {
-      font = p.loadFont("/fonts/SpaceMono-Regular.ttf");
+      font = p.loadFont(gen.font);
       img = p.loadImage(gen.image);
     };
 
@@ -34,15 +34,32 @@ export function createSketch(gen: Generation) {
       p.textSize(24);
       p.text(`seed: ${gen.seed}`, 20, 40);
 
-      p.textSize(375);
-      p.textAlign(p.RIGHT);
-      p.stroke(255);
-      const lineX = p.width * 0.95;
-      const text = gen.text.toUpperCase();
+      const align = gen.textAlign;
+      const alpha = Math.round((gen.textOpacity / 100) * 255);
+      p.textSize(gen.textSize);
+      p.textAlign(align);
+      p.fill(255, alpha);
+      p.stroke(255, alpha);
+      const lineX =
+        align === "center" ? p.width / 2 : align === "left" ? 20 : p.width * 0.95;
+      const text = gen.text
+        .toUpperCase()
+        .split("\n")
+        .map((l) => l.trim())
+        .join("\n");
       const lines = text.split("\n").length;
       const blockHeight =
         p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
-      const y = p.height / 2 - blockHeight / 2 + p.textAscent();
+      const margin = 20;
+      const y =
+        gen.textVAlign === "top"
+          ? p.textAscent() + margin
+          : gen.textVAlign === "bottom"
+            ? p.height -
+              p.textDescent() -
+              margin -
+              (lines - 1) * p.textLeading()
+            : p.height / 2 - blockHeight / 2 + p.textAscent();
       p.text(text, lineX, y);
 
       p.noLoop();
