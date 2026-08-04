@@ -1,0 +1,28 @@
+{
+  "name": "generative-42",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "generate": "tsx generate/headless.ts",
+    "generate:all": "tsx generate/headless.ts --all"
+  },
+  "dependencies": {
+    "p5": "^1.11.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/p5": "^1.7.7",
+    "puppeteer": "^23.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  },
+  "allowScripts": {
+    "puppeteer@23.11.1": true,
+    "esbuild@0.28.1": true,
+    "esbuild@0.21.5": true
+  }
+}
