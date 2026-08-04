@@ -27,13 +27,6 @@ export function createSketch(gen: Generation) {
     p.draw = () => {
       drawFn({ p, img, text: gen.text, seed: gen.seed });
 
-      p.textAlign(p.LEFT);
-      p.fill(255);
-      p.noStroke();
-      p.textFont(font);
-      p.textSize(24);
-      p.text(`seed: ${gen.seed}`, 20, 40);
-
       const align = gen.textAlign;
       const alpha = Math.round((gen.textOpacity / 100) * 255);
       p.textSize(gen.textSize);
@@ -51,9 +44,10 @@ export function createSketch(gen: Generation) {
       const blockHeight =
         p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
       const margin = 20;
+      const topSafeSpace = 60;
       const y =
         gen.textVAlign === "top"
-          ? p.textAscent() + margin
+          ? topSafeSpace + p.textAscent()
           : gen.textVAlign === "bottom"
             ? p.height -
               p.textDescent() -
@@ -61,6 +55,13 @@ export function createSketch(gen: Generation) {
               (lines - 1) * p.textLeading()
             : p.height / 2 - blockHeight / 2 + p.textAscent();
       p.text(text, lineX, y);
+
+      p.textAlign(p.LEFT);
+      p.fill(255);
+      p.noStroke();
+      p.textFont(font);
+      p.textSize(24);
+      p.text(`seed=${gen.seed}`, 20, 40);
 
       p.noLoop();
     };
