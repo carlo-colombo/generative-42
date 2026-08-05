@@ -210,6 +210,19 @@ function createUI(gen: Generation) {
     downloadImage(canvas, `gen-${gen.seed}.png`);
   };
 
+  panel.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    const target = e.target as HTMLElement;
+    const isField =
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT";
+    if (isField) {
+      e.preventDefault();
+      generate.click();
+    }
+  });
+
   panel.append(
     imageLabel,
     imageSelect,

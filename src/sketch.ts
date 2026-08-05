@@ -60,8 +60,9 @@ export function createSketch(gen: Generation) {
       p.fill(255);
       p.noStroke();
       p.textFont(font);
-      p.textSize(24);
-      p.text(`seed=${gen.seed}`, 20, 40);
+      const unit = Math.min(p.width, p.height) / 926;
+      p.textSize(24 * unit);
+      p.text(`seed=${gen.seed}`, 20 * unit, 40 * unit);
 
       p.noLoop();
     };
