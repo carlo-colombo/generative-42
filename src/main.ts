@@ -327,12 +327,15 @@ function createUI(gen: Generation) {
     applyGeneration(gen);
   };
 
+  imageSelect.addEventListener("change", () => generate.click());
+  drawSelect.addEventListener("change", () => generate.click());
+
   const download = document.createElement("button");
   download.textContent = "Download PNG";
   download.onclick = () => {
     const canvas = document.querySelector("canvas") as HTMLCanvasElement;
     const imageName = gen.image.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "image";
-    downloadImage(canvas, `gen-${gen.seed}-${imageName}.png`);
+    downloadImage(canvas, `gen-${gen.seed}-${gen.draw}-${imageName}.png`);
   };
   actions.append(seedRow, generate, download);
 

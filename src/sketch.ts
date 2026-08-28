@@ -7,7 +7,7 @@ export function createSketch(gen: Generation) {
   let font2: p5.Font;
   let img: p5.Image;
 
-  const drawFn = DRAWS[gen.draw] ?? DRAWS["random-rect"];
+  const drawFn = DRAWS[gen.draw] ?? DRAWS["rect"];
 
   const sketch = (p: p5) => {
     p.preload = () => {

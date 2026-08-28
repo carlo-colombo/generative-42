@@ -10,7 +10,7 @@ export interface DrawContext {
 
 export type DrawFunction = (ctx: DrawContext) => void;
 
-function randomRect({ p, img }: DrawContext) {
+function rect({ p, img }: DrawContext) {
   p.noStroke();
 
   for (let i = 0; i < 20000; i++) {
@@ -34,7 +34,7 @@ function randomRect({ p, img }: DrawContext) {
   }
 }
 
-function randomCircles({p,img}: DrawContext) {
+function circles({p,img}: DrawContext) {
   for (let i = 0; i < 20000; i++) {
     const x = p.random(img.width);
     const y = p.random(img.height);
@@ -56,7 +56,7 @@ function randomCircles({p,img}: DrawContext) {
   }
 }
 
-function randomLines({ p, img }: DrawContext) {
+function lines({ p, img }: DrawContext) {
   p.strokeWeight(img.width/700);
 
   for (let i = 0; i < 90000; i++) {
@@ -78,6 +78,48 @@ function randomLines({ p, img }: DrawContext) {
 
     p.stroke(color.r, color.g, color.b);
     p.line(x1, y1, x2, y2);
+  }
+}
+
+function verticalLines({ p, img }: DrawContext) {
+  const strokeWidth = img.width / 700;
+  p.strokeWeight(strokeWidth);
+
+  for (let i = 0; i < 90000; i++) {
+    const x = p.random(img.width);
+    const y1 = p.random(img.height);
+    const y2 = y1 + p.random(Math.min(img.width, img.height) / 10);
+    const halfWidth = strokeWidth / 2;
+    const color = averageColorInArea(img, [
+      { x: x - halfWidth, y: y1 },
+      { x: x + halfWidth, y: y1 },
+      { x: x - halfWidth, y: y2 },
+      { x: x + halfWidth, y: y2 },
+    ], 1000);
+
+    p.stroke(color.r, color.g, color.b);
+    p.line(x, y1, x, y2);
+  }
+}
+
+function horizontalLines({ p, img }: DrawContext) {
+  const strokeWidth = img.width / 700;
+  p.strokeWeight(strokeWidth);
+
+  for (let i = 0; i < 90000; i++) {
+    const x1 = p.random(img.width);
+    const y = p.random(img.height);
+    const x2 = x1 + p.random(Math.min(img.width, img.height) / 10);
+    const halfWidth = strokeWidth / 2;
+    const color = averageColorInArea(img, [
+      { x: x1, y: y - halfWidth },
+      { x: x2, y: y - halfWidth },
+      { x: x1, y: y + halfWidth },
+      { x: x2, y: y + halfWidth },
+    ], 1000);
+
+    p.stroke(color.r, color.g, color.b);
+    p.line(x1, y, x2, y);
   }
 }
 
@@ -124,8 +166,10 @@ function galaxy({p,img}: DrawContext) {
 }
 
 export const DRAWS: Record<string, DrawFunction> = {
-  "random-rect": randomRect,
-  "random-circles": randomCircles,
-  "random-lines": randomLines,
+  "rect": rect,
+  "circles": circles,
+  "lines": lines,
+  "vertical-lines": verticalLines,
+  "horizontal-lines": horizontalLines,
   "galaxy": galaxy
 };

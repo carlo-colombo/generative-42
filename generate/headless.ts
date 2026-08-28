@@ -93,7 +93,7 @@ async function main() {
   for (const gen of generations) {
     console.log(`Rendering seed ${gen.seed}...`);
     const buffer = await renderGeneration(browser, gen);
-    const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}.png`);
+    const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}-${gen.draw}.png`);
     writeFileSync(outPath, buffer);
     console.log(`  Saved: ${outPath}`);
   }

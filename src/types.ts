@@ -26,7 +26,7 @@ export interface Generation {
 export const DEFAULT_GENERATION: Generation = {
   seed: 1,
   image: "/assets/door.jpg",
-  draw: "random-rect",
+  draw: "rect",
   text: "ATTENZIONE\nAL\nLEOPARDO",
   textAlign: "right",
   textVAlign: "center",
