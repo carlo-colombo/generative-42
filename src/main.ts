@@ -98,9 +98,11 @@ function createTextControls(
   number: 1 | 2
 ) {
   const key = number === 1 ? "text" : "text2";
+  const section = document.createElement("section");
+  section.className = "text-control-group";
   const title = document.createElement("h2");
   title.textContent = `Text ${number}`;
-  panel.appendChild(title);
+  section.appendChild(title);
 
   const textLabel = document.createElement("label");
   textLabel.textContent = "Content";
@@ -219,11 +221,23 @@ function createTextControls(
   opacityLabel.htmlFor = `${key}-opacity`;
   opacityInput.id = `${key}-opacity`;
 
-  panel.append(
-    textLabel, textInput, alignLabel, alignSelect, valignLabel, valignSelect,
-    xLabel, xInput, yLabel, yInput, sizeLabel, sizeInput, fontLabel, fontSelect,
-    opacityLabel, opacityRow
-  );
+  const fields = [
+    [textLabel, textInput],
+    [alignLabel, alignSelect],
+    [valignLabel, valignSelect],
+    [xLabel, xInput],
+    [yLabel, yInput],
+    [sizeLabel, sizeInput],
+    [fontLabel, fontSelect],
+    [opacityLabel, opacityRow],
+  ];
+  for (const [label, control] of fields) {
+    const field = document.createElement("div");
+    field.className = "control-field";
+    field.append(label, control);
+    section.appendChild(field);
+  }
+  panel.appendChild(section);
 
   return { textInput, alignSelect, valignSelect, xInput, yInput, sizeInput, fontSelect, opacityInput };
 }
@@ -236,6 +250,11 @@ function createUI(gen: Generation) {
   header.textContent = "Generative 42";
   panel.appendChild(header);
 
+  const sourceControls = document.createElement("div");
+  sourceControls.className = "source-controls";
+
+  const imageField = document.createElement("div");
+  imageField.className = "control-field";
   const imageLabel = document.createElement("label");
   imageLabel.textContent = "Image";
   imageLabel.htmlFor = "image-select";
@@ -243,6 +262,10 @@ function createUI(gen: Generation) {
   imageSelect.id = "image-select";
   imageSelect.name = "image";
 
+  imageField.append(imageLabel, imageSelect);
+
+  const drawField = document.createElement("div");
+  drawField.className = "control-field";
   const drawLabel = document.createElement("label");
   drawLabel.textContent = "Draw function";
   drawLabel.htmlFor = "draw-select";
@@ -256,9 +279,13 @@ function createUI(gen: Generation) {
     drawSelect.appendChild(opt);
   }
   drawSelect.value = gen.draw;
+  drawField.append(drawLabel, drawSelect);
+  sourceControls.append(imageField, drawField);
 
-  const text1 = createTextControls(panel, gen, 1);
-  const text2 = createTextControls(panel, gen, 2);
+  const textControls = document.createElement("div");
+  textControls.className = "text-controls";
+  const text1 = createTextControls(textControls, gen, 1);
+  const text2 = createTextControls(textControls, gen, 2);
 
   const seedRow = document.createElement("div");
   seedRow.className = "seed-row";
@@ -271,6 +298,9 @@ function createUI(gen: Generation) {
     applyGeneration(gen);
   };
   seedRow.append(seedDisplay, nextSeed);
+
+  const actions = document.createElement("div");
+  actions.className = "actions";
 
   const generate = document.createElement("button");
   generate.textContent = "Generate";
@@ -304,6 +334,7 @@ function createUI(gen: Generation) {
     const imageName = gen.image.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "image";
     downloadImage(canvas, `gen-${gen.seed}-${imageName}.png`);
   };
+  actions.append(seedRow, generate, download);
 
   panel.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || e.shiftKey) return;
@@ -319,13 +350,9 @@ function createUI(gen: Generation) {
   });
 
   panel.append(
-    imageLabel,
-    imageSelect,
-    drawLabel,
-    drawSelect,
-    seedRow,
-    generate,
-    download
+    sourceControls,
+    textControls,
+    actions
   );
   document.body.insertBefore(panel, app);
 

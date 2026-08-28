@@ -31,27 +31,44 @@ canvas {
 }
 
 #panel {
-  width: 260px;
+  width: min(440px, 38vw);
   flex-shrink: 0;
   background: #1a1a1a;
   border-right: 1px solid #333;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   overflow-y: auto;
 }
 
 #panel h1 {
   font-size: 18px;
-  margin-bottom: 10px;
+  margin-bottom: 2px;
+}
+
+.source-controls,
+.text-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 #panel h2 {
   font-size: 13px;
-  margin-top: 14px;
+  margin: 0 0 8px;
   border-top: 1px solid #333;
-  padding-top: 14px;
+  padding-top: 10px;
+}
+
+.text-control-group {
+  min-width: 0;
+}
+
+.control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 #panel label {
@@ -59,7 +76,6 @@ canvas {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #888;
-  margin-top: 10px;
 }
 
 #panel select,
@@ -73,6 +89,10 @@ canvas {
   font-family: inherit;
   font-size: 13px;
   resize: vertical;
+}
+
+#panel textarea {
+  min-height: 76px;
 }
 
 .slider-row {
@@ -113,7 +133,6 @@ canvas {
   background: #eee;
   color: #111;
   border-color: #eee;
-  margin-top: 16px;
 }
 
 #panel button.primary:hover {
@@ -122,17 +141,48 @@ canvas {
 
 .seed-row {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin-top: 16px;
+  align-items: center;
+  gap: 10px;
 }
 
 .seed-row button {
-  width: 100%;
+  width: auto;
 }
 
 .seed-row span {
   font-size: 13px;
   color: #aaa;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.actions .seed-row {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+
+@media (max-width: 700px) {
+  body {
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  #panel {
+    width: 100%;
+    max-height: 55vh;
+    border-right: 0;
+    border-bottom: 1px solid #333;
+  }
+
+  .text-controls {
+    grid-template-columns: 1fr;
+  }
+
+  #app {
+    min-height: 45vh;
+  }
 }
