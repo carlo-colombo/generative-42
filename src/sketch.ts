@@ -4,6 +4,7 @@ import { DRAWS } from "./draws";
 
 export function createSketch(gen: Generation) {
   let font: p5.Font;
+  let font2: p5.Font;
   let img: p5.Image;
 
   const drawFn = DRAWS[gen.draw] ?? DRAWS["random-rect"];
@@ -11,6 +12,7 @@ export function createSketch(gen: Generation) {
   const sketch = (p: p5) => {
     p.preload = () => {
       font = p.loadFont(gen.font);
+      font2 = p.loadFont(gen.text2Font);
       img = p.loadImage(gen.image);
     };
 
@@ -27,34 +29,30 @@ export function createSketch(gen: Generation) {
     p.draw = () => {
       drawFn({ p, img, text: gen.text, seed: gen.seed });
 
-      const align = gen.textAlign;
-      const alpha = Math.round((gen.textOpacity / 100) * 255);
-      p.textSize(gen.textSize);
-      p.textAlign(align);
-      p.fill(255, alpha);
-      p.stroke(255, alpha);
-      const lineX =
-        align === "center" ? p.width / 2 : align === "left" ? 20 : p.width * 0.95;
-      const text = gen.text
-        .toUpperCase()
-        .split("\n")
-        .map((l) => l.trim())
-        .join("\n");
-      const lines = text.split("\n").length;
-      const blockHeight =
-        p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
-      const margin = 20;
-      const topSafeSpace = 60;
-      const y =
-        gen.textVAlign === "top"
-          ? topSafeSpace + p.textAscent()
-          : gen.textVAlign === "bottom"
-            ? p.height -
-              p.textDescent() -
-              margin -
-              (lines - 1) * p.textLeading()
-            : p.height / 2 - blockHeight / 2 + p.textAscent();
-      p.text(text, lineX, y);
+      drawText(
+        p,
+        gen.text,
+        gen.textSize,
+        gen.textOpacity,
+        gen.textX,
+        gen.textY,
+        gen.textAlign,
+        gen.textVAlign,
+        font
+      );
+      if (gen.text2) {
+        drawText(
+          p,
+          gen.text2,
+          gen.text2Size,
+          gen.text2Opacity,
+          gen.text2X,
+          gen.text2Y,
+          gen.text2Align,
+          gen.text2VAlign,
+          font2
+        );
+      }
 
       p.textAlign(p.LEFT);
       p.fill(255);
@@ -67,6 +65,42 @@ export function createSketch(gen: Generation) {
       p.noLoop();
     };
   };
+
+  function drawText(
+    p: p5,
+    value: string,
+    size: number,
+    opacity: number,
+    x: number,
+    y: number,
+    align: Generation["textAlign"],
+    vAlign: Generation["textVAlign"],
+    loadedFont: p5.Font
+  ) {
+    const alpha = Math.round((opacity / 100) * 255);
+    p.textFont(loadedFont);
+    p.textSize(size);
+    p.textAlign(align);
+    p.fill(255, alpha);
+    p.stroke(255, alpha);
+    const text = value
+      .toUpperCase()
+      .split("\n")
+      .map((line) => line.trim())
+      .join("\n");
+    const lines = text.split("\n").length;
+    const blockHeight =
+      p.textAscent() + p.textDescent() + (lines - 1) * p.textLeading();
+    const lineX = (p.width * x) / 100;
+    const positionY = (p.height * y) / 100;
+    const baseline =
+      vAlign === "top"
+        ? positionY + p.textAscent()
+        : vAlign === "bottom"
+          ? positionY - p.textDescent() - (lines - 1) * p.textLeading()
+          : positionY - blockHeight / 2 + p.textAscent();
+    p.text(text, lineX, baseline);
+  }
 
   return sketch;
 }

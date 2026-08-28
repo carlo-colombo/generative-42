@@ -6,6 +6,11 @@ import { DEFAULT_GENERATION } from "./types";
 import type { Generation } from "./types";
 import "./style.css";
 
+function numberOrDefault(value: string, fallback: number) {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
 function getGenerationFromURL(): Generation {
   const params = new URLSearchParams(window.location.search);
   return {
@@ -19,12 +24,30 @@ function getGenerationFromURL(): Generation {
     textVAlign:
       (params.get("textVAlign") as Generation["textVAlign"]) ??
       DEFAULT_GENERATION.textVAlign,
+    textX: parseInt(params.get("textX") ?? String(DEFAULT_GENERATION.textX)),
+    textY: parseInt(params.get("textY") ?? String(DEFAULT_GENERATION.textY)),
     textSize: parseInt(
       params.get("textSize") ?? String(DEFAULT_GENERATION.textSize)
     ),
     font: params.get("font") ?? DEFAULT_GENERATION.font,
     textOpacity: parseInt(
       params.get("textOpacity") ?? String(DEFAULT_GENERATION.textOpacity)
+    ),
+    text2: params.get("text2") ?? DEFAULT_GENERATION.text2,
+    text2Align:
+      (params.get("text2Align") as Generation["textAlign"]) ??
+      DEFAULT_GENERATION.text2Align,
+    text2VAlign:
+      (params.get("text2VAlign") as Generation["textVAlign"]) ??
+      DEFAULT_GENERATION.text2VAlign,
+    text2X: parseInt(params.get("text2X") ?? String(DEFAULT_GENERATION.text2X)),
+    text2Y: parseInt(params.get("text2Y") ?? String(DEFAULT_GENERATION.text2Y)),
+    text2Size: parseInt(
+      params.get("text2Size") ?? String(DEFAULT_GENERATION.text2Size)
+    ),
+    text2Font: params.get("text2Font") ?? DEFAULT_GENERATION.text2Font,
+    text2Opacity: parseInt(
+      params.get("text2Opacity") ?? String(DEFAULT_GENERATION.text2Opacity)
     ),
   };
 }
@@ -53,10 +76,156 @@ function applyGeneration(gen: Generation) {
   url.searchParams.set("text", gen.text);
   url.searchParams.set("textAlign", gen.textAlign);
   url.searchParams.set("textVAlign", gen.textVAlign);
+  url.searchParams.set("textX", String(gen.textX));
+  url.searchParams.set("textY", String(gen.textY));
   url.searchParams.set("textSize", String(gen.textSize));
   url.searchParams.set("font", gen.font);
   url.searchParams.set("textOpacity", String(gen.textOpacity));
+  url.searchParams.set("text2", gen.text2);
+  url.searchParams.set("text2Align", gen.text2Align);
+  url.searchParams.set("text2VAlign", gen.text2VAlign);
+  url.searchParams.set("text2X", String(gen.text2X));
+  url.searchParams.set("text2Y", String(gen.text2Y));
+  url.searchParams.set("text2Size", String(gen.text2Size));
+  url.searchParams.set("text2Font", gen.text2Font);
+  url.searchParams.set("text2Opacity", String(gen.text2Opacity));
   window.location.href = url.toString();
+}
+
+function createTextControls(
+  panel: HTMLElement,
+  gen: Generation,
+  number: 1 | 2
+) {
+  const key = number === 1 ? "text" : "text2";
+  const title = document.createElement("h2");
+  title.textContent = `Text ${number}`;
+  panel.appendChild(title);
+
+  const textLabel = document.createElement("label");
+  textLabel.textContent = "Content";
+  const textInput = document.createElement("textarea");
+  textInput.rows = 4;
+  textInput.value = gen[key];
+  textInput.addEventListener("input", () => {
+    textInput.value = textInput.value.toUpperCase();
+  });
+  textLabel.htmlFor = `${key}-input`;
+  textInput.id = `${key}-input`;
+
+  const alignLabel = document.createElement("label");
+  alignLabel.textContent = "Alignment";
+  const alignSelect = document.createElement("select");
+  for (const value of ["left", "center", "right"] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    alignSelect.appendChild(option);
+  }
+  alignLabel.htmlFor = `${key}-align`;
+  alignSelect.id = `${key}-align`;
+  alignSelect.value = number === 1 ? gen.textAlign : gen.text2Align;
+
+  const valignLabel = document.createElement("label");
+  valignLabel.textContent = "Vertical alignment";
+  const valignSelect = document.createElement("select");
+  for (const value of ["top", "center", "bottom"] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    valignSelect.appendChild(option);
+  }
+  valignLabel.htmlFor = `${key}-valign`;
+  valignSelect.id = `${key}-valign`;
+  valignSelect.value = number === 1 ? gen.textVAlign : gen.text2VAlign;
+
+  const xLabel = document.createElement("label");
+  xLabel.textContent = "Horizontal position (%)";
+  const xInput = document.createElement("input");
+  xInput.type = "number";
+  xInput.min = "0";
+  xInput.max = "100";
+  xInput.value = String(number === 1 ? gen.textX : gen.text2X);
+  xLabel.htmlFor = `${key}-x`;
+  xInput.id = `${key}-x`;
+
+  const yLabel = document.createElement("label");
+  yLabel.textContent = "Vertical position (%)";
+  const yInput = document.createElement("input");
+  yInput.type = "number";
+  yInput.min = "0";
+  yInput.max = "100";
+  yInput.value = String(number === 1 ? gen.textY : gen.text2Y);
+  yLabel.htmlFor = `${key}-y`;
+  yInput.id = `${key}-y`;
+
+  alignSelect.addEventListener("change", () => {
+    xInput.value = alignSelect.value === "left"
+      ? "5"
+      : alignSelect.value === "right"
+        ? "95"
+        : "50";
+  });
+  valignSelect.addEventListener("change", () => {
+    yInput.value = valignSelect.value === "top"
+      ? "5"
+      : valignSelect.value === "bottom"
+        ? "95"
+        : "50";
+  });
+
+  const sizeLabel = document.createElement("label");
+  sizeLabel.textContent = "Font size";
+  const sizeInput = document.createElement("input");
+  sizeInput.type = "number";
+  sizeInput.min = "10";
+  sizeInput.max = "3000";
+  sizeInput.step = "5";
+  sizeInput.value = String(number === 1 ? gen.textSize : gen.text2Size);
+  sizeLabel.htmlFor = `${key}-size`;
+  sizeInput.id = `${key}-size`;
+
+  const fontLabel = document.createElement("label");
+  fontLabel.textContent = "Font";
+  const fontSelect = document.createElement("select");
+  for (const font of FONTS) {
+    const option = document.createElement("option");
+    option.value = font.path;
+    option.textContent = font.label;
+    fontSelect.appendChild(option);
+  }
+  fontLabel.htmlFor = `${key}-font`;
+  fontSelect.id = `${key}-font`;
+  const selectedFont = number === 1 ? gen.font : gen.text2Font;
+  fontSelect.value = FONTS.some((font) => font.path === selectedFont)
+    ? selectedFont
+    : DEFAULT_FONT;
+
+  const opacityLabel = document.createElement("label");
+  opacityLabel.textContent = "Opacity";
+  const opacityRow = document.createElement("div");
+  opacityRow.className = "slider-row";
+  const opacityInput = document.createElement("input");
+  opacityInput.type = "range";
+  opacityInput.min = "0";
+  opacityInput.max = "100";
+  opacityInput.value = String(number === 1 ? gen.textOpacity : gen.text2Opacity);
+  const opacityValue = document.createElement("span");
+  opacityValue.textContent = `${opacityInput.value}%`;
+  opacityInput.addEventListener("input", () => {
+    opacityValue.textContent = `${opacityInput.value}%`;
+  });
+  opacityRow.append(opacityInput, opacityValue);
+  opacityLabel.htmlFor = `${key}-opacity`;
+  opacityInput.id = `${key}-opacity`;
+
+  panel.append(
+    textLabel, textInput, alignLabel, alignSelect, valignLabel, valignSelect,
+    xLabel, xInput, yLabel, yInput, sizeLabel, sizeInput, fontLabel, fontSelect,
+    opacityLabel, opacityRow
+  );
+
+  return { textInput, alignSelect, valignSelect, xInput, yInput, sizeInput, fontSelect, opacityInput };
 }
 
 function createUI(gen: Generation) {
@@ -88,91 +257,8 @@ function createUI(gen: Generation) {
   }
   drawSelect.value = gen.draw;
 
-  const textLabel = document.createElement("label");
-  textLabel.textContent = "Text";
-  textLabel.htmlFor = "text-input";
-  const textInput = document.createElement("textarea");
-  textInput.id = "text-input";
-  textInput.name = "text";
-  textInput.rows = 4;
-  textInput.value = gen.text;
-  textInput.addEventListener("input", () => {
-    textInput.value = textInput.value.toUpperCase();
-  });
-
-  const alignLabel = document.createElement("label");
-  alignLabel.textContent = "Text alignment";
-  alignLabel.htmlFor = "align-select";
-  const alignSelect = document.createElement("select");
-  alignSelect.id = "align-select";
-  alignSelect.name = "textAlign";
-  for (const a of ["left", "center", "right"] as const) {
-    const opt = document.createElement("option");
-    opt.value = a;
-    opt.textContent = a;
-    alignSelect.appendChild(opt);
-  }
-  alignSelect.value = gen.textAlign;
-
-  const valignLabel = document.createElement("label");
-  valignLabel.textContent = "Vertical alignment";
-  valignLabel.htmlFor = "valign-select";
-  const valignSelect = document.createElement("select");
-  valignSelect.id = "valign-select";
-  valignSelect.name = "textVAlign";
-  for (const a of ["top", "center", "bottom"] as const) {
-    const opt = document.createElement("option");
-    opt.value = a;
-    opt.textContent = a;
-    valignSelect.appendChild(opt);
-  }
-  valignSelect.value = gen.textVAlign;
-
-  const sizeLabel = document.createElement("label");
-  sizeLabel.textContent = "Font size";
-  sizeLabel.htmlFor = "size-input";
-  const sizeInput = document.createElement("input");
-  sizeInput.id = "size-input";
-  sizeInput.type = "number";
-  sizeInput.min = "10";
-  sizeInput.max = "3000";
-  sizeInput.step = "5";
-  sizeInput.value = String(gen.textSize);
-
-  const fontLabel = document.createElement("label");
-  fontLabel.textContent = "Font";
-  fontLabel.htmlFor = "font-select";
-  const fontSelect = document.createElement("select");
-  fontSelect.id = "font-select";
-  fontSelect.name = "font";
-  for (const f of FONTS) {
-    const opt = document.createElement("option");
-    opt.value = f.path;
-    opt.textContent = f.label;
-    fontSelect.appendChild(opt);
-  }
-  fontSelect.value = FONTS.some((f) => f.path === gen.font)
-    ? gen.font
-    : DEFAULT_FONT;
-
-  const opacityLabel = document.createElement("label");
-  opacityLabel.textContent = "Text opacity";
-  opacityLabel.htmlFor = "opacity-input";
-  const opacityRow = document.createElement("div");
-  opacityRow.className = "slider-row";
-  const opacityInput = document.createElement("input");
-  opacityInput.id = "opacity-input";
-  opacityInput.type = "range";
-  opacityInput.min = "0";
-  opacityInput.max = "100";
-  opacityInput.step = "1";
-  opacityInput.value = String(gen.textOpacity);
-  const opacityValue = document.createElement("span");
-  opacityValue.textContent = `${gen.textOpacity}%`;
-  opacityInput.addEventListener("input", () => {
-    opacityValue.textContent = `${opacityInput.value}%`;
-  });
-  opacityRow.append(opacityInput, opacityValue);
+  const text1 = createTextControls(panel, gen, 1);
+  const text2 = createTextControls(panel, gen, 2);
 
   const seedRow = document.createElement("div");
   seedRow.className = "seed-row";
@@ -192,14 +278,22 @@ function createUI(gen: Generation) {
   generate.onclick = () => {
     gen.image = imageSelect.value;
     gen.draw = drawSelect.value;
-    gen.text = textInput.value.toUpperCase();
-    gen.textAlign = alignSelect.value as Generation["textAlign"];
-    gen.textVAlign = valignSelect.value as Generation["textVAlign"];
-    gen.textSize =
-      parseInt(sizeInput.value, 10) || DEFAULT_GENERATION.textSize;
-    gen.font = fontSelect.value;
-    gen.textOpacity =
-      parseInt(opacityInput.value, 10) || DEFAULT_GENERATION.textOpacity;
+    gen.text = text1.textInput.value.toUpperCase();
+    gen.textAlign = text1.alignSelect.value as Generation["textAlign"];
+    gen.textVAlign = text1.valignSelect.value as Generation["textVAlign"];
+    gen.textX = numberOrDefault(text1.xInput.value, DEFAULT_GENERATION.textX);
+    gen.textY = numberOrDefault(text1.yInput.value, DEFAULT_GENERATION.textY);
+    gen.textSize = numberOrDefault(text1.sizeInput.value, DEFAULT_GENERATION.textSize);
+    gen.font = text1.fontSelect.value;
+    gen.textOpacity = numberOrDefault(text1.opacityInput.value, DEFAULT_GENERATION.textOpacity);
+    gen.text2 = text2.textInput.value.toUpperCase();
+    gen.text2Align = text2.alignSelect.value as Generation["textAlign"];
+    gen.text2VAlign = text2.valignSelect.value as Generation["textVAlign"];
+    gen.text2X = numberOrDefault(text2.xInput.value, DEFAULT_GENERATION.text2X);
+    gen.text2Y = numberOrDefault(text2.yInput.value, DEFAULT_GENERATION.text2Y);
+    gen.text2Size = numberOrDefault(text2.sizeInput.value, DEFAULT_GENERATION.text2Size);
+    gen.text2Font = text2.fontSelect.value;
+    gen.text2Opacity = numberOrDefault(text2.opacityInput.value, DEFAULT_GENERATION.text2Opacity);
     applyGeneration(gen);
   };
 
@@ -207,7 +301,8 @@ function createUI(gen: Generation) {
   download.textContent = "Download PNG";
   download.onclick = () => {
     const canvas = document.querySelector("canvas") as HTMLCanvasElement;
-    downloadImage(canvas, `gen-${gen.seed}.png`);
+    const imageName = gen.image.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "image";
+    downloadImage(canvas, `gen-${gen.seed}-${imageName}.png`);
   };
 
   panel.addEventListener("keydown", (e) => {
@@ -228,18 +323,6 @@ function createUI(gen: Generation) {
     imageSelect,
     drawLabel,
     drawSelect,
-    textLabel,
-    textInput,
-    alignLabel,
-    alignSelect,
-    valignLabel,
-    valignSelect,
-    sizeLabel,
-    sizeInput,
-    fontLabel,
-    fontSelect,
-    opacityLabel,
-    opacityRow,
     seedRow,
     generate,
     download
