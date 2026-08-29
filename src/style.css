@@ -52,6 +52,15 @@ body {
   padding: 20px;
 }
 
+.panel-root {
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
 canvas {
   display: block;
   max-width: 100%;
@@ -62,6 +71,8 @@ canvas {
 
 #panel {
   width: min(440px, 38vw);
+  height: 100%;
+  min-height: 0;
   flex-shrink: 0;
   background: #1a1a1a;
   border-right: 1px solid #333;
@@ -78,10 +89,53 @@ canvas {
 }
 
 .source-controls,
-.text-controls {
+.text-controls,
+.crop-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.crop-controls {
+  grid-template-columns: 1fr 1fr;
+}
+
+.crop-controls h2,
+.crop-controls .crop-preview,
+.crop-controls .checkbox-field {
+  grid-column: 1 / -1;
+}
+
+.crop-preview {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  line-height: 0;
+  cursor: move;
+  touch-action: none;
+}
+
+.crop-preview img {
+  width: 100%;
+  height: auto;
+  opacity: .8;
+}
+
+.crop-rect {
+  position: absolute;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 45%);
+  pointer-events: none;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #aaa;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
 }
 
 #panel h2 {
@@ -232,7 +286,9 @@ canvas {
 
   #panel {
     width: 100%;
-    max-height: 55vh;
+    min-height: 0;
+    height: 100%;
+    max-height: none;
     border-right: 0;
     border-bottom: 1px solid #333;
   }
@@ -243,5 +299,11 @@ canvas {
 
   #app {
     min-height: 45vh;
+  }
+
+  .panel-root {
+    width: 100%;
+    height: 55vh;
+    max-height: 55vh;
   }
 }

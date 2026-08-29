@@ -1,5 +1,6 @@
 export type TextAlign = "left" | "center" | "right";
 export type TextVAlign = "top" | "center" | "bottom";
+export type CropFormat = "original" | "square" | "portrait" | "landscape" | "wide";
 
 export interface Generation {
   seed: number;
@@ -22,6 +23,11 @@ export interface Generation {
   text2Size: number;
   text2Font: string;
   text2Opacity: number;
+  cropFormat: CropFormat;
+  cropX: number;
+  cropY: number;
+  cropSize: number;
+  cropPreview: boolean;
 }
 
 export const DEFAULT_GENERATION: Generation = {
@@ -45,4 +51,9 @@ export const DEFAULT_GENERATION: Generation = {
   text2Size: 100,
   text2Font: "/fonts/SpaceMono-Regular.ttf",
   text2Opacity: 100,
+  cropFormat: "original",
+  cropX: 50,
+  cropY: 50,
+  cropSize: 100,
+  cropPreview: true,
 };

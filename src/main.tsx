@@ -11,6 +11,7 @@ const app = document.getElementById('app')!
 const instance = new p5(createSketch(generation), app)
 
 const panel = document.createElement('div')
+panel.className = 'panel-root'
 document.body.insertBefore(panel, app)
 render(<App model={model} />, panel)
 

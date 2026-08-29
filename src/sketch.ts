@@ -1,6 +1,7 @@
 import p5 from "p5";
 import type { Generation } from "./types";
 import { DRAWS } from "./draws";
+import { cropImage } from './crop';
 
 export function createSketch(gen: Generation) {
   let font: p5.Font;
@@ -19,6 +20,7 @@ export function createSketch(gen: Generation) {
 
     p.setup = () => {
       p.pixelDensity(1);
+      img = cropImage(img, gen);
       p.createCanvas(img.width, img.height);
       p.rectMode(p.CENTER);
       p.noLoop();

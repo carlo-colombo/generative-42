@@ -3,6 +3,7 @@ import type { GenerationModel } from './generation-state'
 import { Actions } from './components/Actions'
 import { SourceControls } from './components/SourceControls'
 import { TextControls } from './components/TextControls'
+import { CropControls } from './components/CropControls'
 
 export function App({ model }: { model: GenerationModel }) {
   const [images, setImages] = useState<string[]>([])
@@ -36,8 +37,8 @@ export function App({ model }: { model: GenerationModel }) {
     {manifestState === 'loading' && <p>Loading images...</p>}
     {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
     <SourceControls model={model} images={images} />
+    <CropControls model={model} />
     <div className="text-controls"><TextControls model={model} layer={1} /><TextControls model={model} layer={2} /></div>
     <Actions model={model} />
   </aside>
 }
-

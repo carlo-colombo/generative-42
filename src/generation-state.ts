@@ -26,7 +26,12 @@ const numericFields = new Set<keyof Generation>([
   'text2Y',
   'text2Size',
   'text2Opacity',
+  'cropX',
+  'cropY',
+  'cropSize',
 ])
+
+const booleanFields = new Set<keyof Generation>(['cropPreview'])
 
 const layerFields: Record<1 | 2, Record<TextLayerField, keyof Generation>> = {
   1: {
@@ -48,6 +53,7 @@ function readParam(params: URLSearchParams, key: keyof Generation) {
   const value = params.get(key)
   if (value === null) return DEFAULT_GENERATION[key]
   if (numericFields.has(key)) return numberOrDefault(value, DEFAULT_GENERATION[key] as number)
+  if (booleanFields.has(key)) return value === 'true'
   return value
 }
 
@@ -63,7 +69,8 @@ export function getGeneration(): Generation {
   const stored = localStorage.getItem('generation')
   if (stored) {
     try {
-      return { ...DEFAULT_GENERATION, ...JSON.parse(stored) }
+      const saved = JSON.parse(stored)
+      return { ...DEFAULT_GENERATION, ...saved, cropPreview: saved.cropPreview !== false && saved.cropPreview !== 'false' }
     } catch {
       return DEFAULT_GENERATION
     }
