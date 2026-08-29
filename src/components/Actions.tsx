@@ -11,7 +11,7 @@ export function Actions({ model }: { model: GenerationModel }) {
   }
   return <div className="actions">
     <div className="seed-row"><span>Seed: {generation.seed}</span><button type="button" onClick={model.nextSeed}>Next seed</button></div>
-    <button type="button" className="primary" onClick={model.applyGeneration}>Generate</button>
+    <button type="button" className="primary" onClick={() => model.applyGeneration()}>Generate</button>
     <button type="button" onClick={download}>Download PNG</button>
   </div>
 }

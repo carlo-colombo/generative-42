@@ -7,7 +7,8 @@ export function createSketch(gen: Generation) {
   let font2: p5.Font;
   let img: p5.Image;
 
-  const drawFn = DRAWS[gen.draw] ?? DRAWS["rect"];
+  const drawDefinition = DRAWS[gen.draw] ?? DRAWS["rect"];
+  const drawFn = drawDefinition.draw;
 
   const sketch = (p: p5) => {
     p.preload = () => {
@@ -27,7 +28,7 @@ export function createSketch(gen: Generation) {
     };
 
     p.draw = () => {
-      drawFn({ p, img, text: gen.text, seed: gen.seed });
+      drawFn({ p, img, text: gen.text, seed: gen.seed, generation: gen });
 
       drawText(
         p,

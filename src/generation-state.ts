@@ -17,6 +17,7 @@ export type TextLayerField = keyof TextLayer
 
 const numericFields = new Set<keyof Generation>([
   'seed',
+  'grayLevels',
   'textX',
   'textY',
   'textSize',
@@ -128,8 +129,9 @@ export function createGenerationModel(initial: Generation) {
     applyGeneration({ ...draft.value, seed: draft.value.seed + 1 })
   }
 
-  function commit() {
-    committed.value = { ...draft.value }
+  function commit(nextGeneration?: Generation) {
+    const generation: Generation = nextGeneration ?? (draft.value as Generation)
+    committed.value = { ...generation }
     applyGeneration(committed.value)
   }
 

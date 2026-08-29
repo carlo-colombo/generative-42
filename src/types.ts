@@ -5,6 +5,7 @@ export interface Generation {
   seed: number;
   image: string;
   draw: string;
+  grayLevels: number;
   text: string;
   textAlign: TextAlign;
   textVAlign: TextVAlign;
@@ -26,7 +27,8 @@ export interface Generation {
 export const DEFAULT_GENERATION: Generation = {
   seed: 1,
   image: "/assets/door.jpg",
-  draw: "rect",
+  draw: "grey-squares",
+  grayLevels: 8,
   text: "ATTENZIONE\nAL\nLEOPARDO",
   textAlign: "right",
   textVAlign: "center",
