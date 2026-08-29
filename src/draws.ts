@@ -18,7 +18,12 @@ export type DrawControl = {
   min: number;
   max: number;
   step: number;
-  field: 'grayLevels';
+  field: 'grayLevels' | 'colorSortAmount';
+} | {
+  type: 'select';
+  label: string;
+  field: 'colorSortDirection';
+  options: { value: string; label: string }[];
 };
 
 export type DrawDefinition = {
@@ -166,6 +171,43 @@ function horizontalLines({ p, img }: DrawContext) {
   }
 }
 
+function colorSorting({ p, img, generation }: DrawContext) {
+  img.loadPixels()
+  const sorted = p.createImage(img.width, img.height)
+  sorted.loadPixels()
+  const amount = Math.max(0, Math.min(100, generation.colorSortAmount))
+  const horizontal = generation.colorSortDirection === 'horizontal'
+  const lineLength = horizontal ? img.width : img.height
+
+  for (let line = 0; line < (horizontal ? img.height : img.width); line++) {
+    const lineAmount = Math.max(0, Math.min(100, amount * p.random(0.85, 1.15)))
+    const sortedLength = Math.round(lineLength * lineAmount / 100)
+    const positions = Array.from({ length: sortedLength }, (_, position) => position)
+    if (sortedLength > 1) {
+      positions.sort((a, b) => {
+        const aIndex = (horizontal ? line * img.width + a : a * img.width + line) * 4
+        const bIndex = (horizontal ? line * img.width + b : b * img.width + line) * 4
+        const aLuminance = 0.299 * img.pixels[aIndex] + 0.587 * img.pixels[aIndex + 1] + 0.114 * img.pixels[aIndex + 2]
+        const bLuminance = 0.299 * img.pixels[bIndex] + 0.587 * img.pixels[bIndex + 1] + 0.114 * img.pixels[bIndex + 2]
+        return aLuminance - bLuminance
+      })
+    }
+
+    for (let position = 0; position < lineLength; position++) {
+      const sourcePosition = position < sortedLength ? positions[position] : position
+      const sourceIndex = (horizontal ? line * img.width + sourcePosition : sourcePosition * img.width + line) * 4
+      const targetIndex = (horizontal ? line * img.width + position : position * img.width + line) * 4
+      sorted.pixels[targetIndex] = img.pixels[sourceIndex]
+      sorted.pixels[targetIndex + 1] = img.pixels[sourceIndex + 1]
+      sorted.pixels[targetIndex + 2] = img.pixels[sourceIndex + 2]
+      sorted.pixels[targetIndex + 3] = img.pixels[sourceIndex + 3]
+    }
+  }
+
+  sorted.updatePixels()
+  p.image(sorted, 0, 0)
+}
+
 function drawStar(p: p5, x: number, y: number, outer: number, inner: number, points: number) {
   p.beginShape();
   for (let i = 0; i < points * 2; i++) {
@@ -218,5 +260,15 @@ export const DRAWS: Record<string, DrawDefinition> = {
   "lines": { draw: lines },
   "vertical-lines": { draw: verticalLines },
   "horizontal-lines": { draw: horizontalLines },
+  "color-sorting": {
+    draw: colorSorting,
+    controls: [
+      { type: 'range', label: 'Color sorting amount', min: 0, max: 100, step: 1, field: 'colorSortAmount' },
+      { type: 'select', label: 'Color sorting direction', field: 'colorSortDirection', options: [
+        { value: 'horizontal', label: 'Horizontal' },
+        { value: 'vertical', label: 'Vertical' },
+      ] },
+    ],
+  },
   "galaxy": { draw: galaxy }
 };

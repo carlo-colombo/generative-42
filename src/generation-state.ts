@@ -29,6 +29,7 @@ const numericFields = new Set<keyof Generation>([
   'cropX',
   'cropY',
   'cropSize',
+  'colorSortAmount',
 ])
 
 const booleanFields = new Set<keyof Generation>(['cropPreview'])

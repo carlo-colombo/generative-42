@@ -15,7 +15,11 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
         {Object.keys(DRAWS).map((name) => <option value={name}>{name}</option>)}
       </select>
     </ControlField>
-    {DRAWS[generation.draw]?.controls?.map((control) => <ControlField label={`${control.label}: ${generation[control.field]}`}>
+    {DRAWS[generation.draw]?.controls?.map((control) => control.type === 'select' ? <ControlField label={control.label}>
+      <select value={generation[control.field]} onChange={(event) => model.setField(control.field, event.currentTarget.value as typeof generation[typeof control.field])}>
+        {control.options.map((option) => <option value={option.value}>{option.label}</option>)}
+      </select>
+    </ControlField> : <ControlField label={`${control.label}: ${generation[control.field]}`}>
       <input
         type="range"
         min={control.min}

@@ -1,6 +1,7 @@
 export type TextAlign = "left" | "center" | "right";
 export type TextVAlign = "top" | "center" | "bottom";
 export type CropFormat = "original" | "square" | "portrait" | "landscape" | "wide";
+export type ColorSortDirection = "horizontal" | "vertical";
 
 export interface Generation {
   seed: number;
@@ -28,6 +29,8 @@ export interface Generation {
   cropY: number;
   cropSize: number;
   cropPreview: boolean;
+  colorSortAmount: number;
+  colorSortDirection: ColorSortDirection;
 }
 
 export const DEFAULT_GENERATION: Generation = {
@@ -56,4 +59,6 @@ export const DEFAULT_GENERATION: Generation = {
   cropY: 50,
   cropSize: 100,
   cropPreview: true,
+  colorSortAmount: 100,
+  colorSortDirection: "horizontal",
 };
