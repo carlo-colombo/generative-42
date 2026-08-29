@@ -4,6 +4,36 @@
   box-sizing: border-box;
 }
 
+@font-face {
+  font-family: "Space Mono";
+  src: url("/fonts/SpaceMono-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("/fonts/BebasNeue-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Bungee";
+  src: url("/fonts/Bungee-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Monoton";
+  src: url("/fonts/Monoton-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Jost";
+  src: url("/fonts/Jost-Variable.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "Monaspace Krypton";
+  src: url("/fonts/MonaspaceKrypton-Regular.ttf") format("truetype");
+}
+
 body {
   display: flex;
   height: 100vh;
@@ -89,6 +119,35 @@ canvas {
   font-family: inherit;
   font-size: 13px;
   resize: vertical;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/SpaceMono-Regular.ttf"]:checked) {
+  font-family: "Space Mono", sans-serif;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/BebasNeue-Regular.ttf"]:checked) {
+  font-family: "Bebas Neue", sans-serif;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/Bungee-Regular.ttf"]:checked) {
+  font-family: "Bungee", sans-serif;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/Monoton-Regular.ttf"]:checked) {
+  font-family: "Monoton", sans-serif;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/Jost-Variable.ttf"]:checked) {
+  font-family: "Jost", sans-serif;
+}
+
+#panel select[id$="-font"]:has(option[value="/fonts/MonaspaceKrypton-Regular.ttf"]:checked) {
+  font-family: "Monaspace Krypton", sans-serif;
+}
+
+#panel select[id$="-font"] {
+  height: 34px;
+  line-height: 18px;
 }
 
 #panel textarea {
