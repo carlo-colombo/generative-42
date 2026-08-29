@@ -78,11 +78,11 @@ export function createSketch(gen: Generation) {
     loadedFont: p5.Font
   ) {
     const alpha = Math.round((opacity / 100) * 255);
+    p.noStroke();
     p.textFont(loadedFont);
     p.textSize(size);
     p.textAlign(align);
     p.fill(255, alpha);
-    p.stroke(255, alpha);
     const text = value
       .toUpperCase()
       .split("\n")
