@@ -9,6 +9,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
     "noEmit": true,
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]

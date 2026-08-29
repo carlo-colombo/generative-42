@@ -10,7 +10,9 @@
     "generate:all": "tsx generate/headless.ts --all"
   },
   "dependencies": {
-    "p5": "^1.11.0"
+    "@preact/signals": "^2.11.1",
+    "p5": "^1.11.0",
+    "preact": "^10.29.8"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
