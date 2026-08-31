@@ -105,9 +105,11 @@ function getTextLayer(generation: Generation, layer: 1 | 2): TextLayer {
 export function createGenerationModel(initial: Generation) {
   const committed = signal(initial)
   const draft = signal({ ...initial })
+  const draftListeners = new Set<(generation: Generation) => void>()
 
   function setField<K extends keyof Generation>(field: K, value: Generation[K]) {
     draft.value = { ...draft.value, [field]: value }
+    for (const listener of draftListeners) listener(draft.value)
   }
 
   function setTextLayerField(layer: 1 | 2, field: TextLayerField, value: string) {
@@ -149,6 +151,10 @@ export function createGenerationModel(initial: Generation) {
     getTextLayer: (layer: 1 | 2) => getTextLayer(draft.value, layer),
     setField,
     setTextLayerField,
+    subscribeDraft: (listener: (generation: Generation) => void) => {
+      draftListeners.add(listener)
+      return () => draftListeners.delete(listener)
+    },
     nextSeed,
     applyGeneration: commit,
   }

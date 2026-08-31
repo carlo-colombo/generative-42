@@ -46,6 +46,7 @@ body {
 #app {
   flex: 1;
   min-width: 0;
+  position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -67,6 +68,19 @@ canvas {
   max-height: calc(100vh - 40px);
   width: auto !important;
   height: auto !important;
+}
+
+#app canvas {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+
+#app canvas.text-layer {
+  display: block !important;
+  pointer-events: none;
+  z-index: 1;
 }
 
 #panel {
