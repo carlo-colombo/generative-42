@@ -29,7 +29,7 @@ function getGenerations(): Generation[] {
 
 function startPreviewServer(): Promise<void> {
   return new Promise((res) => {
-    const server = spawn("npm", ["run", "preview"], {
+    const server = spawn("pnpm", ["run", "preview"], {
       cwd: ROOT,
       stdio: "ignore",
       shell: true,
@@ -79,7 +79,7 @@ async function main() {
   const generations = getGenerations();
 
   console.log("Building project...");
-  execSync("npm run build", { cwd: ROOT, stdio: "inherit" });
+  execSync("pnpm run build", { cwd: ROOT, stdio: "inherit" });
 
   if (!existsSync(OUTPUT_DIR)) {
     mkdirSync(OUTPUT_DIR, { recursive: true });

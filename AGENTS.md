@@ -11,14 +11,14 @@ seeds to PNG for offline use.
 
 ## Commands
 
-- `npm run dev` — start Vite dev server
-- `npm run build` — typecheck (`tsc`) then build (`vite build`)
-- `npm run preview` — serve the built `dist/`
-- `npm run generate` — headless render seed 1 to `output/gen-1.png`
-- `npm run generate:all` — headless render seeds 1–10
-- Typecheck only: `npx tsc --noEmit`
+- `pnpm dev` — start Vite dev server
+- `pnpm build` — typecheck (`tsc`) then build (`vite build`)
+- `pnpm preview` — serve the built `dist/`
+- `pnpm generate` — headless render seed 1 to `output/gen-1.png`
+- `pnpm generate:all` — headless render seeds 1–10
+- Typecheck only: `pnpm exec tsc --noEmit`
 
-After any code change, run `npx tsc --noEmit` (or `npm run build`) to verify.
+After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ After any code change, run `npx tsc --noEmit` (or `npm run build`) to verify.
 - `src/color.ts` — color helpers (e.g. `averageColorInArea`).
 - `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
   files live in `public/fonts/`.
-- `generate/headless.ts` — Puppeteer script. Builds, starts `npm run preview`
+- `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview`
   on port 4173, opens the app with `?seed=N`, captures the canvas, and writes
   PNGs to `output/`.
 
@@ -67,4 +67,4 @@ After any code change, run `npx tsc --noEmit` (or `npm run build`) to verify.
 ## Workflow notes
 
 - Commits are explicit — only commit when asked.
-- `dist/` is a build output; regenerate via `npm run build`.
+- `dist/` is a build output; regenerate via `pnpm build`.
