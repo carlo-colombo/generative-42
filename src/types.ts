@@ -2,6 +2,7 @@ export type TextAlign = "left" | "center" | "right";
 export type TextVAlign = "top" | "center" | "bottom";
 export type CropFormat = "original" | "square" | "portrait" | "landscape" | "wide";
 export type ColorSortDirection = "horizontal" | "vertical";
+export type SectionDirection = "vertical" | "horizontal";
 
 export interface Generation {
   seed: number;
@@ -31,6 +32,11 @@ export interface Generation {
   cropPreview: boolean;
   colorSortAmount: number;
   colorSortDirection: ColorSortDirection;
+  sectionCount: number;
+  sectionOffset: number;
+  sectionDirection: SectionDirection;
+  sectionInvertRatio: number;
+  sectionPosterizeRatio: number;
 }
 
 export const DEFAULT_GENERATION: Generation = {
@@ -61,4 +67,9 @@ export const DEFAULT_GENERATION: Generation = {
   cropPreview: true,
   colorSortAmount: 100,
   colorSortDirection: "horizontal",
+  sectionCount: 3,
+  sectionOffset: 33,
+  sectionDirection: "vertical",
+  sectionInvertRatio: 5,
+  sectionPosterizeRatio: 20,
 };

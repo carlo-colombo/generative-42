@@ -18,11 +18,11 @@ export type DrawControl = {
   min: number;
   max: number;
   step: number;
-  field: 'grayLevels' | 'colorSortAmount';
+  field: 'grayLevels' | 'colorSortAmount' | 'sectionCount' | 'sectionOffset' | 'sectionInvertRatio' | 'sectionPosterizeRatio';
 } | {
   type: 'select';
   label: string;
-  field: 'colorSortDirection';
+  field: 'colorSortDirection' | 'sectionDirection';
   options: { value: string; label: string }[];
 };
 
@@ -250,6 +250,61 @@ function galaxy({p,img}: DrawContext) {
   }
 }
 
+function arrayRotate<T>(arr: T[], reverse: boolean, count: number): T[] {
+  const times = Math.floor(count);
+  for (let i = 0; i < times; i++) {
+    if (reverse) arr.unshift(arr.pop() as T);
+    else arr.push(arr.shift() as T);
+  }
+  return arr;
+}
+
+function offsetSections({ p, img, generation }: DrawContext) {
+  const sectionCount = Math.max(1, Math.round(generation.sectionCount));
+  const slices = 105;
+  const maxShift = slices * Math.max(0, Math.min(100, generation.sectionOffset)) / 100;
+  const invertRatio = Math.max(0, Math.min(100, generation.sectionInvertRatio)) / 100;
+  const posterizeRatio = Math.max(0, Math.min(100, generation.sectionPosterizeRatio)) / 100;
+  const vertical = generation.sectionDirection !== 'horizontal';
+  const margin = 0.05;
+  const xDivisions = vertical ? sectionCount : slices;
+  const yDivisions = vertical ? slices : sectionCount;
+  const blockWidth = img.width / xDivisions;
+  const blockHeight = img.height / yDivisions;
+  const stripCount = vertical ? xDivisions : yDivisions;
+  const sliceCount = vertical ? yDivisions : xDivisions;
+
+  p.background(255);
+  p.imageMode(p.CENTER);
+
+  const strips: p5.Image[][] = [];
+  for (let s = 0; s < stripCount; s++) {
+    const strip: p5.Image[] = [];
+    for (let k = 0; k < sliceCount; k++) {
+      const x = vertical ? s * blockWidth : k * blockWidth;
+      const y = vertical ? k * blockHeight : s * blockHeight;
+      strip.push(img.get(x, y, blockWidth, blockHeight));
+    }
+    strips.push(strip);
+  }
+
+  for (let s = 0; s < stripCount; s++) {
+    const strip = arrayRotate(strips[s], p.random() < 0.4, p.random(maxShift));
+    for (let k = 0; k < sliceCount; k++) {
+      const block = strip[k];
+      if (p.random() < invertRatio) block.filter(p.INVERT);
+      if (p.random() < posterizeRatio) block.filter(p.POSTERIZE, 2);
+      const x = vertical ? s * blockWidth : k * blockWidth;
+      const y = vertical ? k * blockHeight : s * blockHeight;
+      p.push();
+      p.translate(x + blockWidth / 2, y + blockHeight / 2);
+      block.resize(blockWidth * (1 - margin), blockHeight * (1 - margin));
+      p.image(block, 0, 0);
+      p.pop();
+    }
+  }
+}
+
 export const DRAWS: Record<string, DrawDefinition> = {
   "rect": { draw: rect },
   "circles": { draw: circles },
@@ -270,5 +325,18 @@ export const DRAWS: Record<string, DrawDefinition> = {
       ] },
     ],
   },
-  "galaxy": { draw: galaxy }
+  "galaxy": { draw: galaxy },
+  "sections": {
+    draw: offsetSections,
+    controls: [
+      { type: 'range', label: 'Sections', min: 1, max: 20, step: 1, field: 'sectionCount' },
+      { type: 'range', label: 'Offset', min: 0, max: 100, step: 1, field: 'sectionOffset' },
+      { type: 'select', label: 'Direction', field: 'sectionDirection', options: [
+        { value: 'vertical', label: 'Vertical' },
+        { value: 'horizontal', label: 'Horizontal' },
+      ] },
+      { type: 'range', label: 'Invert', min: 0, max: 100, step: 1, field: 'sectionInvertRatio' },
+      { type: 'range', label: 'Posterize', min: 0, max: 100, step: 1, field: 'sectionPosterizeRatio' },
+    ],
+  },
 };
