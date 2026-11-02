@@ -1,5 +1,6 @@
 import { downloadImage } from '../sketch'
 import type { GenerationModel } from '../generation-state'
+import { ControlField } from './ControlField'
 
 export function Actions({ model }: { model: GenerationModel }) {
   const generation = model.draft.value
@@ -10,9 +11,14 @@ export function Actions({ model }: { model: GenerationModel }) {
     const imageName = generation.image.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'image'
     downloadImage(baseCanvas, textCanvas, `gen-${generation.seed}-${generation.draw}-${imageName}.png`)
   }
-  return <div className="actions">
-    <div className="seed-row"><span>Seed: {generation.seed}</span><button type="button" onClick={model.nextSeed}>Next seed</button></div>
+  return <footer className="panel-footer">
+    <ControlField label="Seed">
+      <div className="seed-row">
+        <input type="number" min="1" step="1" value={generation.seed} onInput={(event) => model.setField('seed', Math.max(1, parseInt(event.currentTarget.value, 10) || 1))} />
+        <button type="button" onClick={model.nextSeed}>Next</button>
+      </div>
+    </ControlField>
     <button type="button" className="primary" onClick={() => model.applyGeneration()}>Generate</button>
     <button type="button" onClick={download}>Download PNG</button>
-  </div>
+  </footer>
 }

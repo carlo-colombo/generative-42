@@ -5,7 +5,7 @@ import { SourceControls } from './components/SourceControls'
 import { TextControls } from './components/TextControls'
 import { CropControls } from './components/CropControls'
 
-export function App({ model }: { model: GenerationModel }) {
+function useImages(model: GenerationModel) {
   const [images, setImages] = useState<string[]>([])
   const [manifestState, setManifestState] = useState<'loading' | 'ready' | 'error'>('loading')
   useEffect(() => {
@@ -27,18 +27,40 @@ export function App({ model }: { model: GenerationModel }) {
         setManifestState('error')
       })
   }, [model])
-  return <aside id="panel" onKeyDown={(event) => {
+  return { images, manifestState }
+}
+
+function generateOnEnter(model: GenerationModel) {
+  return (event: KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey && ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement).tagName)) {
       event.preventDefault()
       model.applyGeneration()
     }
-  }}>
-    <h1>Generative 42</h1>
-    {manifestState === 'loading' && <p>Loading images...</p>}
-    {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
-    <SourceControls model={model} images={images} />
-    <CropControls model={model} />
-    <div className="text-controls"><TextControls model={model} layer={1} /><TextControls model={model} layer={2} /></div>
+  }
+}
+
+export function LeftPanel({ model }: { model: GenerationModel }) {
+  const { images, manifestState } = useImages(model)
+  return <aside className="panel panel-left" onKeyDown={generateOnEnter(model)}>
+    <header className="panel-header">
+      <h1>Generative 42</h1>
+      {manifestState === 'loading' && <p>Loading images...</p>}
+      {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
+    </header>
+    <div className="panel-scroll">
+      <SourceControls model={model} images={images} />
+      <CropControls model={model} />
+    </div>
     <Actions model={model} />
+  </aside>
+}
+
+export function RightPanel({ model }: { model: GenerationModel }) {
+  return <aside className="panel panel-right" onKeyDown={generateOnEnter(model)}>
+    <header className="panel-header"><h1>Text</h1></header>
+    <div className="panel-scroll">
+      <TextControls model={model} layer={1} />
+      <TextControls model={model} layer={2} />
+    </div>
   </aside>
 }

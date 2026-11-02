@@ -22,12 +22,22 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
 
 ## Architecture
 
-- `src/main.ts` — entry point. Reads generation from URL params (or
-  localStorage, or `DEFAULT_GENERATION`), builds the control panel DOM, and
-  instantiates p5.
+- `src/main.tsx` — entry point. Reads the generation (URL params, localStorage,
+  or `DEFAULT_GENERATION`), mounts p5 into the center `.stage`, and renders the
+  left and right panels. A `ResizeObserver` sizes the stage to the available
+  space while preserving the canvas aspect ratio.
+- `src/app.tsx` — `LeftPanel` (image, effects, selection, seed/generate actions)
+  and `RightPanel` (text layers 1 and 2), plus the image manifest fetch.
+- `src/generation-state.ts` — Preact signals model (`committed` / `draft`),
+  URL and localStorage serialization. `applyGeneration` navigates to a new URL,
+  so the sketch re-runs from scratch.
+- `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
+  `TextControls`, `Actions`, `ControlField`).
+- `src/style.css` — three-column layout: left controls, centered stage, right
+  text controls; stacks vertically below 940px.
 - `src/types.ts` — `Generation` interface and `DEFAULT_GENERATION`. Adding a
   new generation option means updating `Generation`, `DEFAULT_GENERATION`,
-  the URL param read/write in `main.ts`, and the UI controls.
+  the URL param read/write in `generation-state.ts`, and the UI controls.
 - `src/sketch.ts` — the p5 sketch. `createSketch(gen)` preloads the font and
   image, creates a canvas at the image's pixel size, seeds `randomSeed`/
   `noiseSeed` with `gen.seed`, runs the draw function, then draws the text
@@ -47,8 +57,8 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
 
 - TypeScript, single quotes, no semicolon-statement comments; keep code
   uncommented unless asked.
-- UI controls are created imperatively with `document.createElement` in
-  `main.ts` — no template/framework.
+- UI is Preact + `@preact/signals`; controls read `model.draft.value` so edits
+  preview live, and `model.applyGeneration()` commits them via a reload.
 - The canvas is sized exactly to the source image (`createCanvas(img.width,
   img.height)`); do not assume a fixed canvas size.
 - Generation is fully deterministic given the seed (seeded randoms, `noLoop`).
