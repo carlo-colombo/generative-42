@@ -3,6 +3,7 @@ export type TextVAlign = "top" | "center" | "bottom";
 export type CropFormat = "original" | "square" | "portrait" | "landscape" | "wide";
 export type ColorSortDirection = "horizontal" | "vertical";
 export type SectionDirection = "vertical" | "horizontal";
+export type DetailNoiseMode = "bw" | "color";
 
 export interface Generation {
   seed: number;
@@ -37,6 +38,7 @@ export interface Generation {
   sectionDirection: SectionDirection;
   sectionInvertRatio: number;
   sectionPosterizeRatio: number;
+  detailNoiseMode: DetailNoiseMode;
 }
 
 export const DEFAULT_GENERATION: Generation = {
@@ -72,4 +74,5 @@ export const DEFAULT_GENERATION: Generation = {
   sectionDirection: "vertical",
   sectionInvertRatio: 5,
   sectionPosterizeRatio: 20,
+  detailNoiseMode: "bw",
 };

@@ -22,7 +22,7 @@ export type DrawControl = {
 } | {
   type: 'select';
   label: string;
-  field: 'colorSortDirection' | 'sectionDirection';
+  field: 'colorSortDirection' | 'sectionDirection' | 'detailNoiseMode';
   options: { value: string; label: string }[];
 };
 
@@ -305,6 +305,91 @@ function offsetSections({ p, img, generation }: DrawContext) {
   }
 }
 
+function poissonSample(p: p5, lambda: number): number {
+  const L = Math.exp(-lambda);
+  let k = 0;
+  let prod = 1;
+  do {
+    k++;
+    prod *= p.random();
+  } while (prod > L);
+  return k - 1;
+}
+
+function regionSum(integral: Float64Array, iw: number, x0: number, y0: number, x1: number, y1: number): number {
+  return integral[y1 * iw + x1] - integral[y0 * iw + x1] - integral[y1 * iw + x0] + integral[y0 * iw + x0];
+}
+
+function detailNoise({ p, img, generation }: DrawContext) {
+  img.loadPixels();
+  const w = img.width;
+  const h = img.height;
+  const lum = new Float32Array(w * h);
+  for (let i = 0, pi = 0; i < lum.length; i++, pi += 4) {
+    lum[i] = 0.299 * img.pixels[pi] + 0.587 * img.pixels[pi + 1] + 0.114 * img.pixels[pi + 2];
+  }
+
+  const iw = w + 1;
+  const integral = new Float64Array(iw * (h + 1));
+  const integralSq = new Float64Array(iw * (h + 1));
+  for (let y = 0; y < h; y++) {
+    let row = 0;
+    let rowSq = 0;
+    for (let x = 0; x < w; x++) {
+      const v = lum[y * w + x];
+      row += v;
+      rowSq += v * v;
+      const idx = (y + 1) * iw + (x + 1);
+      integral[idx] = integral[y * iw + (x + 1)] + row;
+      integralSq[idx] = integralSq[y * iw + (x + 1)] + rowSq;
+    }
+  }
+
+  const radius = Math.max(1, Math.round(Math.min(w, h) / 80));
+  const details = new Float32Array(w * h);
+  let maxDetail = 1e-6;
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - radius);
+    const y1 = Math.min(h, y + radius + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(w, x + radius + 1);
+      const n = (x1 - x0) * (y1 - y0);
+      const sum = regionSum(integral, iw, x0, y0, x1, y1);
+      const sumSq = regionSum(integralSq, iw, x0, y0, x1, y1);
+      const mean = sum / n;
+      const detail = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
+      details[y * w + x] = detail;
+      if (detail > maxDetail) maxDetail = detail;
+    }
+  }
+
+  const lambda = 8;
+  const out = p.createImage(w, h);
+  out.loadPixels();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const detail = details[y * w + x] / maxDetail;
+      const noise = poissonSample(p, lambda) / lambda;
+      const value = noise * detail;
+      const v = Math.max(0, Math.min(255, Math.round(value * 255)));
+      const i = (y * w + x) * 4;
+      if (generation.detailNoiseMode === 'color') {
+        out.pixels[i] = Math.round(img.pixels[i] * value);
+        out.pixels[i + 1] = Math.round(img.pixels[i + 1] * value);
+        out.pixels[i + 2] = Math.round(img.pixels[i + 2] * value);
+      } else {
+        out.pixels[i] = v;
+        out.pixels[i + 1] = v;
+        out.pixels[i + 2] = v;
+      }
+      out.pixels[i + 3] = 255;
+    }
+  }
+  out.updatePixels();
+  p.image(out, 0, 0);
+}
+
 export const DRAWS: Record<string, DrawDefinition> = {
   "rect": { draw: rect },
   "circles": { draw: circles },
@@ -338,5 +423,12 @@ export const DRAWS: Record<string, DrawDefinition> = {
       { type: 'range', label: 'Invert', min: 0, max: 100, step: 1, field: 'sectionInvertRatio' },
       { type: 'range', label: 'Posterize', min: 0, max: 100, step: 1, field: 'sectionPosterizeRatio' },
     ],
+  },
+  "detail-noise": {
+    draw: detailNoise,
+    controls: [{ type: 'select', label: 'Color mode', field: 'detailNoiseMode', options: [
+      { value: 'bw', label: 'Black and white' },
+      { value: 'color', label: 'Original color' },
+    ] }],
   },
 };
