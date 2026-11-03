@@ -7,6 +7,7 @@ import type { AreaShape, EdgeMode, Generation, Pt, SortArea, TextAlign, TextLaye
 export type TextLayerField = keyof TextLayer
 
 export const MAX_TEXT_LAYERS = 8
+export const MAX_AREAS = 12
 
 const INLINE_TEXTS_LIMIT = 1500
 const TEXTS_STORAGE_PREFIX = 'texts:'
@@ -38,8 +39,7 @@ const knownFonts = new Set(FONTS.map((font) => font.path))
 const alignments = new Set<TextAlign>(['left', 'center', 'right'])
 const verticalAlignments = new Set<TextVAlign>(['top', 'center', 'bottom'])
 
-const AREAS_PARAM_LIMIT = 1500
-const DEFAULT_THRESHOLD: [number, number] = [0, 255]
+const AREAS_PARAM_LIMIT = 6000
 
 function numberOrDefault(value: string, fallback: number) {
   const parsed = parseInt(value, 10)
@@ -166,8 +166,12 @@ function persistTexts(layers: TextLayer[]): string {
   const encoded = encodeTexts(layers)
   if (encoded.length <= INLINE_TEXTS_LIMIT) return encoded
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-  localStorage.setItem(TEXTS_STORAGE_PREFIX + id, JSON.stringify(layers))
-  return id
+  try {
+    localStorage.setItem(TEXTS_STORAGE_PREFIX + id, JSON.stringify(layers))
+    return id
+  } catch {
+    return encoded
+  }
 }
 
 export function getGenerationFromURL(): Generation {
@@ -196,7 +200,7 @@ export function getGeneration(): Generation {
         ...saved,
         texts: savedTexts ?? readLegacyTexts(legacyTextParams(saved)) ?? DEFAULT_GENERATION.texts,
         cropPreview: saved.cropPreview !== false && saved.cropPreview !== 'false',
-        areas: Array.isArray(saved.areas) ? parseAreas(saved.areas) ?? [] : [],
+        areas: Array.isArray(saved.areas) ? parseAreas(saved.areas) : [],
         areasMode: saved.areasMode === 'union' ? 'union' : 'layers',
       }
     } catch {
@@ -207,14 +211,20 @@ export function getGeneration(): Generation {
 }
 
 export function applyGeneration(gen: Generation) {
-  localStorage.setItem('generation', JSON.stringify(gen))
+  try {
+    localStorage.setItem('generation', JSON.stringify(gen))
+  } catch {
+    // A full quota must not block the render; the URL still carries the state.
+  }
   const url = new URL(window.location.href)
-  const encoded = encodeAreas(gen.areas)
-  const areasParam = encoded.length > AREAS_PARAM_LIMIT ? storeAreas(encoded, gen.areas) : encoded
+  const areasJson = compactAreas(gen.areas)
+  const encoded = base64UrlEncode(areasJson)
+  // A quota failure falls back to the inline value, however long.
+  const storedId = encoded.length > AREAS_PARAM_LIMIT ? storeAreas(encoded, areasJson) : null
   for (const key of generationKeys) {
     url.searchParams.set(key, String(gen[key]))
   }
-  url.searchParams.set('areas', areasParam)
+  url.searchParams.set('areas', storedId ?? encoded)
   url.searchParams.set('texts', persistTexts(gen.texts))
   for (const keys of legacyTextKeys) {
     for (const key of Object.values(keys)) url.searchParams.delete(key)
@@ -273,11 +283,6 @@ function compactArea(area: SortArea): SortArea {
     reverse: area.sort.reverse,
     amount: quantize(area.sort.amount),
   }
-  if (typeof area.sort.angle === 'number' && area.sort.angle !== 0) sort.angle = quantize(area.sort.angle)
-  const threshold = area.sort.threshold
-  if (threshold && (threshold[0] !== DEFAULT_THRESHOLD[0] || threshold[1] !== DEFAULT_THRESHOLD[1])) {
-    sort.threshold = [threshold[0], threshold[1]]
-  }
 
   return {
     id: area.id,
@@ -289,6 +294,10 @@ function compactArea(area: SortArea): SortArea {
     sort,
     opacity: quantize(area.opacity),
   }
+}
+
+function compactAreas(value: SortArea[]): string {
+  return JSON.stringify(value.map(compactArea))
 }
 
 function base64UrlEncode(value: string): string {
@@ -308,25 +317,21 @@ function base64UrlDecode(value: string): Uint8Array {
   return bytes
 }
 
-export function encodeAreas(value: SortArea[]): string {
-  return base64UrlEncode(JSON.stringify(value.map(compactArea)))
-}
-
-export function decodeAreas(value: string): SortArea[] | null {
+// Returns null only when the payload itself is unusable; malformed entries are skipped.
+function decodeAreas(value: string): SortArea[] | null {
+  let payload: unknown
   try {
-    return parseAreas(JSON.parse(new TextDecoder().decode(base64UrlDecode(value))))
+    payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(value)))
   } catch {
     return null
   }
+  if (!Array.isArray(payload)) return null
+  return parseAreas(payload)
 }
 
 function numeric(record: Record<string, unknown>, key: string): number | null {
   const value = record[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function numberOr(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
 function parseShape(value: unknown): AreaShape | null {
@@ -383,12 +388,6 @@ function parseArea(value: unknown): SortArea | null {
   const edgeRecord = typeof record.edge === 'object' && record.edge !== null ? (record.edge as Record<string, unknown>) : {}
   const sortRecord = typeof record.sort === 'object' && record.sort !== null ? (record.sort as Record<string, unknown>) : {}
   const mode: EdgeMode = edgeRecord.mode === 'ragged' ? 'ragged' : 'blend'
-  const thresholdRecord = sortRecord.threshold
-  const threshold: [number, number] =
-    Array.isArray(thresholdRecord) && thresholdRecord.length === 2
-      ? [numberOr(thresholdRecord[0], DEFAULT_THRESHOLD[0]), numberOr(thresholdRecord[1], DEFAULT_THRESHOLD[1])]
-      : [DEFAULT_THRESHOLD[0], DEFAULT_THRESHOLD[1]]
-  const angle = numeric(sortRecord, 'angle')
 
   return {
     id: record.id,
@@ -405,27 +404,27 @@ function parseArea(value: unknown): SortArea | null {
       direction: sortRecord.direction === 'vertical' ? 'vertical' : 'horizontal',
       reverse: sortRecord.reverse === true,
       amount: numeric(sortRecord, 'amount') ?? 100,
-      angle: angle === null ? undefined : angle,
-      threshold,
     },
     opacity: numeric(record, 'opacity') ?? 100,
   }
 }
 
-function parseAreas(value: unknown): SortArea[] | null {
-  if (!Array.isArray(value)) return null
+function parseAreas(value: unknown[]): SortArea[] {
   const areas: SortArea[] = []
   for (const item of value) {
     const area = parseArea(item)
-    if (!area) return null
-    areas.push(area)
+    if (area) areas.push(area)
   }
-  return areas
+  return areas.slice(0, MAX_AREAS)
 }
 
-function storeAreas(encoded: string, areas: SortArea[]): string {
+function storeAreas(encoded: string, payload: string): string | null {
   const id = `${hashString(encoded).toString(36)}${encoded.length.toString(36)}`
-  localStorage.setItem(`areas:${id}`, JSON.stringify(areas))
+  try {
+    localStorage.setItem(`areas:${id}`, payload)
+  } catch {
+    return null
+  }
   return id
 }
 
@@ -434,10 +433,16 @@ function resolveAreas(value: string | null): SortArea[] {
   const decoded = decodeAreas(value)
   if (decoded) return decoded
 
-  const stored = localStorage.getItem(`areas:${value}`)
+  let stored: string | null = null
+  try {
+    stored = localStorage.getItem(`areas:${value}`)
+  } catch {
+    return []
+  }
   if (stored) {
     try {
-      return parseAreas(JSON.parse(stored)) ?? []
+      const payload: unknown = JSON.parse(stored)
+      return Array.isArray(payload) ? parseAreas(payload) : []
     } catch {
       return []
     }
@@ -450,6 +455,8 @@ export function createGenerationModel(initial: Generation) {
   const committed = signal(initial)
   const draft = signal({ ...initial })
   const draftListeners = new Set<(generation: Generation) => void>()
+  const previewListeners = new Set<() => void>()
+  const livePreview = signal(true)
 
   function setField<K extends keyof Generation>(field: K, value: Generation[K]) {
     draft.value = { ...draft.value, [field]: value }
@@ -514,6 +521,14 @@ export function createGenerationModel(initial: Generation) {
   return {
     committed,
     draft,
+    livePreview,
+    requestPreview: () => {
+      for (const listener of previewListeners) listener()
+    },
+    onPreview: (listener: () => void) => {
+      previewListeners.add(listener)
+      return () => previewListeners.delete(listener)
+    },
     getTextLayer,
     setField,
     setTextLayerField,

@@ -20,37 +20,6 @@ export function mulberry32(seed: number): () => number {
   }
 }
 
-export function convexHull(points: Pt[]): Pt[] {
-  if (points.length < 3) return points.map((point) => ({ x: point.x, y: point.y }))
-
-  const sorted = points
-    .map((point) => ({ x: point.x, y: point.y }))
-    .sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x))
-
-  const turn = (o: Pt, a: Pt, b: Pt) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
-
-  const lower: Pt[] = []
-  for (const point of sorted) {
-    while (lower.length >= 2 && turn(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
-      lower.pop()
-    }
-    lower.push(point)
-  }
-
-  const upper: Pt[] = []
-  for (let i = sorted.length - 1; i >= 0; i--) {
-    const point = sorted[i]
-    while (upper.length >= 2 && turn(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
-      upper.pop()
-    }
-    upper.push(point)
-  }
-
-  lower.pop()
-  upper.pop()
-  return lower.concat(upper)
-}
-
 function rectRing(shape: Extract<AreaShape, { kind: 'rect' }>, width: number, height: number): Pt[] {
   const cx = (shape.x + shape.w / 2) * width
   const cy = (shape.y + shape.h / 2) * height
@@ -74,7 +43,8 @@ function ellipseRing(shape: Extract<AreaShape, { kind: 'ellipse' }>, width: numb
   const angle = (shape.rotation * Math.PI) / 180
   const cos = Math.cos(angle)
   const sin = Math.sin(angle)
-  const segments = Math.max(16, Math.min(96, Math.round(Math.max(rx, ry) / 6)))
+  const perimeter = Math.PI * (3 * (rx + ry) - Math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
+  const segments = Math.max(96, Math.min(512, Math.ceil(perimeter / 2)))
   const ring: Pt[] = []
   for (let i = 0; i < segments; i++) {
     const t = (i / segments) * Math.PI * 2
@@ -152,6 +122,24 @@ function boundarySteps(from: number, to: number, forward: boolean, width: number
   return steps.map((step) => step.point)
 }
 
+function closeRing(extended: Pt[], entry: Crossing, exit: Crossing, side: 'a' | 'b', width: number, height: number): Pt[] {
+  const ring: Pt[] = [entry.point]
+  for (let i = entry.segment + 1; i <= exit.segment; i++) ring.push(extended[i])
+  ring.push(exit.point)
+  ring.push(...boundarySteps(exit.perimeter, entry.perimeter, side === 'b', width, height))
+  return ring
+}
+
+function ringArea(ring: Pt[]): number {
+  let area = 0
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]
+    const b = ring[(i + 1) % ring.length]
+    area += a.x * b.y - b.x * a.y
+  }
+  return area / 2
+}
+
 function openPathRing(points: Pt[], side: 'a' | 'b', width: number, height: number): Pt[] {
   const cleaned: Pt[] = []
   for (const point of points) {
@@ -182,14 +170,24 @@ function openPathRing(points: Pt[], side: 'a' | 'b', width: number, height: numb
   crossings.sort((a, b) => (a.segment === b.segment ? a.t - b.t : a.segment - b.segment))
   if (crossings.length < 2) return []
 
-  const entry = crossings[0]
-  const exit = crossings[crossings.length - 1]
-  const ring: Pt[] = [entry.point]
-  for (let i = entry.segment + 1; i <= exit.segment; i++) ring.push(extended[i])
-  ring.push(exit.point)
-  ring.push(...boundarySteps(exit.perimeter, entry.perimeter, side === 'b', width, height))
+  if (crossings.length === 2) return closeRing(extended, crossings[0], crossings[1], side, width, height)
 
-  return ring
+  // A stroke that leaves and re-enters crosses the border more than twice; closing
+  // over the first and last crossing loops the ring across the extra excursions.
+  // Keep the pair whose ring encloses the widest region instead (see AGENTS.md).
+  let best: Pt[] = []
+  let bestArea = -1
+  for (let i = 0; i < crossings.length - 1; i++) {
+    for (let j = i + 1; j < crossings.length; j++) {
+      const ring = closeRing(extended, crossings[i], crossings[j], side, width, height)
+      const area = Math.abs(ringArea(ring))
+      if (area > bestArea) {
+        bestArea = area
+        best = ring
+      }
+    }
+  }
+  return best
 }
 
 function pathRing(shape: Extract<AreaShape, { kind: 'path' }>, width: number, height: number): Pt[] {
@@ -237,8 +235,88 @@ function raggedNoise(x: number, y: number, cell: number, seed: number): number {
   return (coarse * 0.7 + fine * 0.3) * 2 - 1
 }
 
+// Mask scratch buffer reused per canvas size; consume a mask before the next call.
+// Only the region the previous mask wrote is cleared, so reuse costs the area, not the canvas.
+type MaskRange = { startX: number; endX: number; startY: number; endY: number }
+let maskScratch: (MaskRange & { width: number; height: number; weights: Float32Array }) | null = null
+
+function maskBuffer(width: number, height: number): Float32Array {
+  if (!maskScratch || maskScratch.width !== width || maskScratch.height !== height) {
+    maskScratch = { width, height, weights: new Float32Array(width * height), startX: 0, endX: 0, startY: 0, endY: 0 }
+    return maskScratch.weights
+  }
+  const { weights, startX, endX, startY, endY } = maskScratch
+  for (let y = startY; y < endY; y++) weights.fill(0, y * width + startX, y * width + endX)
+  maskScratch.startX = 0
+  maskScratch.endX = 0
+  maskScratch.startY = 0
+  maskScratch.endY = 0
+  return weights
+}
+
+function markMaskRange(startX: number, endX: number, startY: number, endY: number) {
+  if (!maskScratch) return
+  maskScratch.startX = startX
+  maskScratch.endX = endX
+  maskScratch.startY = startY
+  maskScratch.endY = endY
+}
+
+function edgeValue(distance: number, feather: number, jitter: number, px: number, py: number, cell: number, noiseSeed: number): number {
+  let d = distance
+  if (jitter > 0) d += jitter * raggedNoise(px, py, cell, noiseSeed)
+  if (d <= 0) return 0
+  if (feather <= 0 || d >= feather) return 1
+  const t = d / feather
+  return t * t * (3 - 2 * t)
+}
+
+// Rect and ellipse coverage is closed form, so they skip the per-pixel edge loop
+// that paths need. Positive distance means inside.
+function analyticDistance(shape: AreaShape, width: number, height: number): ((px: number, py: number) => number) | null {
+  if (shape.kind === 'path') return null
+
+  const angle = (shape.rotation * Math.PI) / 180
+  const cos = Math.cos(-angle)
+  const sin = Math.sin(-angle)
+
+  if (shape.kind === 'rect') {
+    const cx = (shape.x + shape.w / 2) * width
+    const cy = (shape.y + shape.h / 2) * height
+    const halfWidth = Math.max(0, (shape.w * width) / 2)
+    const halfHeight = Math.max(0, (shape.h * height) / 2)
+    return (px, py) => {
+      const dx = px - cx
+      const dy = py - cy
+      const localX = Math.abs(dx * cos - dy * sin)
+      const localY = Math.abs(dx * sin + dy * cos)
+      const overX = localX - halfWidth
+      const overY = localY - halfHeight
+      if (overX <= 0 && overY <= 0) return Math.min(-overX, -overY)
+      return -Math.hypot(Math.max(overX, 0), Math.max(overY, 0))
+    }
+  }
+
+  const cx = shape.cx * width
+  const cy = shape.cy * height
+  const rx = Math.max(1e-6, shape.rx * width)
+  const ry = Math.max(1e-6, shape.ry * height)
+  return (px, py) => {
+    const dx = px - cx
+    const dy = py - cy
+    const localX = dx * cos - dy * sin
+    const localY = dx * sin + dy * cos
+    const u = localX / rx
+    const v = localY / ry
+    const radius = Math.sqrt(u * u + v * v)
+    if (radius < 1e-9) return Math.min(rx, ry)
+    const length = Math.sqrt(localX * localX + localY * localY)
+    return (length * (1 - radius)) / radius
+  }
+}
+
 export function areaWeight(area: SortArea, width: number, height: number, seed: number): Float32Array {
-  const weights = new Float32Array(width * height)
+  const weights = maskBuffer(width, height)
   const ring = shapePolygon(area.shape, width, height)
   if (ring.length < 3) return weights
 
@@ -247,6 +325,7 @@ export function areaWeight(area: SortArea, width: number, height: number, seed: 
   const jitter = area.edge.mode === 'ragged' ? (Math.max(0, area.edge.jitter) / 100) * minSide : 0
   const cell = Math.max(2, Math.round(minSide / 128))
   const noiseSeed = (seed ^ hashString(area.id)) >>> 0
+  const needsDistance = feather > 0 || jitter > 0
 
   const edgeCount = ring.length
   const ax = new Float64Array(edgeCount)
@@ -276,12 +355,23 @@ export function areaWeight(area: SortArea, width: number, height: number, seed: 
   const endX = Math.min(width, Math.ceil(maxX + margin))
   const startY = Math.max(0, Math.floor(minY - margin))
   const endY = Math.min(height, Math.ceil(maxY + margin))
+  markMaskRange(startX, endX, startY, endY)
+  const analytic = analyticDistance(area.shape, width, height)
 
   for (let y = startY; y < endY; y++) {
     const py = y + 0.5
     const rowStart = y * width
     for (let x = startX; x < endX; x++) {
       const px = x + 0.5
+
+      if (analytic) {
+        const distance = analytic(px, py)
+        weights[rowStart + x] = needsDistance
+          ? edgeValue(distance, feather, jitter, px, py, cell, noiseSeed)
+          : distance > 0 ? 1 : 0
+        continue
+      }
+
       let inside = false
       let nearest = Infinity
 
@@ -293,6 +383,7 @@ export function areaWeight(area: SortArea, width: number, height: number, seed: 
         if (y0 > py !== y1 > py && px < ((x1 - x0) * (py - y0)) / (y1 - y0) + x0) {
           inside = !inside
         }
+        if (!needsDistance) continue
 
         const dx = x1 - x0
         const dy = y1 - y0
@@ -306,22 +397,9 @@ export function areaWeight(area: SortArea, width: number, height: number, seed: 
         if (distanceSquared < nearest) nearest = distanceSquared
       }
 
-      let distance = Math.sqrt(nearest)
-      if (!inside) distance = -distance
-      if (jitter > 0) distance += jitter * raggedNoise(px, py, cell, noiseSeed)
-
-      let value = 0
-      if (distance >= 0) {
-        if (feather <= 0) {
-          value = 1
-        } else if (distance >= feather) {
-          value = 1
-        } else {
-          const t = distance / feather
-          value = t * t * (3 - 2 * t)
-        }
-      }
-      weights[rowStart + x] = value
+      weights[rowStart + x] = needsDistance
+        ? edgeValue(inside ? Math.sqrt(nearest) : -Math.sqrt(nearest), feather, jitter, px, py, cell, noiseSeed)
+        : inside ? 1 : 0
     }
   }
 

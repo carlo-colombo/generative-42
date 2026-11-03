@@ -1,4 +1,5 @@
 import type { EditorModel, ShapeTool } from '../editor-state'
+import { MAX_AREAS, type GenerationModel } from '../generation-state'
 
 type ToolDefinition = { id: ShapeTool; label: string; hint: string }
 
@@ -11,7 +12,7 @@ export const SHAPE_TOOLS: ToolDefinition[] = [
   { id: 'curve', label: 'Curve', hint: 'Drag an open stroke · then choose side A or B' },
 ]
 
-export function ToolButtons({ editor }: { editor: EditorModel }) {
+export function ToolButtons({ editor, disabled = false }: { editor: EditorModel; disabled?: boolean }) {
   const tool = editor.tool.value
   return <div className="tool-buttons" role="toolbar" aria-label="Shape tools">
     {SHAPE_TOOLS.map((entry) => (
@@ -21,6 +22,7 @@ export function ToolButtons({ editor }: { editor: EditorModel }) {
         className={entry.id === tool ? 'tool-button active' : 'tool-button'}
         aria-pressed={entry.id === tool}
         title={entry.hint}
+        disabled={disabled && entry.id !== 'select'}
         onClick={() => { editor.tool.value = entry.id }}
       >
         {entry.label}
@@ -29,10 +31,11 @@ export function ToolButtons({ editor }: { editor: EditorModel }) {
   </div>
 }
 
-export function StageToolbar({ editor }: { editor: EditorModel }) {
+export function StageToolbar({ editor, model }: { editor: EditorModel; model: GenerationModel }) {
   const active = SHAPE_TOOLS.find((entry) => entry.id === editor.tool.value)
+  const atCapacity = model.draft.value.areas.length >= MAX_AREAS
   return <div className="stage-toolbar">
-    <ToolButtons editor={editor} />
-    <span className="toolbar-hint">{active?.hint}</span>
+    <ToolButtons editor={editor} disabled={atCapacity} />
+    <span className="toolbar-hint">{atCapacity ? `Limit of ${MAX_AREAS} areas` : active?.hint}</span>
   </div>
 }

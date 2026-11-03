@@ -568,11 +568,12 @@ body {
 }
 
 .slider-row input[type="range"] {
-  flex: 1;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
 }
 
-.panel .slider-input {
+.panel input.slider-input {
   flex: 0 0 auto;
   width: 54px;
   padding: 4px 5px;
@@ -581,8 +582,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.panel .slider-input:disabled {
+.panel input.slider-input:disabled {
   opacity: 0.45;
+}
+
+.preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preview-row .checkbox-field {
+  margin: 0;
 }
 
 .feather-swatch {

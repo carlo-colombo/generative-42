@@ -51,11 +51,12 @@ function sortBucketKeys(keys: Uint16Array, length: number) {
   }
 }
 
-export function sortPixels(
+// A null weight means the mask covers the whole canvas (all ones).
+function sortPixels(
   source: Uint8ClampedArray,
   width: number,
   height: number,
-  weight: Float32Array,
+  weight: Float32Array | null,
   params: SortParams,
   random: () => number,
 ): Uint8ClampedArray {
@@ -146,7 +147,7 @@ export function sortPixels(
       const sourceIndex = (lineStart + (from + positions[i]) * step) * 4
       const targetIndex = (lineStart + (from + i) * step) * 4
       if (blend) {
-        const coverage = weight[lineStart + (from + i) * step]
+        const coverage = weight ? weight[lineStart + (from + i) * step] : 1
         target[targetIndex] = source[sourceIndex] * coverage + source[targetIndex] * (1 - coverage)
         target[targetIndex + 1] = source[sourceIndex + 1] * coverage + source[targetIndex + 1] * (1 - coverage)
         target[targetIndex + 2] = source[sourceIndex + 2] * coverage + source[targetIndex + 2] * (1 - coverage)
@@ -164,6 +165,10 @@ export function sortPixels(
     // (1.15 - 0.85) is spelled out to keep the legacy p5.random(0.85, 1.15) float sequence identical
     const lineAmount = Math.max(0, Math.min(100, amount * (random() * (1.15 - 0.85) + 0.85)))
     const lineStart = horizontal ? line * width : line
+    if (weight === null) {
+      sortRun(lineStart, 0, lineLength, lineAmount)
+      continue
+    }
     let position = 0
     while (position < lineLength) {
       if (weight[lineStart + position * step] <= 0) {
@@ -191,11 +196,21 @@ function unionWeight(areas: SortArea[], width: number, height: number, seed: num
   return union
 }
 
-function composite(result: Uint8ClampedArray, pass: Uint8ClampedArray, weight: Float32Array, opacity: number) {
-  const alpha = Math.max(0, Math.min(100, opacity)) / 100
-  if (alpha <= 0) return
+function composite(
+  result: Uint8ClampedArray,
+  pass: Uint8ClampedArray,
+  weight: Float32Array,
+  opacity: number,
+  mode: SortArea['edge']['mode'],
+) {
+  const opacityAlpha = Math.max(0, Math.min(100, opacity)) / 100
+  if (opacityAlpha <= 0) return
+  const soft = mode === 'blend'
   for (let pixel = 0, index = 0; pixel < weight.length; pixel++, index += 4) {
-    if (weight[pixel] <= 0) continue
+    const coverage = weight[pixel]
+    if (coverage <= 0) continue
+    // Blend keeps the feather ramp; ragged edges stay crisp at full coverage.
+    const alpha = soft ? opacityAlpha * Math.min(1, coverage) : opacityAlpha
     if (alpha >= 1) {
       result[index] = pass[index]
       result[index + 1] = pass[index + 1]
@@ -210,6 +225,16 @@ function composite(result: Uint8ClampedArray, pass: Uint8ClampedArray, weight: F
   }
 }
 
+function coversCanvas(area: SortArea): boolean {
+  const shape = area.shape
+  if (shape.kind !== 'rect' || shape.rotation !== 0 || shape.w <= 0 || shape.h <= 0) return false
+  return shape.x <= 0 && shape.y <= 0 && shape.x + shape.w >= 1 && shape.y + shape.h >= 1
+}
+
+function fullCoverage(area: SortArea): boolean {
+  return coversCanvas(area) && area.edge.feather <= 0 && area.edge.jitter <= 0 && area.edge.mode === 'blend' && area.opacity >= 100
+}
+
 export function sortAreas(
   source: Uint8ClampedArray,
   width: number,
@@ -222,20 +247,26 @@ export function sortAreas(
   const visible = areas.filter((area) => area.visible)
   if (visible.length === 0) return new Uint8ClampedArray(source)
 
+  if (visible.length === 1 && fullCoverage(visible[0])) {
+    // A single full-canvas blend area needs no mask: every line is one run.
+    const area = visible[0]
+    return sortPixels(source, width, height, null, { ...area.sort, edge: area.edge }, randomFor(area))
+  }
+
   const result = new Uint8ClampedArray(source)
   if (areasMode === 'union') {
     // Union resolves the mask per pixel and sorts it once with the topmost area's options.
     const top = visible[visible.length - 1]
     const weight = unionWeight(visible, width, height, seed)
     const pass = sortPixels(source, width, height, weight, { ...top.sort, edge: top.edge }, randomFor(top))
-    composite(result, pass, weight, top.opacity)
+    composite(result, pass, weight, top.opacity, top.edge.mode)
     return result
   }
 
   for (const area of visible) {
     const weight = areaWeight(area, width, height, seed)
     const pass = sortPixels(source, width, height, weight, { ...area.sort, edge: area.edge }, randomFor(area))
-    composite(result, pass, weight, area.opacity)
+    composite(result, pass, weight, area.opacity, area.edge.mode)
   }
   return result
 }

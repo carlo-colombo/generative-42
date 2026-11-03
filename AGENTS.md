@@ -54,9 +54,10 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   narrows the render to a single area. `color-sorting` runs one implicit
   full-canvas area through the same path.
 - `src/areas.ts` — p5-free area math: `areaWeight` builds the 0..1 mask for a
-  rect, ellipse, or path area (feather ramp, ragged noise), plus `hashString`,
-  `mulberry32`, and `convexHull`. `shapePolygon` returns the pixel-space mask
-  ring the editor draws.
+  rect, ellipse, or path area (feather ramp, ragged noise), plus `hashString`
+  and `mulberry32`. `shapePolygon` returns the pixel-space mask ring the editor
+  draws, and the ring distance pass is skipped entirely when feather and jitter
+  are both 0.
 - `src/editor-state.ts` — area editor signals (selection, active tool, mask
   preview, right-panel tab, canvas size) plus the area CRUD helpers.
 - `src/components/StageEditor.tsx` — canvas overlay above the p5 stage. Draws
@@ -96,13 +97,25 @@ normalised 0..1 against the cropped canvas, so changing the crop re-anchors an
 area to the new frame rather than to image content. Feather and jitter are
 relative to `min(width, height)`.
 
+Ellipse rings use `clamp(ceil(perimeter / 2), 96, 512)` segments. An open path
+closes along the canvas border between its first and last crossing; when the
+stroke crosses the border more than twice the ring closes over the widest
+crossing pair and still walks the excursion vertices, so those interiors keep
+their even-odd parity. `AreaShape` `path.tension` is reserved and unused.
+
 `areas` is serialized exactly like `texts`: base64url JSON in one param, with
-`areas=<id>` and an `localStorage` entry past 1500 characters. `areasMode` is
-`layers` (each area sorts and composites in list order) or `union` (one pass
-using the topmost area's sort options); `soloAreaId` narrows the render to a
-single area. Rendering only follows areas for the `pixel-sort-areas` draw;
-`/generate/headless.ts` captures `canvas.base-layer`, so the stage overlay
-canvas is never part of an export.
+`areas=<id>` and an `localStorage` entry past 6000 characters, so such a URL
+resolves only in the browser that created it. The stored copy is the same
+quantized JSON that produced the encoding, and a failed `localStorage` write
+falls back to the inline param. `areasMode` is `layers` (each area sorts and
+composites in list order, with alpha = feather weight * opacity) or `union` (one
+pass using the topmost area's sort options); `soloAreaId` narrows the render to a
+single area and `MAX_AREAS` (12) caps the list. A single unrotated rect area
+that covers the whole canvas at feather 0, jitter 0, opacity 100 and blend mode
+skips the mask entirely, which is the path `color-sorting` takes. Rendering only
+follows areas
+for the `pixel-sort-areas` draw; `/generate/headless.ts` captures
+`canvas.base-layer`, so the stage overlay canvas is never part of an export.
 
 ## Conventions
 

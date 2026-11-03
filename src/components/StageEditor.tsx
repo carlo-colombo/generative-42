@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { areaWeight, shapePolygon } from '../areas'
 import type { EditorModel } from '../editor-state'
 import { addArea, clamp01, clampShape, createSortArea, translateShape, updateArea } from '../editor-state'
-import type { GenerationModel } from '../generation-state'
+import { MAX_AREAS, type GenerationModel } from '../generation-state'
 import { soloAreas } from '../sort'
 import type { AreaShape, Pt, SortArea } from '../types'
 
@@ -29,6 +29,9 @@ const EDGE_HIT = 8
 const SIMPLIFY_TOLERANCE = 2
 const MIN_DRAW_SIZE = 3
 const MIN_SHAPE_SIZE = 4
+// Per-area preview masks are one byte per pixel; past this budget the preview
+// rebuilds every mask instead of keeping them.
+const MASK_PREVIEW_CACHE_BYTES = 64 * 1024 * 1024
 
 type Drag =
   | { kind: 'none' }
@@ -224,6 +227,13 @@ function simplify(points: Px[], tolerance: number): Px[] {
   return points.filter((_, index) => keep[index] === 1)
 }
 
+type MaskCache = Map<string, { version: string; mask: Uint8Array }>
+
+// Everything a preview mask depends on: canvas size, seed and the area's own geometry and edge.
+function areaMaskVersion(area: SortArea, size: Size, seed: number): string {
+  return `${size.width}x${size.height}:${seed}:${area.id}:${JSON.stringify(area.shape)}:${area.edge.feather}:${area.edge.jitter}:${area.edge.mode}`
+}
+
 function withAlpha(color: string, alpha: number): string {
   const match = /^#([0-9a-f]{6})$/i.exec(color.trim())
   if (!match) return color
@@ -238,6 +248,8 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   const polygonRef = useRef<Px[]>([])
   const hoverRef = useRef<Px | null>(null)
   const maskCacheRef = useRef<{ key: string; image: ImageData } | null>(null)
+  const areaMaskCacheRef = useRef<MaskCache>(new Map())
+  const frameRef = useRef(0)
   const selectedRef = useRef<SortArea | undefined>(undefined)
   const [polygonCount, setPolygonCount] = useState(0)
   const [pendingCurve, setPendingCurve] = useState<Px[] | null>(null)
@@ -248,6 +260,16 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   const maskPreview = editor.maskPreview.value
   const areas = draft.areas.map((area) => ({ ...area, shape: clampShape(area.shape) }))
   const selected = areas.find((area) => area.id === selectedId)
+
+  // One draw per animation frame: pointermoves and draft updates coalesce instead of
+  // rebuilding the overlay for every event.
+  function scheduleDraw() {
+    if (frameRef.current !== 0) return
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0
+      drawRef.current()
+    })
+  }
 
   function canvasSize(): Size | null {
     const canvas = canvasRef.current
@@ -463,24 +485,41 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
 
   function drawMaskPreview(context: CanvasRenderingContext2D, size: Size) {
     const renderable = soloAreas(areas, draft.soloAreaId).filter((area) => area.visible)
-    const key = `${size.width}x${size.height}:${draft.seed}:${draft.soloAreaId}:${renderable
-      .map((area) => `${area.id}:${JSON.stringify(area.shape)}:${area.edge.feather}:${area.edge.jitter}:${area.edge.mode}`)
-      .join('|')}`
+    const pixelCount = size.width * size.height
+    const versions = renderable.map((area) => areaMaskVersion(area, size, draft.seed))
+    const key = `${size.width}x${size.height}:${draft.seed}:${versions.join('|')}`
     if (!maskCacheRef.current || maskCacheRef.current.key !== key) {
-      const weights = new Float32Array(size.width * size.height)
-      for (const area of renderable) {
-        const weight = areaWeight(area, size.width, size.height, draft.seed)
-        for (let i = 0; i < weights.length; i++) {
-          if (weight[i] > weights[i]) weights[i] = weight[i]
+      const cache = areaMaskCacheRef.current
+      const cacheable = renderable.length * pixelCount <= MASK_PREVIEW_CACHE_BYTES
+      const union = new Uint8Array(pixelCount)
+      renderable.forEach((area, index) => {
+        const version = versions[index]
+        const cached = cache.get(area.id)
+        let mask = cached && cached.version === version ? cached.mask : null
+        if (!mask) {
+          const weights = areaWeight(area, size.width, size.height, draft.seed)
+          mask = new Uint8Array(pixelCount)
+          for (let i = 0; i < pixelCount; i++) mask[i] = Math.round(weights[i] * 255)
+          if (cacheable) cache.set(area.id, { version, mask })
         }
+        for (let i = 0; i < pixelCount; i++) {
+          if (mask[i] > union[i]) union[i] = mask[i]
+        }
+      })
+      if (cacheable) {
+        const live = new Set(renderable.map((area) => area.id))
+        for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
+      } else {
+        cache.clear()
       }
       const image = new ImageData(size.width, size.height)
-      for (let i = 0; i < weights.length; i++) {
-        const value = Math.round(weights[i] * 255)
-        image.data[i * 4] = value
-        image.data[i * 4 + 1] = value
-        image.data[i * 4 + 2] = value
-        image.data[i * 4 + 3] = 255
+      for (let i = 0; i < pixelCount; i++) {
+        const value = union[i]
+        const offset = i * 4
+        image.data[offset] = value
+        image.data[offset + 1] = value
+        image.data[offset + 2] = value
+        image.data[offset + 3] = 255
       }
       maskCacheRef.current = { key, image }
     }
@@ -502,10 +541,12 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     const scale = uiScaleOf(canvas)
 
     context.clearRect(0, 0, size.width, size.height)
-    if (maskPreview) {
+    if (maskPreview && dragRef.current.kind === 'none') {
       drawMaskPreview(context, size)
       return
     }
+    // While a gesture is in flight the outlines follow it live and the weight map
+    // is rebuilt once, when the pointer is released.
     for (const area of areas) drawArea(context, area, size, area.id === selectedId, scale)
     drawPending(context, size, scale)
   }
@@ -513,13 +554,18 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   useEffect(() => {
     selectedRef.current = selected
     drawRef.current = draw
-    draw()
+    scheduleDraw()
   })
+
+  useEffect(() => () => {
+    if (frameRef.current !== 0) cancelAnimationFrame(frameRef.current)
+    frameRef.current = 0
+  }, [])
 
   useEffect(() => {
     if (!baseCanvas) return
     editor.canvasSize.value = { width: baseCanvas.width, height: baseCanvas.height }
-    drawRef.current()
+    scheduleDraw()
   }, [baseCanvas, editor])
 
   function pointerToPx(event: PointerEvent): Px | null {
@@ -566,6 +612,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   }
 
   function commitShape(shape: AreaShape) {
+    if (model.draft.value.areas.length >= MAX_AREAS) return
     const area = createSortArea(clampShape(shape), model.draft.value)
     addArea(model, area)
     editor.selectedId.value = area.id
@@ -589,7 +636,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       (point, index) => index === 0 || Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y) > minGap,
     )
     if (deduped.length < 3) {
-      drawRef.current()
+      scheduleDraw()
       return
     }
     commitShape({ kind: 'path', closed: true, side: 'a', tension: 0, points: deduped.map((point) => toPt(point, size)) })
@@ -601,7 +648,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     const points = pendingCurve
     setPendingCurve(null)
     if (points.length < 2) {
-      drawRef.current()
+      scheduleDraw()
       return
     }
     commitShape({ kind: 'path', closed: false, side, tension: 0, points: points.map((point) => toPt(point, size)) })
@@ -747,7 +794,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     if (tool === 'select') {
       canvas.setPointerCapture(event.pointerId)
       startSelectDrag(point, size, event.altKey, scale)
-      drawRef.current()
+      scheduleDraw()
       return
     }
 
@@ -757,7 +804,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         polygonRef.current = [...polygonRef.current, point]
         setPolygonCount(polygonRef.current.length)
       }
-      drawRef.current()
+      scheduleDraw()
       return
     }
 
@@ -767,7 +814,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     } else {
       dragRef.current = { kind: 'freehand', tool, points: [point] }
     }
-    drawRef.current()
+    scheduleDraw()
   }
 
   function handlePointerMove(event: PointerEvent) {
@@ -779,7 +826,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     if (drag.kind === 'none') {
       if (tool === 'polygon' && polygonRef.current.length > 0) {
         hoverRef.current = point
-        drawRef.current()
+        scheduleDraw()
       }
       return
     }
@@ -787,7 +834,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     if (drag.kind === 'shape') {
       drag.current = point
       drag.shift = event.shiftKey
-      drawRef.current()
+      scheduleDraw()
       return
     }
 
@@ -795,7 +842,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       const last = drag.points[drag.points.length - 1]
       if (!last || Math.hypot(last.x - point.x, last.y - point.y) >= 1.5) {
         drag.points.push(point)
-        drawRef.current()
+        scheduleDraw()
       }
       return
     }
@@ -831,7 +878,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     dragRef.current = { kind: 'none' }
     if (canvas?.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
     if (!size || !point) {
-      drawRef.current()
+      scheduleDraw()
       return
     }
 
@@ -850,14 +897,14 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         setPendingCurve(simplified)
       }
     }
-    drawRef.current()
+    scheduleDraw()
   }
 
   function handlePointerCancel(event: PointerEvent) {
     const canvas = canvasRef.current
     if (canvas?.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
     dragRef.current = { kind: 'none' }
-    drawRef.current()
+    scheduleDraw()
   }
 
   useEffect(() => {
@@ -867,7 +914,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return
+      if (event.defaultPrevented || isEditableTarget(event.target)) return
 
       if (event.key === 'Escape') {
         polygonRef.current = []
@@ -876,7 +923,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         setPendingCurve(null)
         dragRef.current = { kind: 'none' }
         editor.selectedId.value = null
-        drawRef.current()
+        scheduleDraw()
         return
       }
 
@@ -896,7 +943,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         event.preventDefault()
         polygonRef.current = polygonRef.current.slice(0, -1)
         setPolygonCount(polygonRef.current.length)
-        drawRef.current()
+        scheduleDraw()
         return
       }
 
@@ -929,6 +976,8 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       <canvas
         ref={canvasRef}
         className="editor-canvas"
+        role="img"
+        aria-label="Area editing surface: draw and adjust the sort areas over the artwork"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -944,14 +993,14 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
               <span>Open curve side</span>
               <button type="button" onClick={() => commitCurve('a')}>A · left</button>
               <button type="button" onClick={() => commitCurve('b')}>B · right</button>
-              <button type="button" onClick={() => { setPendingCurve(null); drawRef.current() }}>Cancel</button>
+              <button type="button" onClick={() => { setPendingCurve(null); scheduleDraw() }}>Cancel</button>
             </>
           ) : (
             <>
               <span>Polygon · {polygonCount} points</span>
               <button type="button" onClick={closePolygon}>Close</button>
-              <button type="button" onClick={() => { polygonRef.current = polygonRef.current.slice(0, -1); setPolygonCount(polygonRef.current.length); drawRef.current() }}>Undo</button>
-              <button type="button" onClick={() => { polygonRef.current = []; hoverRef.current = null; setPolygonCount(0); drawRef.current() }}>Cancel</button>
+              <button type="button" onClick={() => { polygonRef.current = polygonRef.current.slice(0, -1); setPolygonCount(polygonRef.current.length); scheduleDraw() }}>Undo</button>
+              <button type="button" onClick={() => { polygonRef.current = []; hoverRef.current = null; setPolygonCount(0); scheduleDraw() }}>Cancel</button>
             </>
           )}
         </div>

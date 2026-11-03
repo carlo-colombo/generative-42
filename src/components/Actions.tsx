@@ -19,6 +19,13 @@ export function Actions({ model }: { model: GenerationModel }) {
       </div>
     </ControlField>
     <button type="button" className="primary" onClick={() => model.applyGeneration()}>Generate</button>
+    <div className="preview-row">
+      <label className="checkbox-field">
+        <input type="checkbox" checked={model.livePreview.value} onChange={(event) => { model.livePreview.value = event.currentTarget.checked }} />
+        Live preview
+      </label>
+      <button type="button" onClick={model.requestPreview} disabled={model.livePreview.value}>Preview</button>
+    </div>
     <button type="button" onClick={download}>Download PNG</button>
   </footer>
 }

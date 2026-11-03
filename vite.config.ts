@@ -36,9 +36,11 @@ function assetManifestPlugin(): Plugin {
 export default defineConfig({
   plugins: [assetManifestPlugin()],
   server: {
+    host: "0.0.0.0",
     open: true,
   },
   preview: {
+    host: "0.0.0.0",
     port: 4173,
   },
   build: {

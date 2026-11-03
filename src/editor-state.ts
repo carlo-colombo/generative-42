@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import type { GenerationModel } from './generation-state'
+import { MAX_AREAS, type GenerationModel } from './generation-state'
 import type { AreaShape, Generation, SortArea } from './types'
 
 export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'curve'
@@ -92,7 +92,9 @@ export function createSortArea(shape: AreaShape, generation: Generation): SortAr
 }
 
 export function addArea(model: GenerationModel, area: SortArea) {
-  model.setField('areas', [...model.draft.value.areas, area])
+  const areas = model.draft.value.areas
+  if (areas.length >= MAX_AREAS) return
+  model.setField('areas', [...areas, area])
 }
 
 export function updateArea(model: GenerationModel, id: string, update: (area: SortArea) => SortArea) {
@@ -107,7 +109,7 @@ export function removeArea(model: GenerationModel, id: string) {
 export function duplicateArea(model: GenerationModel, id: string): SortArea | null {
   const areas = model.draft.value.areas
   const index = areas.findIndex((area) => area.id === id)
-  if (index === -1) return null
+  if (index === -1 || areas.length >= MAX_AREAS) return null
   const source = areas[index]
   const copy: SortArea = {
     ...source,

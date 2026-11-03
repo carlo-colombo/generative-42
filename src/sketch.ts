@@ -5,15 +5,50 @@ import { cropImage } from './crop';
 import { DEFAULT_FONT, FONTS } from './fonts';
 
 type TextCanvas = p5 | p5.Graphics
-type SketchReady = (baseCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, renderText: (generation: Generation) => void) => void
+type SortRenderResult = { imageChanged: boolean; resized: boolean }
+type SketchReady = (
+  baseCanvas: HTMLCanvasElement,
+  textCanvas: HTMLCanvasElement,
+  renderText: (generation: Generation) => void,
+  renderSort: (generation: Generation) => SortRenderResult,
+) => void
 
-export function createSketch(gen: Generation, onReady?: SketchReady) {
+export function createSketch(initial: Generation, onReady?: SketchReady) {
   const fonts: Record<string, p5.Font> = {};
+  let renderer: p5;
+  let sourceImage: p5.Image;
   let img: p5.Image;
   let textLayer: p5.Graphics;
+  let current = initial;
+  let cropKey = cropSignature(initial);
 
-  const drawDefinition = DRAWS[gen.draw] ?? DRAWS["rect"];
-  const drawFn = drawDefinition.draw;
+  function cropSignature(gen: Generation) {
+    return `${gen.cropFormat}:${gen.cropX}:${gen.cropY}:${gen.cropSize}`;
+  }
+
+  function renderSort(next: Generation): SortRenderResult {
+    if (next.image !== current.image) return { imageChanged: true, resized: false };
+    const nextCrop = cropSignature(next);
+    let resized = false;
+    if (nextCrop !== cropKey) {
+      img = cropImage(sourceImage, next);
+      cropKey = nextCrop;
+      renderer.resizeCanvas(img.width, img.height);
+      renderer.pixelDensity(1);
+      renderer.rectMode(renderer.CENTER);
+      textLayer.resizeCanvas(img.width, img.height);
+      textLayer.pixelDensity(1);
+      resized = true;
+    }
+    current = next;
+    const definition = DRAWS[next.draw] ?? DRAWS["rect"];
+    renderer.randomSeed(next.seed);
+    renderer.noiseSeed(next.seed);
+    definition.draw({ p: renderer, img, seed: next.seed, generation: next });
+    renderer.noLoop();
+    drawTextLayer(textLayer, next);
+    return { imageChanged: false, resized };
+  }
 
   function fontFor(path: string) {
     return fonts[path] ?? fonts[DEFAULT_FONT] ?? Object.values(fonts)[0];
@@ -21,19 +56,20 @@ export function createSketch(gen: Generation, onReady?: SketchReady) {
 
   const sketch = (p: p5) => {
     p.preload = () => {
-      const fontPaths = new Set([...FONTS.map((font) => font.path), ...gen.texts.map((layer) => layer.font)]);
+      const fontPaths = new Set([...FONTS.map((font) => font.path), ...initial.texts.map((layer) => layer.font)]);
       for (const path of fontPaths) {
         fonts[path] = p.loadFont(path, undefined, () => {
           delete fonts[path];
           (p as unknown as { _decrementPreload: () => void })._decrementPreload();
         });
       }
-      img = p.loadImage(gen.image);
+      sourceImage = p.loadImage(initial.image);
     };
 
     p.setup = () => {
+      renderer = p;
       p.pixelDensity(1);
-      img = cropImage(img, gen);
+      img = cropImage(sourceImage, current);
       p.createCanvas(img.width, img.height);
       const baseCanvas = (p as unknown as { canvas: HTMLCanvasElement }).canvas;
       baseCanvas.classList.add('base-layer');
@@ -42,16 +78,13 @@ export function createSketch(gen: Generation, onReady?: SketchReady) {
       const textCanvas = (textLayer as unknown as { canvas: HTMLCanvasElement }).canvas;
       textCanvas.classList.add('text-layer');
       textCanvas.style.display = 'block';
-      onReady?.(baseCanvas, textCanvas, (generation) => drawTextLayer(textLayer, generation));
+      onReady?.(baseCanvas, textCanvas, (generation) => drawTextLayer(textLayer, generation), renderSort);
       p.rectMode(p.CENTER);
       p.noLoop();
-      p.randomSeed(gen.seed);
-      p.noiseSeed(gen.seed);
-      p.draw();
+      renderSort(current);
     };
 
     p.draw = () => {
-      drawFn({ p, img, seed: gen.seed, generation: gen });
       p.noLoop();
     };
   };

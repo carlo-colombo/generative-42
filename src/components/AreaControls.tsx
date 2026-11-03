@@ -3,6 +3,7 @@ import { updateArea } from '../editor-state'
 import type { GenerationModel } from '../generation-state'
 import type { EdgeMode, SortArea } from '../types'
 import { ControlField } from './ControlField'
+import { Segmented } from './Segmented'
 
 function clamp(value: number, min: number, max: number) {
   return value < min ? min : value > max ? max : value
@@ -26,28 +27,6 @@ function SliderField({ label, value, min, max, step, unit, disabled, onChange }:
     <div className="slider-row">
       <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
       <input className="slider-input" type="number" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
-    </div>
-  </ControlField>
-}
-
-function Segmented<T extends string>({ label, value, options, onChange }: {
-  label: string
-  value: T
-  options: { value: T; label: string; title?: string }[]
-  onChange: (value: T) => void
-}) {
-  return <ControlField label={label}>
-    <div className="segmented" role="group" aria-label={label}>
-      {options.map((option) => <button
-        key={option.value}
-        type="button"
-        className={option.value === value ? 'active' : undefined}
-        aria-pressed={option.value === value}
-        title={option.title}
-        onClick={() => onChange(option.value)}
-      >
-        {option.label}
-      </button>)}
     </div>
   </ControlField>
 }
@@ -99,12 +78,13 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
     <ControlField label="Direction">
       <div className="direction-row">
         <div className="segmented" role="group" aria-label="Direction">
-          <button type="button" aria-pressed={area.sort.direction === 'horizontal'} className={area.sort.direction === 'horizontal' ? 'active' : undefined} title="Horizontal" onClick={() => update((current) => ({ ...current, sort: { ...current.sort, direction: 'horizontal' } }))}>↔</button>
-          <button type="button" aria-pressed={area.sort.direction === 'vertical'} className={area.sort.direction === 'vertical' ? 'active' : undefined} title="Vertical" onClick={() => update((current) => ({ ...current, sort: { ...current.sort, direction: 'vertical' } }))}>↕</button>
+          <button type="button" aria-label="Horizontal sort" aria-pressed={area.sort.direction === 'horizontal'} className={area.sort.direction === 'horizontal' ? 'active' : undefined} title="Horizontal" onClick={() => update((current) => ({ ...current, sort: { ...current.sort, direction: 'horizontal' } }))}>↔</button>
+          <button type="button" aria-label="Vertical sort" aria-pressed={area.sort.direction === 'vertical'} className={area.sort.direction === 'vertical' ? 'active' : undefined} title="Vertical" onClick={() => update((current) => ({ ...current, sort: { ...current.sort, direction: 'vertical' } }))}>↕</button>
         </div>
         <button
           type="button"
           className={area.sort.reverse ? 'toggle-button active' : 'toggle-button'}
+          aria-label="Reverse sort direction"
           aria-pressed={area.sort.reverse}
           onClick={() => update((current) => ({ ...current, sort: { ...current.sort, reverse: !current.sort.reverse } }))}
         >
@@ -123,7 +103,7 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
       onChange={(mode) => update((current) => ({ ...current, edge: { ...current.edge, mode } }))}
     />
 
-    <ControlField label="Feather" value={`${area.edge.feather}% · ${featherPixels}px`}>
+    <ControlField label="Feather" value={area.edge.mode === 'ragged' ? 'blend only' : `${area.edge.feather}% · ${featherPixels}px`}>
       <div className="slider-row">
         <input type="range" min={0} max={100} step={1} value={area.edge.feather} onInput={(event) => {
           const feather = clamp(Number(event.currentTarget.value), 0, 100)
@@ -149,6 +129,8 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
       onChange={(jitter) => update((current) => ({ ...current, edge: { ...current.edge, jitter } }))}
     />
     {area.edge.mode !== 'ragged' && <p className="hint-text">Jitter applies to ragged edges only.</p>}
+    {area.edge.mode === 'ragged' && <p className="hint-text">Feather applies to blend edges only.</p>}
+    <p className="hint-text">Feather and jitter are percentages of the shorter canvas side{minSide > 0 ? ` (${minSide}px)` : ''}.</p>
 
     {area.shape.kind === 'path' && !area.shape.closed && <Segmented<'a' | 'b'>
       label="Open side"
