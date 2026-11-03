@@ -1,4 +1,4 @@
-import type { AreaShape, Pt, SortArea } from './types'
+import type { AreaShape, LayerEdge, Pt } from './types'
 
 export function hashString(value: string): number {
   let hash = 2166136261
@@ -235,8 +235,9 @@ function raggedNoise(x: number, y: number, cell: number, seed: number): number {
   return (coarse * 0.7 + fine * 0.3) * 2 - 1
 }
 
-// Mask scratch buffer reused per canvas size; consume a mask before the next call.
-// Only the region the previous mask wrote is cleared, so reuse costs the area, not the canvas.
+// Mask scratch buffer reused per canvas size; callers that keep a weight map must
+// copy it before the next call. Only the region the previous mask wrote is
+// cleared, so reuse costs the shape, not the canvas.
 type MaskRange = { startX: number; endX: number; startY: number; endY: number }
 let maskScratch: (MaskRange & { width: number; height: number; weights: Float32Array }) | null = null
 
@@ -315,16 +316,24 @@ function analyticDistance(shape: AreaShape, width: number, height: number): ((px
   }
 }
 
-export function areaWeight(area: SortArea, width: number, height: number, seed: number): Float32Array {
+// Mask scratch buffer stays shared, so a caller that keeps a weight map must copy it.
+export function maskWeight(
+  shape: AreaShape,
+  edge: LayerEdge,
+  width: number,
+  height: number,
+  seed: number,
+  id: string,
+): Float32Array {
   const weights = maskBuffer(width, height)
-  const ring = shapePolygon(area.shape, width, height)
+  const ring = shapePolygon(shape, width, height)
   if (ring.length < 3) return weights
 
   const minSide = Math.min(width, height)
-  const feather = (Math.max(0, area.edge.feather) / 100) * minSide
-  const jitter = area.edge.mode === 'ragged' ? (Math.max(0, area.edge.jitter) / 100) * minSide : 0
+  const feather = (Math.max(0, edge.feather) / 100) * minSide
+  const jitter = edge.mode === 'ragged' ? (Math.max(0, edge.jitter) / 100) * minSide : 0
   const cell = Math.max(2, Math.round(minSide / 128))
-  const noiseSeed = (seed ^ hashString(area.id)) >>> 0
+  const noiseSeed = (seed ^ hashString(id)) >>> 0
   const needsDistance = feather > 0 || jitter > 0
 
   const edgeCount = ring.length
@@ -356,7 +365,7 @@ export function areaWeight(area: SortArea, width: number, height: number, seed: 
   const startY = Math.max(0, Math.floor(minY - margin))
   const endY = Math.min(height, Math.ceil(maxY + margin))
   markMaskRange(startX, endX, startY, endY)
-  const analytic = analyticDistance(area.shape, width, height)
+  const analytic = analyticDistance(shape, width, height)
 
   for (let y = startY; y < endY; y++) {
     const py = y + 0.5

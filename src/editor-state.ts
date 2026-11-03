@@ -1,20 +1,22 @@
 import { signal } from '@preact/signals'
-import { MAX_AREAS, type GenerationModel } from './generation-state'
-import type { AreaShape, Generation, SortArea } from './types'
+import { DEFAULT_FONT } from './fonts'
+import { MAX_LAYERS, type GenerationModel } from './generation-state'
+import { defaultParams, effectLabel } from './effects'
+import { LAYER_COLORS } from './types'
+import type { AreaShape, EffectId, EffectLayer, EffectParams, Generation, Layer, TextAlign, TextLayer, TextVAlign } from './types'
 
 export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'curve'
-export type RightTab = 'text' | 'areas'
-
-export const AREA_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#b388ff', '#ff9f1c']
+export type TextField = 'text' | 'align' | 'vAlign' | 'x' | 'y' | 'size' | 'font' | 'opacity'
 
 export function createEditorModel() {
   return {
-    selectedId: signal<string | null>(null),
+    selectedLayerId: signal<string | null>(null),
     tool: signal<ShapeTool>('select'),
     maskPreview: signal(false),
     showMasks: signal(true),
     canvasSize: signal({ width: 0, height: 0 }),
-    tab: signal<RightTab>('text'),
+    // The effect a newly drawn shape creates.
+    newEffect: signal<EffectId>('pixel-sort'),
   }
 }
 
@@ -67,69 +69,125 @@ export function copyShape(shape: AreaShape): AreaShape {
   return { ...shape }
 }
 
-function nextAreaId(areas: SortArea[]): { id: string; index: number } {
-  const used = new Set(areas.map((area) => area.id))
+function nextLayerId(layers: Layer[], prefix: string): { id: string; index: number } {
+  const used = new Set(layers.map((layer) => layer.id))
   let index = 1
-  while (used.has(`a${index}`)) index++
-  return { id: `a${index}`, index }
+  while (used.has(`${prefix}${index}`)) index++
+  return { id: `${prefix}${index}`, index }
 }
 
-export function createSortArea(shape: AreaShape, generation: Generation): SortArea {
-  const { id, index } = nextAreaId(generation.areas)
+export function createEffectLayer(shape: AreaShape, generation: Generation, effect: EffectId): EffectLayer {
+  const { id, index } = nextLayerId(generation.layers, 'e')
   return {
+    kind: 'effect',
     id,
-    label: `Area ${index}`,
-    color: AREA_COLORS[(index - 1) % AREA_COLORS.length],
+    label: `Effect ${index}`,
     visible: true,
-    shape,
-    edge: { feather: 0, jitter: 0, mode: 'blend' },
-    sort: {
-      direction: generation.colorSortDirection,
-      reverse: false,
-      randomness: 0,
-    },
     opacity: 100,
+    color: LAYER_COLORS[(index - 1) % LAYER_COLORS.length],
+    shape: copyShape(shape),
+    edge: { feather: 0, jitter: 0, mode: 'blend' },
+    effect,
+    params: defaultParams(effect),
   }
 }
 
-export function addArea(model: GenerationModel, area: SortArea) {
-  const areas = model.draft.value.areas
-  if (areas.length >= MAX_AREAS) return
-  model.setField('areas', [...areas, area])
-}
-
-export function updateArea(model: GenerationModel, id: string, update: (area: SortArea) => SortArea) {
-  model.setField('areas', model.draft.value.areas.map((area) => (area.id === id ? update(area) : area)))
-}
-
-export function removeArea(model: GenerationModel, id: string) {
-  model.setField('areas', model.draft.value.areas.filter((area) => area.id !== id))
-  if (model.draft.value.soloAreaId === id) model.setField('soloAreaId', '')
-}
-
-export function duplicateArea(model: GenerationModel, id: string): SortArea | null {
-  const areas = model.draft.value.areas
-  const index = areas.findIndex((area) => area.id === id)
-  if (index === -1 || areas.length >= MAX_AREAS) return null
-  const source = areas[index]
-  const copy: SortArea = {
-    ...source,
-    id: nextAreaId(areas).id,
-    shape: copyShape(source.shape),
-    edge: { ...source.edge },
-    sort: { ...source.sort },
+export function createTextLayer(generation: Generation): TextLayer {
+  const { id, index } = nextLayerId(generation.layers, 't')
+  return {
+    kind: 'text',
+    id,
+    label: `Text ${index}`,
+    visible: true,
+    opacity: 100,
+    text: '',
+    align: 'left',
+    vAlign: 'bottom',
+    x: 5,
+    y: 95,
+    size: 100,
+    font: DEFAULT_FONT,
   }
-  model.setField('areas', [...areas.slice(0, index + 1), copy, ...areas.slice(index + 1)])
+}
+
+export function addLayer(model: GenerationModel, layer: Layer): boolean {
+  const layers = model.draft.value.layers
+  if (layers.length >= MAX_LAYERS) return false
+  model.setField('layers', [...layers, layer])
+  return true
+}
+
+export function updateLayer(model: GenerationModel, id: string, update: (layer: Layer) => Layer) {
+  model.setField('layers', model.draft.value.layers.map((layer) => (layer.id === id ? update(layer) : layer)))
+}
+
+export function updateEffectLayer(model: GenerationModel, id: string, update: (layer: EffectLayer) => EffectLayer) {
+  updateLayer(model, id, (layer) => (layer.kind === 'effect' ? update(layer) : layer))
+}
+
+export function removeLayer(model: GenerationModel, id: string) {
+  const generation = model.draft.value
+  model.setField('layers', generation.layers.filter((layer) => layer.id !== id))
+  if (generation.soloLayerId === id) model.setField('soloLayerId', '')
+}
+
+function copyLayer(layer: Layer, id: string): Layer {
+  if (layer.kind === 'text') return { ...layer, id }
+  return { ...layer, id, shape: copyShape(layer.shape), edge: { ...layer.edge }, params: { ...layer.params } }
+}
+
+export function duplicateLayer(model: GenerationModel, id: string): Layer | null {
+  const layers = model.draft.value.layers
+  const index = layers.findIndex((layer) => layer.id === id)
+  if (index === -1 || layers.length >= MAX_LAYERS) return null
+  const copy = copyLayer(layers[index], nextLayerId(layers, layers[index].kind === 'text' ? 't' : 'e').id)
+  model.setField('layers', [...layers.slice(0, index + 1), copy, ...layers.slice(index + 1)])
   return copy
 }
 
-export function moveArea(model: GenerationModel, id: string, offset: number) {
-  const areas = model.draft.value.areas
-  const index = areas.findIndex((area) => area.id === id)
-  const target = index + offset
-  if (index === -1 || target < 0 || target >= areas.length) return
-  const next = [...areas]
-  const [area] = next.splice(index, 1)
-  next.splice(target, 0, area)
-  model.setField('areas', next)
+export function moveLayer(model: GenerationModel, id: string, to: number) {
+  const layers = model.draft.value.layers
+  const from = layers.findIndex((layer) => layer.id === id)
+  const target = Math.max(0, Math.min(layers.length - 1, to))
+  if (from === -1 || from === target) return
+  const next = [...layers]
+  const [layer] = next.splice(from, 1)
+  next.splice(target, 0, layer)
+  model.setField('layers', next)
+}
+
+export function updateTextLayerField(model: GenerationModel, id: string, field: TextField, value: string) {
+  updateLayer(model, id, (layer) => {
+    if (layer.kind !== 'text') return layer
+    if (field === 'text') return { ...layer, text: value.toUpperCase() }
+    if (field === 'align') {
+      const align = value as TextAlign
+      return { ...layer, align, x: align === 'left' ? 5 : align === 'right' ? 95 : 50 }
+    }
+    if (field === 'vAlign') {
+      const vAlign = value as TextVAlign
+      return { ...layer, vAlign, y: vAlign === 'top' ? 5 : vAlign === 'bottom' ? 95 : 50 }
+    }
+    if (field === 'font') return { ...layer, font: value }
+    if (value.trim() === '') return layer
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return layer
+    return { ...layer, [field]: parsed }
+  })
+}
+
+export function updateEffectParams(model: GenerationModel, id: string, key: keyof EffectParams, value: number | string | boolean) {
+  updateEffectLayer(model, id, (layer) => ({
+    ...layer,
+    params: { ...layer.params, [key]: value } as EffectParams,
+  }))
+}
+
+export function setEffect(model: GenerationModel, id: string, effect: EffectId) {
+  updateEffectLayer(model, id, (layer) => ({
+    ...layer,
+    effect,
+    label: layer.label || effectLabel(effect),
+    params: defaultParams(effect),
+  }))
 }

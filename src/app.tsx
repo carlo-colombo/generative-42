@@ -1,28 +1,16 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
-import type { EditorModel, RightTab } from './editor-state'
-import { MAX_AREAS, MAX_TEXT_LAYERS, type GenerationModel } from './generation-state'
+import { useEffect, useState } from 'preact/hooks'
+import type { EditorModel } from './editor-state'
+import { addLayer, createEffectLayer, createTextLayer } from './editor-state'
+import { MAX_LAYERS, type GenerationModel } from './generation-state'
+import { EFFECT_LIST } from './effects'
 import { Actions } from './components/Actions'
-import { AreaControls } from './components/AreaControls'
-import { AreaList } from './components/AreaList'
-import { SourceControls } from './components/SourceControls'
-import { TextControls } from './components/TextControls'
-import { TextLayerList } from './components/TextLayerList'
+import { ControlField } from './components/ControlField'
 import { CropControls } from './components/CropControls'
-import { Segmented } from './components/Segmented'
+import { LayerControls } from './components/LayerControls'
+import { LayerList } from './components/LayerList'
+import { SourceControls } from './components/SourceControls'
 import { ToolButtons } from './components/ToolButtons'
-
-const RIGHT_TABS: { id: RightTab; label: string }[] = [
-  { id: 'text', label: 'Text' },
-  { id: 'areas', label: 'Areas' },
-]
-
-function tabId(tab: RightTab) {
-  return `right-tab-${tab}`
-}
-
-function tabPanelId(tab: RightTab) {
-  return `right-tabpanel-${tab}`
-}
+import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
 function useImages(model: GenerationModel) {
   const [images, setImages] = useState<string[]>([])
@@ -75,131 +63,51 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
 }
 
 export function RightPanel({ model, editor }: { model: GenerationModel; editor: EditorModel }) {
-  const tab = editor.tab.value
   const draft = model.draft.value
-  const layers = draft.texts
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const selected = Math.min(selectedIndex, layers.length - 1)
-  const atCapacity = layers.length >= MAX_TEXT_LAYERS
-  const atAreaCapacity = draft.areas.length >= MAX_AREAS
-  const textTabRef = useRef<HTMLButtonElement>(null)
-  const areasTabRef = useRef<HTMLButtonElement>(null)
-  const tabRefs: Record<RightTab, typeof textTabRef> = { text: textTabRef, areas: areasTabRef }
+  const atCapacity = draft.layers.length >= MAX_LAYERS
+  const newEffect = editor.newEffect.value
+  const newEffectLabel = EFFECT_LIST.find((entry) => entry.id === newEffect)?.label ?? newEffect
 
-  const selectTab = (next: RightTab, focus = false) => {
-    editor.tab.value = next
-    if (focus) tabRefs[next].current?.focus()
-  }
-
-  const onTabKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-    event.preventDefault()
-    const index = RIGHT_TABS.findIndex((entry) => entry.id === tab)
-    const step = event.key === 'ArrowRight' ? 1 : -1
-    selectTab(RIGHT_TABS[(index + step + RIGHT_TABS.length) % RIGHT_TABS.length].id, true)
-  }
-
-  const applyAreasDraw = () => {
-    model.setField('draw', 'pixel-sort-areas')
-    model.applyGeneration()
-  }
-
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= layers.length) return
-    model.moveTextLayer(from, to)
-    setSelectedIndex(to)
-  }
-
-  const duplicate = (index: number) => {
+  const addEffect = () => {
     if (atCapacity) return
-    model.duplicateTextLayer(index)
-    setSelectedIndex(index + 1)
+    const layer = createEffectLayer(FULL_CANVAS_SHAPE, draft, newEffect)
+    if (addLayer(model, layer)) editor.selectedLayerId.value = layer.id
   }
 
-  const remove = (index: number) => {
-    if (layers.length <= 1) return
-    model.removeTextLayer(index)
-    setSelectedIndex(index < selected ? selected - 1 : Math.min(selected, layers.length - 2))
-  }
-
-  const add = () => {
+  const addText = () => {
     if (atCapacity) return
-    const source = layers[selected]
-    model.addTextLayer({ ...source, text: '', x: source.x + 4, y: source.y + 4 })
-    setSelectedIndex(layers.length)
+    const layer = createTextLayer(draft)
+    if (addLayer(model, layer)) editor.selectedLayerId.value = layer.id
   }
 
   return <aside className="panel panel-right" onKeyDown={generateOnEnter(model)}>
     <header className="panel-header">
-      <div className="tab-bar" role="tablist" aria-label="Right panel" onKeyDown={onTabKeyDown}>
-        {RIGHT_TABS.map((entry) => <button
-          key={entry.id}
-          ref={tabRefs[entry.id]}
-          type="button"
-          role="tab"
-          id={tabId(entry.id)}
-          aria-controls={tabPanelId(entry.id)}
-          aria-selected={tab === entry.id}
-          tabIndex={tab === entry.id ? 0 : -1}
-          className={tab === entry.id ? 'tab active' : 'tab'}
-          onClick={() => selectTab(entry.id)}
-        >{entry.label}</button>)}
-      </div>
+      <h1>Layers</h1>
     </header>
     <div className="panel-scroll">
-      <div role="tabpanel" id={tabPanelId('text')} aria-labelledby={tabId('text')} hidden={tab !== 'text'}>
-        <section className="panel-section">
-          <h2 className="section-title">Layers</h2>
-          <TextLayerList
-            layers={layers}
-            selectedIndex={selected}
-            onSelect={setSelectedIndex}
-            onMoveUp={(index) => move(index, index - 1)}
-            onMoveDown={(index) => move(index, index + 1)}
-            onDuplicate={atCapacity ? undefined : duplicate}
-            onRemove={layers.length > 1 ? remove : undefined}
-          />
-          <button type="button" onClick={add} disabled={atCapacity}>Add layer</button>
-          {atCapacity && <p className="text-hint">Limit of {MAX_TEXT_LAYERS} layers</p>}
-        </section>
-        <TextControls
-          index={selected}
-          layer={layers[selected]}
-          onField={(field, value) => model.setTextLayerField(selected, field, value)}
-          onMoveUp={selected > 0 ? () => move(selected, selected - 1) : undefined}
-          onMoveDown={selected < layers.length - 1 ? () => move(selected, selected + 1) : undefined}
-          onDuplicate={atCapacity ? undefined : () => duplicate(selected)}
-          onRemove={layers.length > 1 ? () => remove(selected) : undefined}
-        />
-      </div>
-      <div role="tabpanel" id={tabPanelId('areas')} aria-labelledby={tabId('areas')} hidden={tab !== 'areas'}>
-        {draft.draw !== 'pixel-sort-areas' && <section className="panel-section">
-          <p className="hint-text">Areas only render with the Pixel sorting areas draw.</p>
-          <button type="button" onClick={applyAreasDraw}>Use Pixel sorting areas</button>
-        </section>}
-        <section className="panel-section">
-          <Segmented<'layers' | 'union'>
-            label="Mode"
-            value={draft.areasMode}
-            options={[{ value: 'layers', label: 'Layers' }, { value: 'union', label: 'Union' }]}
-            onChange={(areasMode) => model.setField('areasMode', areasMode)}
-          />
-          <p className="hint-text">Layers sorts each area in list order; union sorts once using the topmost area's options.</p>
-        </section>
-        <AreaList model={model} editor={editor} />
-        <AreaControls model={model} editor={editor} />
-        <section className="panel-section">
-          <h2 className="section-title">Add area</h2>
-          <ToolButtons editor={editor} disabled={atAreaCapacity} />
-          {atAreaCapacity && <p className="text-hint">Limit of {MAX_AREAS} areas</p>}
-        </section>
-        <section className="panel-section">
-          <label className="checkbox-field">
-            <input type="checkbox" checked={editor.maskPreview.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />
-            Preview masks
-          </label>
-        </section>
-      </div>
+      <LayerList model={model} editor={editor} />
+      <section className="panel-section">
+        <h2 className="section-title">Add layer</h2>
+        <ControlField label="Effect">
+          <select value={newEffect} onChange={(event) => { editor.newEffect.value = event.currentTarget.value as EffectId }}>
+            {EFFECT_LIST.map((entry) => <option value={entry.id}>{entry.label}</option>)}
+          </select>
+        </ControlField>
+        <div className="add-row">
+          <button type="button" onClick={addEffect} disabled={atCapacity}>Add effect</button>
+          <button type="button" onClick={addText} disabled={atCapacity}>Add text</button>
+        </div>
+        {atCapacity && <p className="text-hint">Limit of {MAX_LAYERS} layers</p>}
+        <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole frame.</p>
+        <ToolButtons editor={editor} disabled={atCapacity} />
+      </section>
+      <LayerControls model={model} editor={editor} />
+      <section className="panel-section">
+        <label className="checkbox-field">
+          <input type="checkbox" checked={editor.maskPreview.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />
+          Preview effect masks
+        </label>
+      </section>
     </div>
   </aside>
 }

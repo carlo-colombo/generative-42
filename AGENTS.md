@@ -4,9 +4,10 @@ Guidance for AI agents working in this repository.
 
 ## Overview
 
-Generative art tool built with p5.js and TypeScript. Given an image, a draw
-function, and some text, it renders a single static canvas per `seed`.
-A browser UI tweaks generation settings; a headless Puppeteer script renders
+Generative art tool built with p5.js and TypeScript. Given an image, a stack of
+layers, and some text, it renders a single static canvas per `seed`. Each stack
+row is either an effect layer (a shape plus any effect from the registry) or a
+text layer. A browser UI edits the stack; a headless Puppeteer script renders
 seeds to PNG for offline use.
 
 ## Commands
@@ -25,97 +26,117 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
 - `src/main.tsx` — entry point. Reads the generation (URL params, localStorage,
   or `DEFAULT_GENERATION`), mounts p5 into the center `.stage`, and renders the
   left and right panels. A `ResizeObserver` sizes the stage to the available
-  space while preserving the canvas aspect ratio.
-- `src/app.tsx` — `LeftPanel` (image, effects, selection, seed/generate actions)
-  and `RightPanel` (the text layer list and the selected layer's controls),
+  space while preserving the canvas aspect ratio. One debounced preview pipeline
+  calls the composition renderer; the render signature is
+  `JSON.stringify(generation)`, so every layer field participates.
+- `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
+  the add-layer controls, the selected layer inspector, the mask preview toggle),
   plus the image manifest fetch.
-- `src/generation-state.ts` — Preact signals model (`committed` / `draft`),
-  URL and localStorage serialization. `applyGeneration` navigates to a new URL,
-  so the sketch re-runs from scratch.
+- `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
+  `layers` serialization, layer sanitization, and legacy-URL/localStorage
+  migration. `applyGeneration` navigates to a new URL, so the sketch re-runs from
+  scratch. `MAX_LAYERS` (20) caps the stack.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
-  `TextLayerList`, `TextLayerActions`, `TextControls`, `Actions`,
-  `ControlField`).
+  `LayerList`, `LayerControls`, `Actions`, `ToolButtons`, `ControlField`,
+  `Segmented`, `HelpPopover`).
 - `src/style.css` — three-column layout: left controls, centered stage, right
-  text controls; stacks vertically below 940px.
-- `src/types.ts` — `Generation` interface and `DEFAULT_GENERATION`. Adding a
-  new generation option means updating `Generation`, `DEFAULT_GENERATION`,
-  the URL param read/write in `generation-state.ts`, and the UI controls.
-- `src/sketch.ts` — the p5 sketch. `createSketch(gen)` preloads every font and
-  the image, creates a canvas at the image's pixel size, seeds `randomSeed`/
-  `noiseSeed` with `gen.seed`, runs the draw function, then draws the text
-  overlay and the `seed=` label. `extractImage`/`downloadImage` export the
-  canvas.
-- `src/draws.ts` — registry of draw functions (`DRAWS`). Each takes a
-  `DrawContext` (`p`, `img`, `seed`, `generation`). Add new draw styles here
-  and they appear in the UI dropdown automatically.
-- `src/sort.ts` — pixel-sorting core. `sortPixels` sorts one masked pass
-  (bucketed luminance runs, weight blending, ragged offsets) and `sortAreas`
-  composites the `generation.areas` layers or their union; `generation.soloAreaId`
-  narrows the render to a single area. `color-sorting` runs one implicit
-  full-canvas area through the same path.
-- `src/areas.ts` — p5-free area math: `areaWeight` builds the 0..1 mask for a
-  rect, ellipse, or path area (feather ramp, ragged noise), plus `hashString`
-  and `mulberry32`. `shapePolygon` returns the pixel-space mask ring the editor
-  draws, and the ring distance pass is skipped entirely when feather and jitter
-  are both 0.
-- `src/editor-state.ts` — area editor signals (selection, active tool, mask
-  preview, right-panel tab, canvas size) plus the area CRUD helpers.
-- `src/components/StageEditor.tsx` — canvas overlay above the p5 stage. Draws
-  the draft areas (outline, upstream feather band, chevrons, label), the mask
-  preview, and the shape handles; owns the drawing tools and the canvas
-  gestures. Shapes are stored normalised 0..1 against the cropped canvas.
-- `src/components/AreaControls.tsx`, `AreaList.tsx`, and `ToolButtons.tsx` —
-  area inspector, ordered area list, and the shape-tool buttons shared by the
-  stage toolbar and the Areas tab.
-- `src/main.tsx` — mounts the stage column (toolbar above the stage), the
-  editor overlay, and the three Preact roots.
+  layer controls; stacks vertically below 940px.
+- `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
+  `EffectParams`/`DEFAULT_EFFECT_PARAMS`, `DEFAULT_GENERATION`, `LAYER_COLORS`,
+  and `FULL_CANVAS_SHAPE`. Adding a new generation option means updating
+  `Generation`, `DEFAULT_GENERATION`, the URL param read/write in
+  `generation-state.ts`, and the UI controls.
+- `src/effects.ts` — effect registry keyed by `EffectId`:
+  `{ label, defaults, controls, render }`. Controls are range/select/toggle
+  descriptors over `EffectParams`, and `LayerControls` renders them
+  automatically. Effects: `pixel-sort`, `galaxy`, `sections`, `detail-noise`,
+  `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
+  `horizontal-lines`. `normalizeEffectId` aliases the legacy `color-sorting` and
+  `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is hidden from the
+  controls and only migrated legacy `color-sorting` layers carry it.
+- `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
+  and walks visible layers bottom-to-top, rendering each into one clear
+  `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
+  it with normal alpha over the accumulated result. Effect `render` receives
+  `{ p, source, mask, seed, params, edge, generation }`, where `source` is a
+  fresh `p5.Image` of the composite below (so effects chain). Caches masks and
+  per-layer buffers; cache keys chain the config of every layer below, so a
+  top-layer edit does not re-render lower effects. Masks and buffers are cleared
+  on crop, canvas-size, or seed change.
+- `src/sort.ts` — raw pixel sort (`sortPixels`): bucketed luminance runs,
+  mask-segmented runs, ragged block offsets. It writes raw sorted pixels; the
+  generic mask compositor applies feather/ragged alpha exactly once.
+- `src/areas.ts` — p5-free shape math: `maskWeight` builds the 0..1 mask for a
+  rect, ellipse, or path shape (feather ramp, ragged noise); also `hashString`,
+  `mulberry32`, and `shapePolygon`. `maskWeight` reuses one scratch buffer, so a
+  caller that keeps a mask must copy it. `shapePolygon` returns the pixel-space
+  mask ring the editor draws, and the ring distance pass is skipped entirely
+  when feather and jitter are both 0.
+- `src/text.ts` — glyph rasterization (opaque; the engine applies layer opacity)
+  and the non-exported `seed=` label.
+- `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
+  `maskPreview`, `showMasks`, `canvasSize`, `newEffect`) and the unified layer
+  CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
+  duplicate/move), plus the shape clamp/translate/copy helpers. `newEffect` is
+  the effect a newly drawn shape creates.
+- `src/components/StageEditor.tsx` — canvas overlay above the p5 stage. Only
+  effect layers are outlined and editable; it owns the drawing tools and canvas
+  gestures. Shapes are stored normalised 0..1 against the cropped canvas. Sort
+  chevrons appear only on `pixel-sort` layers, and the mask preview covers
+  effect layers only.
+- `src/components/LayerList.tsx` — the unified stack list (UI top = topmost
+  layer): type chip, name, visibility, solo, duplicate, delete, up/down, and
+  drag-and-drop reorder. `LayerControls.tsx` dispatches on layer kind; the effect
+  inspector includes the effect dropdown (resetting params to that effect's
+  defaults while keeping shape/edge/opacity), generated effect controls, edge
+  mode/feather/jitter, opacity, colour, and label.
+- `src/sketch.ts` — the p5 sketch. Preloads every font and the source image,
+  crops the image, creates the base canvas at the cropped pixel size, and hands
+  the render function to `main.tsx`. One `renderComposition` call replaces the
+  old draw function + separate text canvas. Sets `canvas.base-layer.dataset.composed`
+  to the rendered seed for headless capture. The `seed=` label stays on a
+  separate non-exported overlay canvas. `downloadImage` exports the base
+  composition (text included).
 - `src/color.ts` — color helpers (e.g. `averageColorInArea`).
 - `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
   files live in `public/fonts/`; every `FONTS` entry must exist there, because
   the sketch preloads all of them.
-- `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview`
-  on port 4173, opens the app with `?seed=N`, captures the canvas, and writes
-  PNGs to `output/`.
+- `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview` on
+  port 4173, opens the app with `?seed=N`, waits for the composition-ready flag,
+  captures `canvas.base-layer`, and writes `output/gen-N.png`.
 
-## Text layers
+## Layers
 
-`Generation.texts` holds the text layers (`TextLayer` in `src/types.ts`),
-capped at `MAX_TEXT_LAYERS` (8) in `generation-state.ts`. A URL carries them in
-a single `texts` param: base64url-encoded JSON. When that payload exceeds 1500
-characters the URL stores `texts=<id>` instead and the layers go to
-`localStorage` under `texts:<id>`, so such a URL only resolves in the browser
-that created it. Pre-change per-layer params (`text`, `textSize`, `text2`, ...)
-and `localStorage.generation` blobs are still migrated through the same legacy
-key map.
+`Generation.layers` is stored bottom-to-top; the right panel shows it
+top-to-bottom. The cropped source image is the implicit background, so an empty
+stack renders the source and nothing else.
 
-## Sort areas
+`Layer = EffectLayer | TextLayer`, and both carry `id`, `label`, `visible`, and
+`opacity`.
 
-`Generation.areas` is an ordered list of `SortArea` shapes (rect, ellipse, or
-path, including concave rings and open curves with a `side`). Each area carries
-its own direction, reverse, randomness, feather, ragged edge, and opacity;
-coordinates are normalised 0..1 against the cropped canvas, so changing the
-crop re-anchors an area to the new frame rather than to image content. Feather
-and jitter are relative to `min(width, height)`.
+- `EffectLayer` adds `color` (overlay colour), `shape` (`rect`, `ellipse`, or
+  `path`, normalised 0..1), `edge` (`feather`, `jitter`, `mode`), `effect`, and
+  `params`. The effect paints inside the shape mask. A full-canvas effect is a
+  rect layer covering 0..1; there is no global draw selector.
+- `TextLayer` adds `text`, `align`, `vAlign`, `x`, `y`, `size`, and `font`. Text
+  layers are full-canvas positioned, are not stage-editable, and have no shape
+  mask in this pass. Text is rasterized into a transparent scratch, composited
+  in stack order with its opacity, and baked into exports.
 
-Feather is a ramp inward from the whole shape border: weight rises from 0 at
-the edge to 1 at `feather` pixels inside, on every side. Direction and reverse
-only order the runs and never change which part of the border is feathered, and
-the stage overlay draws the band uniformly to match.
+Each visible layer renders over the composite below it, so galaxy -> pixel-sort
+chains sample the galaxy output. Only normal alpha compositing is used; there
+are no blend modes. `soloLayerId` narrows the render to one layer.
 
-Every run is sorted in full by default. `sort.randomness` is the share of the
-run, drawn at random per run, that is left unsorted at the end a run is read
-from (its start, or its end when `sort.reverse` is set). At 0 the sorted block
-fills the run, so the area border stays sharp; higher values keep the original
-pixels along that border, giving the area an organic edge. `edge.mode` decides
-how the sorted pixels land against the mask: `blend` cross-fades every pixel by
-the mask weight, so the feather ramp shows, while `ragged` writes hard pixels
-and instead displaces each run's sorted block by a random offset up to
-`edge.jitter`, one draw per run, clamped to the line rather than to the run.
-Feather is therefore a blend-only control, and jitter a ragged-only one.
-
-The legacy `color-sorting` draw still passes `colorSortAmount` as a
-deterministic share of each run, with the same per-line wobble as before, and
-never randomises a run.
+Per-layer RNG seed is `seed ^ hashString(layer.id)`, so a layer's own
+randomness stays stable when layers are reordered. Reordering still changes the
+composite because each effect samples the layers below it. The generic
+compositor applies edge coverage once:
+`blend` alpha = `bufferAlpha * maskWeight * opacity`, `ragged` alpha =
+`bufferAlpha * (maskWeight > 0 ? 1 : 0) * opacity`. Feather is a ramp inward from
+the whole shape border and therefore a blend-only control; jitter displaces each
+pixel-sort run's sorted block and is a ragged-only control. A single unrotated
+rect covering the whole canvas at feather 0 and jitter 0 skips the mask
+entirely.
 
 Ellipse rings use `clamp(ceil(perimeter / 2), 96, 512)` segments. An open path
 closes along the canvas border between its first and last crossing; when the
@@ -123,19 +144,35 @@ stroke crosses the border more than twice the ring closes over the widest
 crossing pair and still walks the excursion vertices, so those interiors keep
 their even-odd parity. `AreaShape` `path.tension` is reserved and unused.
 
-`areas` is serialized exactly like `texts`: base64url JSON in one param, with
-`areas=<id>` and an `localStorage` entry past 6000 characters, so such a URL
-resolves only in the browser that created it. The stored copy is the same
-quantized JSON that produced the encoding, and a failed `localStorage` write
-falls back to the inline param. `areasMode` is `layers` (each area sorts and
-composites in list order, with alpha = feather weight * opacity) or `union` (one
-pass using the topmost area's sort options); `soloAreaId` narrows the render to a
-single area and `MAX_AREAS` (12) caps the list. A single unrotated rect area
-that covers the whole canvas at feather 0, jitter 0, opacity 100 and blend mode
-skips the mask entirely, which is the path `color-sorting` takes. Rendering only
-follows areas
-for the `pixel-sort-areas` draw; `/generate/headless.ts` captures
-`canvas.base-layer`, so the stage overlay canvas is never part of an export.
+## Serialization and migration
+
+`layers` is one URL param: base64url-encoded, quantized JSON. Past 6000
+characters the URL stores `layers=<id>` instead and the payload goes to
+`localStorage` under `layers:<id>`, so such a URL resolves only in the browser
+that created it. A failed `localStorage` write falls back to the inline param.
+`soloLayerId` is a separate scalar param. `applyGeneration` also writes the full
+generation to `localStorage.generation` and deletes the legacy keys (`draw`,
+`texts`, `areas`, `areasMode`, `soloAreaId`, the per-layer text params, and the
+old effect globals).
+
+When a URL or stored generation has no `layers`, it is migrated:
+
+- `draw=pixel-sort-areas`: one pixel-sort layer per legacy area, in area order,
+  with that area's shape, edge, direction, reverse, and randomness; no global
+  effect layer. `soloAreaId` becomes `soloLayerId` when it maps to one of them.
+- `draw=color-sorting`: one full-canvas pixel-sort layer carrying the legacy
+  `colorSortAmount` as the hidden `amount` and `colorSortDirection`; reverse off
+  and randomness 0.
+- Any other draw: one full-canvas effect layer from `draw` plus the legacy
+  effect fields (`grayLevels`, `section*`, `detailNoiseMode`), with the legacy
+  text layers above it.
+- Legacy texts come from the `texts` param (inline or `texts:<id>` storage),
+  then the pre-change per-layer params (`text`, `textSize`, `text2`, ...), then
+  the two default text layers.
+
+Per-layer seeds mean migrated renders need not be pixel-identical to the old
+ones. The legacy `amount` behavior (each run sorted by a deterministic share with
+the old per-line wobble) is retained for migrated `color-sorting` layers only.
 
 ## Conventions
 
@@ -143,10 +180,11 @@ for the `pixel-sort-areas` draw; `/generate/headless.ts` captures
   uncommented unless asked.
 - UI is Preact + `@preact/signals`; controls read `model.draft.value` so edits
   preview live, and `model.applyGeneration()` commits them via a reload.
-- The canvas is sized exactly to the source image (`createCanvas(img.width,
-  img.height)`); do not assume a fixed canvas size.
-- Generation is fully deterministic given the seed (seeded randoms, `noLoop`).
-- User-visible text is uppercased (see the textarea `input` handler).
+- The canvas is sized exactly to the cropped source image; do not assume a fixed
+  canvas size.
+- Generation is fully deterministic given the seed (seeded randoms per layer,
+  `noLoop`).
+- User-visible text is uppercased (see the text field handler and `drawText`).
 - Non-scaling overlays must scale with the image. Baseline convention: text
   sized relative to `min(width, height) / 926`, the mantova.jpg short side.
 - Images and fonts are served from `public/` and must be added to
@@ -162,3 +200,5 @@ for the `pixel-sort-areas` draw; `/generate/headless.ts` captures
 
 - Commits are explicit — only commit when asked.
 - `dist/` is a build output; regenerate via `pnpm build`.
+- `/generate/headless.ts` captures `canvas.base-layer`, which now includes text;
+  the stage overlay and the `seed=` canvas are never part of an export.

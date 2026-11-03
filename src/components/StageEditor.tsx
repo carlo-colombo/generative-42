@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { areaWeight, shapePolygon } from '../areas'
+import { maskWeight, shapePolygon } from '../areas'
 import type { EditorModel } from '../editor-state'
-import { addArea, clamp01, clampShape, createSortArea, translateShape, updateArea } from '../editor-state'
-import { MAX_AREAS, type GenerationModel } from '../generation-state'
-import { soloAreas } from '../sort'
-import type { AreaShape, Pt, SortArea } from '../types'
+import { addLayer, clamp01, clampShape, createEffectLayer, translateShape, updateEffectLayer } from '../editor-state'
+import { MAX_LAYERS, type GenerationModel } from '../generation-state'
+import type { AreaShape, EffectLayer, Pt } from '../types'
 
 type Px = { x: number; y: number }
 type Size = { width: number; height: number }
@@ -29,7 +28,7 @@ const EDGE_HIT = 8
 const SIMPLIFY_TOLERANCE = 2
 const MIN_DRAW_SIZE = 3
 const MIN_SHAPE_SIZE = 4
-// Per-area preview masks are one byte per pixel; past this budget the preview
+// Per-layer preview masks are one byte per pixel; past this budget the preview
 // rebuilds every mask instead of keeping them.
 const MASK_PREVIEW_CACHE_BYTES = 64 * 1024 * 1024
 
@@ -112,7 +111,7 @@ function outlinePoints(shape: AreaShape, size: Size): { points: Px[]; closed: bo
   return { points: shapePolygon(shape, size.width, size.height), closed: true }
 }
 
-// The mask region, i.e. what areaWeight covers; open paths come back closed along the canvas border.
+// The mask region, i.e. what maskWeight covers; open paths come back closed along the canvas border.
 function regionPoints(shape: AreaShape, size: Size): Px[] {
   return shapePolygon(shape, size.width, size.height)
 }
@@ -241,9 +240,9 @@ function simplify(points: Px[], tolerance: number): Px[] {
 
 type MaskCache = Map<string, { version: string; mask: Uint8Array }>
 
-// Everything a preview mask depends on: canvas size, seed and the area's own geometry and edge.
-function areaMaskVersion(area: SortArea, size: Size, seed: number): string {
-  return `${size.width}x${size.height}:${seed}:${area.id}:${JSON.stringify(area.shape)}:${area.edge.feather}:${area.edge.jitter}:${area.edge.mode}`
+// Everything a preview mask depends on: canvas size, seed and the layer's own geometry and edge.
+function layerMaskVersion(layer: EffectLayer, size: Size, seed: number): string {
+  return `${size.width}x${size.height}:${seed}:${layer.id}:${JSON.stringify(layer.shape)}:${layer.edge.feather}:${layer.edge.jitter}:${layer.edge.mode}`
 }
 
 function withAlpha(color: string, alpha: number): string {
@@ -260,19 +259,21 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   const polygonRef = useRef<Px[]>([])
   const hoverRef = useRef<Px | null>(null)
   const maskCacheRef = useRef<{ key: string; image: ImageData } | null>(null)
-  const areaMaskCacheRef = useRef<MaskCache>(new Map())
+  const layerMaskCacheRef = useRef<MaskCache>(new Map())
   const frameRef = useRef(0)
-  const selectedRef = useRef<SortArea | undefined>(undefined)
+  const selectedRef = useRef<EffectLayer | undefined>(undefined)
   const [polygonCount, setPolygonCount] = useState(0)
   const [pendingCurve, setPendingCurve] = useState<Px[] | null>(null)
 
   const draft = model.draft.value
   const tool = editor.tool.value
-  const selectedId = editor.selectedId.value
+  const selectedId = editor.selectedLayerId.value
   const maskPreview = editor.maskPreview.value
   const showMasks = editor.showMasks.value
-  const areas = draft.areas.map((area) => ({ ...area, shape: clampShape(area.shape) }))
-  const selected = areas.find((area) => area.id === selectedId)
+  const layers = draft.layers
+    .filter((layer): layer is EffectLayer => layer.kind === 'effect')
+    .map((layer) => ({ ...layer, shape: clampShape(layer.shape) }))
+  const selected = layers.find((layer) => layer.id === selectedId)
 
   // One draw per animation frame: pointermoves and draft updates coalesce instead of
   // rebuilding the overlay for every event.
@@ -289,78 +290,78 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     return canvas && canvas.width > 0 && canvas.height > 0 ? { width: canvas.width, height: canvas.height } : null
   }
 
-  function drawArea(context: CanvasRenderingContext2D, area: SortArea, size: Size, isSelected: boolean, scale: number) {
-    const soloedOut = Boolean(draft.soloAreaId) && draft.soloAreaId !== area.id
+  function drawLayer(context: CanvasRenderingContext2D, layer: EffectLayer, size: Size, isSelected: boolean, scale: number) {
+    const soloedOut = Boolean(draft.soloLayerId) && draft.soloLayerId !== layer.id
     context.save()
-    context.globalAlpha = area.visible && !soloedOut ? 1 : 0.3
+    context.globalAlpha = layer.visible && !soloedOut ? 1 : 0.3
 
     if (isSelected) {
-      const region = regionPoints(area.shape, size)
+      const region = regionPoints(layer.shape, size)
       context.beginPath()
       region.forEach((point, index) => (index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y)))
       context.closePath()
-      context.fillStyle = withAlpha(area.color, 0.1)
+      context.fillStyle = withAlpha(layer.color, 0.1)
       context.fill()
     }
 
-    drawFeatherBand(context, area, size)
+    drawFeatherBand(context, layer, size)
 
-    const outline = outlinePoints(area.shape, size)
+    const outline = outlinePoints(layer.shape, size)
     context.beginPath()
     outline.points.forEach((point, index) => (index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y)))
     if (outline.closed) context.closePath()
     context.setLineDash(isSelected ? [] : [7 * scale, 5 * scale])
     context.lineWidth = (isSelected ? 2 : 1.2) * scale
-    context.strokeStyle = isSelected ? '#ffffff' : area.color
+    context.strokeStyle = isSelected ? '#ffffff' : layer.color
     context.stroke()
     if (isSelected) {
       context.lineWidth = 1 * scale
-      context.strokeStyle = area.color
+      context.strokeStyle = layer.color
       context.stroke()
     }
     context.setLineDash([])
 
-    drawChevrons(context, area, size, scale)
-    drawLabel(context, area, size, isSelected, scale)
-    if (isSelected) drawHandles(context, area.shape, size, scale)
+    if (layer.effect === 'pixel-sort') drawChevrons(context, layer, size, scale)
+    drawLabel(context, layer, size, isSelected, scale)
+    if (isSelected) drawHandles(context, layer.shape, size, scale)
     context.restore()
   }
 
-  function drawFeatherBand(context: CanvasRenderingContext2D, area: SortArea, size: Size) {
-    const featherPx = (area.edge.feather / 100) * Math.min(size.width, size.height)
+  function drawFeatherBand(context: CanvasRenderingContext2D, layer: EffectLayer, size: Size) {
+    const featherPx = (layer.edge.feather / 100) * Math.min(size.width, size.height)
     if (featherPx < 0.75) return
     context.save()
-    const region = regionPoints(area.shape, size)
+    const region = regionPoints(layer.shape, size)
     context.beginPath()
     region.forEach((point, index) => (index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y)))
     context.closePath()
     context.clip()
 
     context.beginPath()
-    const outline = outlinePoints(area.shape, size)
+    const outline = outlinePoints(layer.shape, size)
     outline.points.forEach((point, index) => (index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y)))
     if (outline.closed) context.closePath()
     context.lineWidth = featherPx * 2
-    context.strokeStyle = withAlpha(area.color, 0.3)
+    context.strokeStyle = withAlpha(layer.color, 0.3)
     context.stroke()
     context.restore()
   }
 
-  function drawChevrons(context: CanvasRenderingContext2D, area: SortArea, size: Size, scale: number) {
-    const bounds = shapeBounds(area.shape, size)
+  function drawChevrons(context: CanvasRenderingContext2D, layer: EffectLayer, size: Size, scale: number) {
+    const bounds = shapeBounds(layer.shape, size)
     const width = bounds.maxX - bounds.minX
     const height = bounds.maxY - bounds.minY
     if (width < 12 || height < 12) return
 
-    const horizontal = area.sort.direction === 'horizontal'
-    const forward = !area.sort.reverse
+    const horizontal = layer.params.direction === 'horizontal'
+    const forward = !layer.params.reverse
     const centerX = (bounds.minX + bounds.maxX) / 2
     const centerY = (bounds.minY + bounds.maxY) / 2
     const spread = Math.min((horizontal ? width : height) * 0.32, 60 * scale)
     const arm = Math.min(Math.min(width, height) * 0.12, 11 * scale)
 
     context.save()
-    context.strokeStyle = withAlpha(area.color, 0.9)
+    context.strokeStyle = withAlpha(layer.color, 0.9)
     context.lineWidth = Math.max(1.5 * scale, arm * 0.22)
     context.lineCap = 'round'
     for (const step of [-1, -0.34, 0.34, 1]) {
@@ -385,10 +386,10 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     context.restore()
   }
 
-  function drawLabel(context: CanvasRenderingContext2D, area: SortArea, size: Size, isSelected: boolean, scale: number) {
-    const bounds = shapeBounds(area.shape, size)
+  function drawLabel(context: CanvasRenderingContext2D, layer: EffectLayer, size: Size, isSelected: boolean, scale: number) {
+    const bounds = shapeBounds(layer.shape, size)
     const fontSize = 11 * scale
-    const text = area.label || area.id
+    const text = layer.label || layer.id
     context.save()
     context.font = `${fontSize}px ui-monospace, "Space Mono", monospace`
     const metrics = context.measureText(text)
@@ -399,7 +400,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     const y = Math.min(Math.max(bounds.minY + 4 * scale, 2), Math.max(2, size.height - boxHeight - 2))
     context.fillStyle = 'rgba(0, 0, 0, 0.6)'
     context.fillRect(x, y, boxWidth, boxHeight)
-    context.fillStyle = isSelected ? '#ffffff' : area.color
+    context.fillStyle = isSelected ? '#ffffff' : layer.color
     context.textBaseline = 'middle'
     context.fillText(text, x + padding, y + boxHeight / 2 + 0.5)
     context.restore()
@@ -479,37 +480,37 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   }
 
   function drawMaskPreview(context: CanvasRenderingContext2D, size: Size) {
-    const renderable = soloAreas(areas, draft.soloAreaId).filter((area) => area.visible)
+    const renderable = layers.filter((layer) => layer.visible && (!draft.soloLayerId || draft.soloLayerId === layer.id))
     const pixelCount = size.width * size.height
-    const versions = renderable.map((area) => areaMaskVersion(area, size, draft.seed))
+    const versions = renderable.map((layer) => layerMaskVersion(layer, size, draft.seed))
     const key = `${size.width}x${size.height}:${draft.seed}:${versions.join('|')}`
     if (!maskCacheRef.current || maskCacheRef.current.key !== key) {
-      const cache = areaMaskCacheRef.current
+      const cache = layerMaskCacheRef.current
       const cacheable = renderable.length * pixelCount <= MASK_PREVIEW_CACHE_BYTES
-      const union = new Uint8Array(pixelCount)
-      renderable.forEach((area, index) => {
+      const combined = new Uint8Array(pixelCount)
+      renderable.forEach((layer, index) => {
         const version = versions[index]
-        const cached = cache.get(area.id)
+        const cached = cache.get(layer.id)
         let mask = cached && cached.version === version ? cached.mask : null
         if (!mask) {
-          const weights = areaWeight(area, size.width, size.height, draft.seed)
+          const weights = maskWeight(layer.shape, layer.edge, size.width, size.height, draft.seed, layer.id)
           mask = new Uint8Array(pixelCount)
           for (let i = 0; i < pixelCount; i++) mask[i] = Math.round(weights[i] * 255)
-          if (cacheable) cache.set(area.id, { version, mask })
+          if (cacheable) cache.set(layer.id, { version, mask })
         }
         for (let i = 0; i < pixelCount; i++) {
-          if (mask[i] > union[i]) union[i] = mask[i]
+          if (mask[i] > combined[i]) combined[i] = mask[i]
         }
       })
       if (cacheable) {
-        const live = new Set(renderable.map((area) => area.id))
+        const live = new Set(renderable.map((layer) => layer.id))
         for (const id of [...cache.keys()]) if (!live.has(id)) cache.delete(id)
       } else {
         cache.clear()
       }
       const image = new ImageData(size.width, size.height)
       for (let i = 0; i < pixelCount; i++) {
-        const value = union[i]
+        const value = combined[i]
         const offset = i * 4
         image.data[offset] = value
         image.data[offset + 1] = value
@@ -518,6 +519,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       }
       maskCacheRef.current = { key, image }
     }
+
     context.putImageData(maskCacheRef.current.image, 0, 0)
   }
 
@@ -543,7 +545,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     }
     // While a gesture is in flight the outlines follow it live and the weight map
     // is rebuilt once, when the pointer is released.
-    for (const area of areas) drawArea(context, area, size, area.id === selectedId, scale)
+    for (const layer of layers) drawLayer(context, layer, size, layer.id === selectedId, scale)
     drawPending(context, size, scale)
   }
 
@@ -612,12 +614,11 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   }
 
   function commitShape(shape: AreaShape) {
-    if (model.draft.value.areas.length >= MAX_AREAS) return
-    const area = createSortArea(clampShape(shape), model.draft.value)
-    addArea(model, area)
-    editor.selectedId.value = area.id
+    if (model.draft.value.layers.length >= MAX_LAYERS) return
+    const layer = createEffectLayer(clampShape(shape), model.draft.value, editor.newEffect.value)
+    if (!addLayer(model, layer)) return
+    editor.selectedLayerId.value = layer.id
     editor.tool.value = 'select'
-    editor.tab.value = 'areas'
     polygonRef.current = []
     hoverRef.current = null
     setPolygonCount(0)
@@ -732,10 +733,10 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
           if (Math.hypot(point.x - points[index].x, point.y - points[index].y) > VERTEX_HIT * scale) continue
           if (alt) {
             if (points.length > (selected.shape.closed ? 3 : 2)) {
-              updateArea(model, selected.id, (area) =>
-                area.shape.kind === 'path'
-                  ? { ...area, shape: { ...area.shape, points: area.shape.points.filter((_, i) => i !== index) } }
-                  : area,
+              updateEffectLayer(model, selected.id, (layer) =>
+                layer.shape.kind === 'path'
+                  ? { ...layer, shape: { ...layer.shape, points: layer.shape.points.filter((_, i) => i !== index) } }
+                  : layer,
               )
             }
             return
@@ -747,16 +748,16 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
           const segment = nearestSegment(points, selected.shape.closed, point)
           if (segment && segment.distance <= EDGE_HIT * scale && selected.shape.points.length > 1) {
             const inserted = toPt(segment.point, size)
-            updateArea(model, selected.id, (area) =>
-              area.shape.kind === 'path'
+            updateEffectLayer(model, selected.id, (layer) =>
+              layer.shape.kind === 'path'
                 ? {
-                    ...area,
+                    ...layer,
                     shape: {
-                      ...area.shape,
-                      points: [...area.shape.points.slice(0, segment.index + 1), inserted, ...area.shape.points.slice(segment.index + 1)],
+                      ...layer.shape,
+                      points: [...layer.shape.points.slice(0, segment.index + 1), inserted, ...layer.shape.points.slice(segment.index + 1)],
                     },
                   }
-                : area,
+                : layer,
             )
             return
           }
@@ -772,13 +773,12 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       }
     }
 
-    const hit = [...areas].reverse().find((area) => hitShape(area.shape, point, size, EDGE_HIT * scale))
+    const hit = [...layers].reverse().find((layer) => hitShape(layer.shape, point, size, EDGE_HIT * scale))
     if (!hit) {
-      editor.selectedId.value = null
+      editor.selectedLayerId.value = null
       return
     }
-    editor.selectedId.value = hit.id
-    editor.tab.value = 'areas'
+    editor.selectedLayerId.value = hit.id
     dragRef.current = { kind: 'move', id: hit.id, start: point, shape: hit.shape }
   }
 
@@ -836,7 +836,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       )
       if (handle) return resizeCursor(selected.shape, handle, size)
     }
-    const hit = [...areas].reverse().find((area) => hitShape(area.shape, point, size, EDGE_HIT * scale))
+    const hit = [...layers].reverse().find((layer) => hitShape(layer.shape, point, size, EDGE_HIT * scale))
     return hit ? 'move' : 'default'
   }
 
@@ -878,23 +878,22 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
 
     if (drag.kind === 'move') {
       const shape = moveShape(drag.shape, drag.start, point, size)
-      updateArea(model, drag.id, (area) => ({ ...area, shape }))
+      updateEffectLayer(model, drag.id, (layer) => ({ ...layer, shape }))
       return
     }
 
     if (drag.kind === 'resize') {
-      const canvas = canvasRef.current
-      const minSize = MIN_SHAPE_SIZE * (canvas ? uiScaleOf(canvas) : 1)
+      const minSize = MIN_SHAPE_SIZE * uiScaleOf(canvas)
       const shape = clampShape(resizeShape(drag.shape, drag.handle, point, size, minSize))
-      updateArea(model, drag.id, (area) => ({ ...area, shape }))
+      updateEffectLayer(model, drag.id, (layer) => ({ ...layer, shape }))
       return
     }
 
     if (drag.kind === 'vertex') {
-      updateArea(model, drag.id, (area) =>
-        area.shape.kind === 'path'
-          ? { ...area, shape: { ...area.shape, points: area.shape.points.map((pathPoint, index) => (index === drag.index ? toPt(point, size) : pathPoint)) } }
-          : area,
+      updateEffectLayer(model, drag.id, (layer) =>
+        layer.shape.kind === 'path'
+          ? { ...layer, shape: { ...layer.shape, points: layer.shape.points.map((pathPoint, index) => (index === drag.index ? toPt(point, size) : pathPoint)) } }
+          : layer,
       )
     }
   }
@@ -951,7 +950,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         setPolygonCount(0)
         setPendingCurve(null)
         dragRef.current = { kind: 'none' }
-        editor.selectedId.value = null
+        editor.selectedLayerId.value = null
         scheduleDraw()
         return
       }
@@ -986,12 +985,12 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
       else if (event.key === 'ArrowDown') delta.y = step
       else return
       event.preventDefault()
-      updateArea(model, active.id, (area) => {
+      updateEffectLayer(model, active.id, (layer) => {
         const size = canvasSize()
-        if (!size) return { ...area, shape: clampShape(translateShape(area.shape, delta.x, delta.y)) }
+        if (!size) return { ...layer, shape: clampShape(translateShape(layer.shape, delta.x, delta.y)) }
         return {
-          ...area,
-          shape: moveShape(area.shape, { x: 0, y: 0 }, { x: delta.x * size.width, y: delta.y * size.height }, size),
+          ...layer,
+          shape: moveShape(layer.shape, { x: 0, y: 0 }, { x: delta.x * size.width, y: delta.y * size.height }, size),
         }
       })
     }
@@ -1006,7 +1005,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         ref={canvasRef}
         className="editor-canvas"
         role="img"
-        aria-label="Area editing surface: draw and adjust the sort areas over the artwork"
+        aria-label="Layer editing surface: draw and adjust effect layers over the artwork"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

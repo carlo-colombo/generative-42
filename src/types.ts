@@ -5,17 +5,6 @@ export type ColorSortDirection = "horizontal" | "vertical";
 export type SectionDirection = "vertical" | "horizontal";
 export type DetailNoiseMode = "bw" | "color";
 
-export type TextLayer = {
-  text: string;
-  align: TextAlign;
-  vAlign: TextVAlign;
-  x: number;
-  y: number;
-  size: number;
-  font: string;
-  opacity: number;
-};
-
 export type Pt = { x: number; y: number };
 
 export type AreaShape =
@@ -25,37 +14,28 @@ export type AreaShape =
 
 export type EdgeMode = 'blend' | 'ragged';
 
-export type SortArea = {
-  id: string;
-  label: string;
-  color: string;
-  visible: boolean;
-  shape: AreaShape;
-  edge: { feather: number; jitter: number; mode: EdgeMode };
-  sort: {
-    direction: ColorSortDirection;
-    reverse: boolean;
-    randomness: number;
-  };
-  opacity: number;
-};
+export type LayerEdge = { feather: number; jitter: number; mode: EdgeMode };
 
-export interface Generation {
-  seed: number;
-  image: string;
-  draw: string;
+export type EffectId =
+  | 'pixel-sort'
+  | 'rect'
+  | 'circles'
+  | 'grey-squares'
+  | 'lines'
+  | 'vertical-lines'
+  | 'horizontal-lines'
+  | 'galaxy'
+  | 'sections'
+  | 'detail-noise';
+
+export interface EffectParams {
   grayLevels: number;
-  texts: TextLayer[];
-  cropFormat: CropFormat;
-  cropX: number;
-  cropY: number;
-  cropSize: number;
-  cropPreview: boolean;
-  colorSortAmount: number;
-  colorSortDirection: ColorSortDirection;
-  areas: SortArea[];
-  areasMode: 'layers' | 'union';
-  soloAreaId: string;
+  direction: ColorSortDirection;
+  reverse: boolean;
+  randomness: number;
+  // Only migrated legacy color-sorting layers carry an amount; the pixel-sort
+  // controls sort whole runs and leave `amount` null.
+  amount: number | null;
   sectionCount: number;
   sectionOffset: number;
   sectionDirection: SectionDirection;
@@ -64,47 +44,115 @@ export interface Generation {
   detailNoiseMode: DetailNoiseMode;
 }
 
-export const DEFAULT_GENERATION: Generation = {
-  seed: 1,
-  image: "/assets/door.jpg",
-  draw: "grey-squares",
+export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   grayLevels: 8,
-  texts: [
-    {
-      text: "ATTENZIONE\nAL\nLEOPARDO",
-      align: "right",
-      vAlign: "center",
-      x: 95,
-      y: 50,
-      size: 375,
-      font: "/fonts/SpaceMono-Regular.ttf",
-      opacity: 100,
-    },
-    {
-      text: "",
-      align: "left",
-      vAlign: "bottom",
-      x: 5,
-      y: 95,
-      size: 100,
-      font: "/fonts/SpaceMono-Regular.ttf",
-      opacity: 100,
-    },
-  ],
-  cropFormat: "original",
-  cropX: 50,
-  cropY: 50,
-  cropSize: 100,
-  cropPreview: true,
-  colorSortAmount: 100,
-  colorSortDirection: "horizontal",
-  areas: [],
-  areasMode: 'layers',
-  soloAreaId: '',
+  direction: "horizontal",
+  reverse: false,
+  randomness: 0,
+  amount: null,
   sectionCount: 3,
   sectionOffset: 33,
   sectionDirection: "vertical",
   sectionInvertRatio: 5,
   sectionPosterizeRatio: 20,
   detailNoiseMode: "bw",
+};
+
+export type LayerBase = {
+  id: string;
+  label: string;
+  visible: boolean;
+  opacity: number;
+};
+
+export type EffectLayer = LayerBase & {
+  kind: 'effect';
+  color: string;
+  shape: AreaShape;
+  edge: LayerEdge;
+  effect: EffectId;
+  params: EffectParams;
+};
+
+export type TextLayer = LayerBase & {
+  kind: 'text';
+  text: string;
+  align: TextAlign;
+  vAlign: TextVAlign;
+  x: number;
+  y: number;
+  size: number;
+  font: string;
+};
+
+export type Layer = EffectLayer | TextLayer;
+
+export const LAYER_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#b388ff', '#ff9f1c'];
+
+export interface Generation {
+  seed: number;
+  image: string;
+  cropFormat: CropFormat;
+  cropX: number;
+  cropY: number;
+  cropSize: number;
+  cropPreview: boolean;
+  soloLayerId: string;
+  // Bottom-to-top; the cropped source image is the implicit background.
+  layers: Layer[];
+}
+
+export const FULL_CANVAS_SHAPE: AreaShape = { kind: 'rect', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
+
+export const DEFAULT_GENERATION: Generation = {
+  seed: 1,
+  image: "/assets/door.jpg",
+  cropFormat: "original",
+  cropX: 50,
+  cropY: 50,
+  cropSize: 100,
+  cropPreview: true,
+  soloLayerId: '',
+  layers: [
+    {
+      kind: 'effect',
+      id: 'e1',
+      label: 'Grey squares',
+      visible: true,
+      opacity: 100,
+      color: LAYER_COLORS[1],
+      shape: FULL_CANVAS_SHAPE,
+      edge: { feather: 0, jitter: 0, mode: 'blend' },
+      effect: 'grey-squares',
+      params: { ...DEFAULT_EFFECT_PARAMS },
+    },
+    {
+      kind: 'text',
+      id: 't1',
+      label: 'Text 1',
+      visible: true,
+      opacity: 100,
+      text: 'ATTENZIONE\nAL\nLEOPARDO',
+      align: 'right',
+      vAlign: 'center',
+      x: 95,
+      y: 50,
+      size: 375,
+      font: '/fonts/SpaceMono-Regular.ttf',
+    },
+    {
+      kind: 'text',
+      id: 't2',
+      label: 'Text 2',
+      visible: true,
+      opacity: 100,
+      text: '',
+      align: 'left',
+      vAlign: 'bottom',
+      x: 5,
+      y: 95,
+      size: 100,
+      font: '/fonts/SpaceMono-Regular.ttf',
+    },
+  ],
 };

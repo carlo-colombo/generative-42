@@ -1,8 +1,9 @@
 import puppeteer, { type Browser } from "puppeteer";
-import { execSync, spawn } from "child_process";
+import { execSync } from "child_process";
 import { existsSync, mkdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { preview, type PreviewServer } from "vite";
 import { DEFAULT_GENERATION, type Generation } from "../src/types";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,24 +28,10 @@ function getGenerations(): Generation[] {
   return [{ ...DEFAULT_GENERATION, seed }];
 }
 
-function startPreviewServer(): Promise<void> {
-  return new Promise((res) => {
-    const server = spawn("pnpm", ["run", "preview"], {
-      cwd: ROOT,
-      stdio: "ignore",
-      shell: true,
-    });
-
-    const check = setInterval(() => {
-      fetch(`http://localhost:${PORT}`)
-        .then(() => {
-          clearInterval(check);
-          res();
-        })
-        .catch(() => {});
-    }, 200);
-
-    process.on("exit", () => server.kill());
+function startPreviewServer(): Promise<PreviewServer> {
+  return preview({
+    root: ROOT,
+    preview: { port: PORT, strictPort: true, host: "localhost" },
   });
 }
 
@@ -57,12 +44,14 @@ async function renderGeneration(
   const url = `http://localhost:${PORT}?seed=${gen.seed}`;
   await page.goto(url, { waitUntil: "networkidle0" });
 
-  await page.waitForFunction(() => {
-    const canvas = document.querySelector("canvas.base-layer");
-    return canvas !== null;
-  });
-
-  await new Promise((r) => setTimeout(r, 500));
+  await page.waitForFunction(
+    (seed) => {
+      const canvas = document.querySelector<HTMLCanvasElement>("canvas.base-layer");
+      return canvas !== null && canvas.dataset.composed === String(seed);
+    },
+    {},
+    gen.seed
+  );
 
   const dataUrl = await page.evaluate(() => {
     const canvas = document.querySelector("canvas.base-layer") as HTMLCanvasElement;
@@ -86,19 +75,22 @@ async function main() {
   }
 
   console.log("Starting preview server...");
-  await startPreviewServer();
+  const server = await startPreviewServer();
 
-  const browser = await puppeteer.launch({ headless: true });
-
-  for (const gen of generations) {
-    console.log(`Rendering seed ${gen.seed}...`);
-    const buffer = await renderGeneration(browser, gen);
-    const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}-${gen.draw}.png`);
-    writeFileSync(outPath, buffer);
-    console.log(`  Saved: ${outPath}`);
+  let browser: Browser | undefined;
+  try {
+    browser = await puppeteer.launch({ headless: true });
+    for (const gen of generations) {
+      console.log(`Rendering seed ${gen.seed}...`);
+      const buffer = await renderGeneration(browser, gen);
+      const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}.png`);
+      writeFileSync(outPath, buffer);
+      console.log(`  Saved: ${outPath}`);
+    }
+  } finally {
+    await browser?.close();
+    await server.close();
   }
-
-  await browser.close();
   console.log("Done.");
 }
 

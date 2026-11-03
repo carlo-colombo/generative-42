@@ -12,12 +12,12 @@ import './style.css'
 const generation = getGeneration()
 const model = createGenerationModel(generation)
 const editor = createEditorModel()
+editor.selectedLayerId.value = generation.layers[generation.layers.length - 1]?.id ?? null
 const app = document.getElementById('app')!
-let textCanvas: HTMLCanvasElement | undefined
+let seedCanvas: HTMLCanvasElement | undefined
 let baseCanvas: HTMLCanvasElement | undefined
-let renderText: ((generation: Generation) => void) | undefined
-let renderSort: ((generation: Generation) => { imageChanged: boolean; resized: boolean }) | undefined
-let drawSignature = ''
+let renderComposition: ((generation: Generation) => { imageChanged: boolean; resized: boolean }) | undefined
+let drawnSignature = ''
 let previewTimer = 0
 let pendingPreview: Generation | null = null
 
@@ -67,22 +67,27 @@ const toolbarObserver = new ResizeObserver(fitStage)
 toolbarObserver.observe(toolbarRoot)
 fitStage()
 
-function sortSignature(generation: Generation) {
-  const { texts, ...rest } = generation
-  return JSON.stringify(rest)
+function compositionSignature(generation: Generation) {
+  return JSON.stringify(generation)
+}
+
+function selectFallbackLayer(generation: Generation) {
+  const selected = editor.selectedLayerId.value
+  if (selected && generation.layers.some((layer) => layer.id === selected)) return
+  editor.selectedLayerId.value = generation.layers[generation.layers.length - 1]?.id ?? null
 }
 
 function applyPreview(generation: Generation) {
-  if (!renderSort) return
-  drawSignature = sortSignature(generation)
-  const result = renderSort(generation)
+  if (!renderComposition) return
+  drawnSignature = compositionSignature(generation)
+  const result = renderComposition(generation)
   if (result.resized && baseCanvas) {
     editor.canvasSize.value = { width: baseCanvas.width, height: baseCanvas.height }
     aspectRatio = baseCanvas.width / baseCanvas.height
     fitStage()
     renderEditor()
   }
-  renderText?.(generation)
+  selectFallbackLayer(generation)
 }
 
 function schedulePreview(generation: Generation) {
@@ -97,23 +102,20 @@ function schedulePreview(generation: Generation) {
 }
 
 const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
-  renderText?.(nextGeneration)
   if (!model.livePreview.value) return
-  if (sortSignature(nextGeneration) === drawSignature) return
+  if (compositionSignature(nextGeneration) === drawnSignature) return
   schedulePreview(nextGeneration)
 })
 const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
-const instance = new p5(createSketch(generation, (base, text, renderLayer, renderSortLayer) => {
-  base.classList.add('base-layer')
+const instance = new p5(createSketch(generation, (base, seed, renderLayer) => {
   baseCanvas = base
-  textCanvas = text
-  renderText = renderLayer
-  renderSort = renderSortLayer
-  stage.appendChild(text)
+  seedCanvas = seed
+  renderComposition = renderLayer
+  stage.appendChild(seed)
   aspectRatio = base.width / base.height
+  editor.canvasSize.value = { width: base.width, height: base.height }
   fitStage()
-  drawSignature = sortSignature(model.draft.value)
-  renderLayer(model.draft.value)
+  drawnSignature = compositionSignature(model.draft.value)
   renderEditor()
 }), stage)
 
@@ -133,6 +135,6 @@ if (import.meta.hot) {
     unsubscribePreview()
     stageObserver.disconnect()
     toolbarObserver.disconnect()
-    textCanvas?.remove()
+    seedCanvas?.remove()
   })
 }
