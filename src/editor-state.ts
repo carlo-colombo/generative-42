@@ -12,6 +12,7 @@ export function createEditorModel() {
     selectedId: signal<string | null>(null),
     tool: signal<ShapeTool>('select'),
     maskPreview: signal(false),
+    showMasks: signal(true),
     canvasSize: signal({ width: 0, height: 0 }),
     tab: signal<RightTab>('text'),
   }

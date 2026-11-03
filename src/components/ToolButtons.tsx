@@ -36,6 +36,15 @@ export function StageToolbar({ editor, model }: { editor: EditorModel; model: Ge
   const atCapacity = model.draft.value.areas.length >= MAX_AREAS
   return <div className="stage-toolbar">
     <ToolButtons editor={editor} disabled={atCapacity} />
+    <button
+      type="button"
+      className={editor.showMasks.value ? 'tool-button active' : 'tool-button'}
+      aria-pressed={editor.showMasks.value}
+      title={editor.showMasks.value ? 'Hide the area masks and stop editing the stage' : 'Show the area masks and edit on the stage'}
+      onClick={() => { editor.showMasks.value = !editor.showMasks.value }}
+    >
+      {editor.showMasks.value ? 'Masks on' : 'Masks off'}
+    </button>
     <span className="toolbar-hint">{atCapacity ? `Limit of ${MAX_AREAS} areas` : active?.hint}</span>
   </div>
 }

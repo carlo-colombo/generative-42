@@ -258,6 +258,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   const tool = editor.tool.value
   const selectedId = editor.selectedId.value
   const maskPreview = editor.maskPreview.value
+  const showMasks = editor.showMasks.value
   const areas = draft.areas.map((area) => ({ ...area, shape: clampShape(area.shape) }))
   const selected = areas.find((area) => area.id === selectedId)
 
@@ -541,6 +542,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     const scale = uiScaleOf(canvas)
 
     context.clearRect(0, 0, size.width, size.height)
+    if (!showMasks) return
     if (maskPreview && dragRef.current.kind === 'none') {
       drawMaskPreview(context, size)
       return
@@ -972,7 +974,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   }, [model, editor, pendingCurve])
 
   return (
-    <div className="stage-editor">
+    <div className={showMasks ? 'stage-editor' : 'stage-editor is-hidden'}>
       <canvas
         ref={canvasRef}
         className="editor-canvas"
