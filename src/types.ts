@@ -16,6 +16,32 @@ export type TextLayer = {
   opacity: number;
 };
 
+export type Pt = { x: number; y: number };
+
+export type AreaShape =
+  | { kind: 'rect'; x: number; y: number; w: number; h: number; rotation: number }
+  | { kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number; rotation: number }
+  | { kind: 'path'; closed: boolean; side: 'a' | 'b'; tension: number; points: Pt[] };
+
+export type EdgeMode = 'blend' | 'ragged';
+
+export type SortArea = {
+  id: string;
+  label: string;
+  color: string;
+  visible: boolean;
+  shape: AreaShape;
+  edge: { feather: number; jitter: number; mode: EdgeMode };
+  sort: {
+    direction: ColorSortDirection;
+    reverse: boolean;
+    amount: number;
+    angle?: number;
+    threshold?: [number, number];
+  };
+  opacity: number;
+};
+
 export interface Generation {
   seed: number;
   image: string;
@@ -29,6 +55,9 @@ export interface Generation {
   cropPreview: boolean;
   colorSortAmount: number;
   colorSortDirection: ColorSortDirection;
+  areas: SortArea[];
+  areasMode: 'layers' | 'union';
+  soloAreaId: string;
   sectionCount: number;
   sectionOffset: number;
   sectionDirection: SectionDirection;
@@ -71,6 +100,9 @@ export const DEFAULT_GENERATION: Generation = {
   cropPreview: true,
   colorSortAmount: 100,
   colorSortDirection: "horizontal",
+  areas: [],
+  areasMode: 'layers',
+  soloAreaId: '',
   sectionCount: 3,
   sectionOffset: 33,
   sectionDirection: "vertical",

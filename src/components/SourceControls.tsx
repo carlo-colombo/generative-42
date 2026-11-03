@@ -18,7 +18,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       <h2 className="section-title">Effects</h2>
       <ControlField label="Draw function">
         <select id="draw-select" value={generation.draw} onChange={(event) => { model.setField('draw', (event.currentTarget as HTMLSelectElement).value); model.applyGeneration() }}>
-          {Object.keys(DRAWS).map((name) => <option value={name}>{name}</option>)}
+          {Object.keys(DRAWS).map((name) => <option value={name}>{DRAWS[name].label ?? name}</option>)}
         </select>
       </ControlField>
       {controls.length > 0 && <div className="field-grid">

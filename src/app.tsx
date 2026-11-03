@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'preact/hooks'
+import type { EditorModel } from './editor-state'
 import { MAX_TEXT_LAYERS, type GenerationModel } from './generation-state'
 import { Actions } from './components/Actions'
+import { AreaControls } from './components/AreaControls'
+import { AreaList } from './components/AreaList'
 import { SourceControls } from './components/SourceControls'
 import { TextControls } from './components/TextControls'
 import { TextLayerList } from './components/TextLayerList'
 import { CropControls } from './components/CropControls'
+import { ToolButtons } from './components/ToolButtons'
 
 function useImages(model: GenerationModel) {
   const [images, setImages] = useState<string[]>([])
@@ -56,7 +60,8 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
   </aside>
 }
 
-export function RightPanel({ model }: { model: GenerationModel }) {
+export function RightPanel({ model, editor }: { model: GenerationModel; editor: EditorModel }) {
+  const tab = editor.tab.value
   const layers = model.draft.value.texts
   const [selectedIndex, setSelectedIndex] = useState(0)
   const selected = Math.min(selectedIndex, layers.length - 1)
@@ -88,31 +93,51 @@ export function RightPanel({ model }: { model: GenerationModel }) {
   }
 
   return <aside className="panel panel-right" onKeyDown={generateOnEnter(model)}>
-    <header className="panel-header"><h1>Text</h1></header>
+    <header className="panel-header">
+      <div className="tab-bar" role="tablist" aria-label="Right panel">
+        <button type="button" role="tab" className={tab === 'text' ? 'tab active' : 'tab'} aria-selected={tab === 'text'} onClick={() => { editor.tab.value = 'text' }}>Text</button>
+        <button type="button" role="tab" className={tab === 'areas' ? 'tab active' : 'tab'} aria-selected={tab === 'areas'} onClick={() => { editor.tab.value = 'areas' }}>Areas</button>
+      </div>
+    </header>
     <div className="panel-scroll">
-      <section className="panel-section">
-        <h2 className="section-title">Layers</h2>
-        <TextLayerList
-          layers={layers}
-          selectedIndex={selected}
-          onSelect={setSelectedIndex}
-          onMoveUp={(index) => move(index, index - 1)}
-          onMoveDown={(index) => move(index, index + 1)}
-          onDuplicate={atCapacity ? undefined : duplicate}
-          onRemove={layers.length > 1 ? remove : undefined}
+      {tab === 'text' ? <>
+        <section className="panel-section">
+          <h2 className="section-title">Layers</h2>
+          <TextLayerList
+            layers={layers}
+            selectedIndex={selected}
+            onSelect={setSelectedIndex}
+            onMoveUp={(index) => move(index, index - 1)}
+            onMoveDown={(index) => move(index, index + 1)}
+            onDuplicate={atCapacity ? undefined : duplicate}
+            onRemove={layers.length > 1 ? remove : undefined}
+          />
+          <button type="button" onClick={add} disabled={atCapacity}>Add layer</button>
+          {atCapacity && <p className="text-hint">Limit of {MAX_TEXT_LAYERS} layers</p>}
+        </section>
+        <TextControls
+          index={selected}
+          layer={layers[selected]}
+          onField={(field, value) => model.setTextLayerField(selected, field, value)}
+          onMoveUp={selected > 0 ? () => move(selected, selected - 1) : undefined}
+          onMoveDown={selected < layers.length - 1 ? () => move(selected, selected + 1) : undefined}
+          onDuplicate={atCapacity ? undefined : () => duplicate(selected)}
+          onRemove={layers.length > 1 ? () => remove(selected) : undefined}
         />
-        <button type="button" onClick={add} disabled={atCapacity}>Add layer</button>
-        {atCapacity && <p className="text-hint">Limit of {MAX_TEXT_LAYERS} layers</p>}
-      </section>
-      <TextControls
-        index={selected}
-        layer={layers[selected]}
-        onField={(field, value) => model.setTextLayerField(selected, field, value)}
-        onMoveUp={selected > 0 ? () => move(selected, selected - 1) : undefined}
-        onMoveDown={selected < layers.length - 1 ? () => move(selected, selected + 1) : undefined}
-        onDuplicate={atCapacity ? undefined : () => duplicate(selected)}
-        onRemove={layers.length > 1 ? () => remove(selected) : undefined}
-      />
+      </> : <>
+        <AreaList model={model} editor={editor} />
+        <AreaControls model={model} editor={editor} />
+        <section className="panel-section">
+          <h2 className="section-title">Add area</h2>
+          <ToolButtons editor={editor} />
+        </section>
+        <section className="panel-section">
+          <label className="checkbox-field">
+            <input type="checkbox" checked={editor.maskPreview.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />
+            Preview masks
+          </label>
+        </section>
+      </>}
     </div>
   </aside>
 }

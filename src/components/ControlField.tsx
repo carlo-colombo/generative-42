@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 
-export function ControlField({ label, value, children }: { label: string; value?: string | number; children: ComponentChildren }) {
+export function ControlField({ label, value, children }: { label: string; value?: ComponentChildren; children: ComponentChildren }) {
   return <div className="control-field">
     <span className="control-label">
       <span>{label}</span>

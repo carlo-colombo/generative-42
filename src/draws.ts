@@ -1,5 +1,6 @@
 import p5 from "p5";
 import { averageColorInArea, type Point } from "./color";
+import { legacySortArea, seededAreaRandom, soloAreas, sortAreas } from "./sort";
 import type { Generation } from "./types";
 
 export interface DrawContext {
@@ -27,6 +28,7 @@ export type DrawControl = {
 
 export type DrawDefinition = {
   draw: DrawFunction;
+  label?: string;
   controls?: DrawControl[];
 };
 
@@ -170,66 +172,44 @@ function horizontalLines({ p, img }: DrawContext) {
   }
 }
 
-const LUMINANCE_BUCKETS = 16384
+function drawPixels(p: p5, width: number, height: number, pixels: Uint8ClampedArray) {
+  const image = p.createImage(width, height)
+  image.loadPixels()
+  ;(image.pixels as unknown as Uint8ClampedArray).set(pixels)
+  image.updatePixels()
+  p.image(image, 0, 0)
+}
 
 function colorSorting({ p, img, generation }: DrawContext) {
-  const width = img.width
-  const height = img.height
   img.loadPixels()
   const source = img.pixels as unknown as Uint8ClampedArray
+  // The legacy draw keeps p5's seeded stream (one draw per line) so its output is
+  // pixel-identical to before; stored areas use mulberry32 instead.
+  const sorted = sortAreas(
+    source,
+    img.width,
+    img.height,
+    [legacySortArea(generation)],
+    'layers',
+    generation.seed,
+    () => () => p.random(),
+  )
+  drawPixels(p, img.width, img.height, sorted)
+}
 
-  const sorted = p.createImage(width, height)
-  sorted.loadPixels()
-  const target = sorted.pixels as unknown as Uint8ClampedArray
-  target.set(source)
-
-  const amount = Math.max(0, Math.min(100, generation.colorSortAmount))
-  const horizontal = generation.colorSortDirection === 'horizontal'
-  const lineLength = horizontal ? width : height
-  const lineCount = horizontal ? height : width
-  const bucketScale = LUMINANCE_BUCKETS / 255
-
-  const counts = new Int32Array(LUMINANCE_BUCKETS)
-  const buckets = new Uint16Array(lineLength)
-  const positions = new Uint32Array(lineLength)
-
-  for (let line = 0; line < lineCount; line++) {
-    const lineAmount = Math.max(0, Math.min(100, amount * p.random(0.85, 1.15)))
-    const sortedLength = Math.round(lineLength * lineAmount / 100)
-    if (sortedLength < 2) continue
-
-    counts.fill(0)
-    for (let position = 0; position < sortedLength; position++) {
-      const index = (horizontal ? line * width + position : position * width + line) * 4
-      const luminance = 0.299 * source[index] + 0.587 * source[index + 1] + 0.114 * source[index + 2]
-      let bucket = (luminance * bucketScale) | 0
-      if (bucket >= LUMINANCE_BUCKETS) bucket = LUMINANCE_BUCKETS - 1
-      buckets[position] = bucket
-      counts[bucket]++
-    }
-
-    let offset = 0
-    for (let bucket = 0; bucket < LUMINANCE_BUCKETS; bucket++) {
-      const count = counts[bucket]
-      counts[bucket] = offset
-      offset += count
-    }
-    for (let position = 0; position < sortedLength; position++) {
-      positions[counts[buckets[position]]++] = position
-    }
-
-    for (let position = 0; position < sortedLength; position++) {
-      const sourceIndex = (horizontal ? line * width + positions[position] : positions[position] * width + line) * 4
-      const targetIndex = (horizontal ? line * width + position : position * width + line) * 4
-      target[targetIndex] = source[sourceIndex]
-      target[targetIndex + 1] = source[sourceIndex + 1]
-      target[targetIndex + 2] = source[sourceIndex + 2]
-      target[targetIndex + 3] = source[sourceIndex + 3]
-    }
-  }
-
-  sorted.updatePixels()
-  p.image(sorted, 0, 0)
+function pixelSortAreas({ p, img, generation }: DrawContext) {
+  img.loadPixels()
+  const source = img.pixels as unknown as Uint8ClampedArray
+  const sorted = sortAreas(
+    source,
+    img.width,
+    img.height,
+    soloAreas(generation.areas, generation.soloAreaId),
+    generation.areasMode,
+    generation.seed,
+    seededAreaRandom(generation.seed),
+  )
+  drawPixels(p, img.width, img.height, sorted)
 }
 
 function drawStar(p: p5, x: number, y: number, outer: number, inner: number, points: number) {
@@ -433,6 +413,10 @@ export const DRAWS: Record<string, DrawDefinition> = {
         { value: 'vertical', label: 'Vertical' },
       ] },
     ],
+  },
+  "pixel-sort-areas": {
+    draw: pixelSortAreas,
+    label: 'Pixel sorting areas',
   },
   "galaxy": { draw: galaxy },
   "sections": {

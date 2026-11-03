@@ -1,7 +1,8 @@
 import { signal } from '@preact/signals'
+import { hashString } from './areas'
 import { DEFAULT_GENERATION } from './types'
 import { DEFAULT_FONT, FONTS } from './fonts'
-import type { Generation, TextAlign, TextLayer, TextVAlign } from './types'
+import type { AreaShape, EdgeMode, Generation, Pt, SortArea, TextAlign, TextLayer, TextVAlign } from './types'
 
 export type TextLayerField = keyof TextLayer
 
@@ -30,12 +31,15 @@ const numericFields = new Set<keyof Generation>([
 
 const booleanFields = new Set<keyof Generation>(['cropPreview'])
 
-const generationKeys = (Object.keys(DEFAULT_GENERATION) as (keyof Generation)[]).filter((key) => key !== 'texts')
+const generationKeys = (Object.keys(DEFAULT_GENERATION) as (keyof Generation)[]).filter((key) => key !== 'texts' && key !== 'areas')
 
 const knownFonts = new Set(FONTS.map((font) => font.path))
 
 const alignments = new Set<TextAlign>(['left', 'center', 'right'])
 const verticalAlignments = new Set<TextVAlign>(['top', 'center', 'bottom'])
+
+const AREAS_PARAM_LIMIT = 1500
+const DEFAULT_THRESHOLD: [number, number] = [0, 255]
 
 function numberOrDefault(value: string, fallback: number) {
   const parsed = parseInt(value, 10)
@@ -171,7 +175,13 @@ export function getGenerationFromURL(): Generation {
   const generation = Object.fromEntries(
     generationKeys.map((key) => [key, readParam(params, key)]),
   ) as unknown as Generation
-  return { ...generation, texts: readTexts(params) }
+  return {
+    ...generation,
+    texts: readTexts(params),
+    areas: resolveAreas(params.get('areas')),
+    areasMode: params.get('areasMode') === 'union' ? 'union' : 'layers',
+    soloAreaId: params.get('soloAreaId') ?? '',
+  }
 }
 
 export function getGeneration(): Generation {
@@ -186,6 +196,8 @@ export function getGeneration(): Generation {
         ...saved,
         texts: savedTexts ?? readLegacyTexts(legacyTextParams(saved)) ?? DEFAULT_GENERATION.texts,
         cropPreview: saved.cropPreview !== false && saved.cropPreview !== 'false',
+        areas: Array.isArray(saved.areas) ? parseAreas(saved.areas) ?? [] : [],
+        areasMode: saved.areasMode === 'union' ? 'union' : 'layers',
       }
     } catch {
       return DEFAULT_GENERATION
@@ -197,15 +209,242 @@ export function getGeneration(): Generation {
 export function applyGeneration(gen: Generation) {
   localStorage.setItem('generation', JSON.stringify(gen))
   const url = new URL(window.location.href)
+  const encoded = encodeAreas(gen.areas)
+  const areasParam = encoded.length > AREAS_PARAM_LIMIT ? storeAreas(encoded, gen.areas) : encoded
   for (const key of generationKeys) {
     url.searchParams.set(key, String(gen[key]))
   }
+  url.searchParams.set('areas', areasParam)
+  url.searchParams.set('texts', persistTexts(gen.texts))
   for (const keys of legacyTextKeys) {
     for (const key of Object.values(keys)) url.searchParams.delete(key)
   }
-  url.searchParams.set('texts', persistTexts(gen.texts))
   window.location.href = url.toString()
 }
+
+function quantize(value: number): number {
+  return Math.round(value * 1e4) / 1e4
+}
+
+function compactPoints(points: Pt[]): Pt[] {
+  const compact: Pt[] = []
+  for (const point of points) {
+    const next = { x: quantize(point.x), y: quantize(point.y) }
+    const last = compact[compact.length - 1]
+    if (last && last.x === next.x && last.y === next.y) continue
+    compact.push(next)
+  }
+  return compact
+}
+
+function compactShape(shape: AreaShape): AreaShape {
+  if (shape.kind === 'rect') {
+    return {
+      kind: 'rect',
+      x: quantize(shape.x),
+      y: quantize(shape.y),
+      w: quantize(shape.w),
+      h: quantize(shape.h),
+      rotation: quantize(shape.rotation),
+    }
+  }
+  if (shape.kind === 'ellipse') {
+    return {
+      kind: 'ellipse',
+      cx: quantize(shape.cx),
+      cy: quantize(shape.cy),
+      rx: quantize(shape.rx),
+      ry: quantize(shape.ry),
+      rotation: quantize(shape.rotation),
+    }
+  }
+  return {
+    kind: 'path',
+    closed: shape.closed,
+    side: shape.side,
+    tension: quantize(shape.tension),
+    points: compactPoints(shape.points),
+  }
+}
+
+function compactArea(area: SortArea): SortArea {
+  const sort: SortArea['sort'] = {
+    direction: area.sort.direction,
+    reverse: area.sort.reverse,
+    amount: quantize(area.sort.amount),
+  }
+  if (typeof area.sort.angle === 'number' && area.sort.angle !== 0) sort.angle = quantize(area.sort.angle)
+  const threshold = area.sort.threshold
+  if (threshold && (threshold[0] !== DEFAULT_THRESHOLD[0] || threshold[1] !== DEFAULT_THRESHOLD[1])) {
+    sort.threshold = [threshold[0], threshold[1]]
+  }
+
+  return {
+    id: area.id,
+    label: area.label,
+    color: area.color,
+    visible: area.visible,
+    shape: compactShape(area.shape),
+    edge: { feather: quantize(area.edge.feather), jitter: quantize(area.edge.jitter), mode: area.edge.mode },
+    sort,
+    opacity: quantize(area.opacity),
+  }
+}
+
+function base64UrlEncode(value: string): string {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function base64UrlDecode(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+  const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4))
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
+export function encodeAreas(value: SortArea[]): string {
+  return base64UrlEncode(JSON.stringify(value.map(compactArea)))
+}
+
+export function decodeAreas(value: string): SortArea[] | null {
+  try {
+    return parseAreas(JSON.parse(new TextDecoder().decode(base64UrlDecode(value))))
+  } catch {
+    return null
+  }
+}
+
+function numeric(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function parseShape(value: unknown): AreaShape | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+
+  if (record.kind === 'rect') {
+    const x = numeric(record, 'x')
+    const y = numeric(record, 'y')
+    const w = numeric(record, 'w')
+    const h = numeric(record, 'h')
+    if (x === null || y === null || w === null || h === null) return null
+    return { kind: 'rect', x, y, w, h, rotation: numeric(record, 'rotation') ?? 0 }
+  }
+
+  if (record.kind === 'ellipse') {
+    const cx = numeric(record, 'cx')
+    const cy = numeric(record, 'cy')
+    const rx = numeric(record, 'rx')
+    const ry = numeric(record, 'ry')
+    if (cx === null || cy === null || rx === null || ry === null) return null
+    return { kind: 'ellipse', cx, cy, rx, ry, rotation: numeric(record, 'rotation') ?? 0 }
+  }
+
+  if (record.kind === 'path') {
+    if (!Array.isArray(record.points)) return null
+    const points: Pt[] = []
+    for (const point of record.points) {
+      if (typeof point !== 'object' || point === null) return null
+      const x = numeric(point as Record<string, unknown>, 'x')
+      const y = numeric(point as Record<string, unknown>, 'y')
+      if (x === null || y === null) return null
+      points.push({ x, y })
+    }
+    return {
+      kind: 'path',
+      closed: record.closed === true,
+      side: record.side === 'b' ? 'b' : 'a',
+      tension: numeric(record, 'tension') ?? 0,
+      points,
+    }
+  }
+
+  return null
+}
+
+function parseArea(value: unknown): SortArea | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string') return null
+  const shape = parseShape(record.shape)
+  if (!shape) return null
+
+  const edgeRecord = typeof record.edge === 'object' && record.edge !== null ? (record.edge as Record<string, unknown>) : {}
+  const sortRecord = typeof record.sort === 'object' && record.sort !== null ? (record.sort as Record<string, unknown>) : {}
+  const mode: EdgeMode = edgeRecord.mode === 'ragged' ? 'ragged' : 'blend'
+  const thresholdRecord = sortRecord.threshold
+  const threshold: [number, number] =
+    Array.isArray(thresholdRecord) && thresholdRecord.length === 2
+      ? [numberOr(thresholdRecord[0], DEFAULT_THRESHOLD[0]), numberOr(thresholdRecord[1], DEFAULT_THRESHOLD[1])]
+      : [DEFAULT_THRESHOLD[0], DEFAULT_THRESHOLD[1]]
+  const angle = numeric(sortRecord, 'angle')
+
+  return {
+    id: record.id,
+    label: typeof record.label === 'string' ? record.label : '',
+    color: typeof record.color === 'string' ? record.color : '#ffffff',
+    visible: record.visible !== false,
+    shape,
+    edge: {
+      feather: numeric(edgeRecord, 'feather') ?? 0,
+      jitter: numeric(edgeRecord, 'jitter') ?? 0,
+      mode,
+    },
+    sort: {
+      direction: sortRecord.direction === 'vertical' ? 'vertical' : 'horizontal',
+      reverse: sortRecord.reverse === true,
+      amount: numeric(sortRecord, 'amount') ?? 100,
+      angle: angle === null ? undefined : angle,
+      threshold,
+    },
+    opacity: numeric(record, 'opacity') ?? 100,
+  }
+}
+
+function parseAreas(value: unknown): SortArea[] | null {
+  if (!Array.isArray(value)) return null
+  const areas: SortArea[] = []
+  for (const item of value) {
+    const area = parseArea(item)
+    if (!area) return null
+    areas.push(area)
+  }
+  return areas
+}
+
+function storeAreas(encoded: string, areas: SortArea[]): string {
+  const id = `${hashString(encoded).toString(36)}${encoded.length.toString(36)}`
+  localStorage.setItem(`areas:${id}`, JSON.stringify(areas))
+  return id
+}
+
+function resolveAreas(value: string | null): SortArea[] {
+  if (!value) return []
+  const decoded = decodeAreas(value)
+  if (decoded) return decoded
+
+  const stored = localStorage.getItem(`areas:${value}`)
+  if (stored) {
+    try {
+      return parseAreas(JSON.parse(stored)) ?? []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 
 export function createGenerationModel(initial: Generation) {
   const committed = signal(initial)

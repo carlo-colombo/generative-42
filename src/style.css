@@ -356,6 +356,369 @@ body {
   letter-spacing: 0.09em;
 }
 
+.stage-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-height: 100%;
+  min-height: 0;
+}
+
+.stage-toolbar-root {
+  align-self: stretch;
+  display: flex;
+}
+
+.stage-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  width: 100%;
+}
+
+.tool-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tool-button {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tool-button:hover {
+  color: var(--text);
+  border-color: #3d3d3d;
+}
+
+.panel .tool-buttons .tool-button {
+  width: auto;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+
+.tool-button.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
+.toolbar-hint {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+.stage-editor-root {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.stage-editor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.editor-canvas {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.editor-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  padding: 6px 8px;
+  background: rgb(0 0 0 / 72%);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow-x: auto;
+  pointer-events: auto;
+}
+
+.editor-prompt button {
+  padding: 4px 8px;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  background: #1c1c1c;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.editor-prompt button:hover {
+  background: #2a2a2a;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.panel .tab {
+  flex: 1;
+  width: auto;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.panel .tab.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--control-bg);
+}
+
+.segmented button {
+  flex: 1;
+  min-width: 30px;
+  width: auto;
+  padding: 5px 6px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button.active {
+  background: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
+.direction-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.direction-row .segmented {
+  flex: 0 0 auto;
+}
+
+.panel .toggle-button {
+  flex: 1;
+  width: auto;
+  padding: 5px 8px;
+  background: var(--control-bg);
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.panel .toggle-button.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel .slider-input {
+  flex: 0 0 auto;
+  width: 54px;
+  padding: 4px 5px;
+  text-align: right;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel .slider-input:disabled {
+  opacity: 0.45;
+}
+
+.feather-swatch {
+  display: block;
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel .color-row input[type="color"] {
+  width: 36px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--control-bg);
+  cursor: pointer;
+}
+
+.area-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.area-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--control-bg);
+}
+
+.area-row.selected {
+  border-color: #6a6a6a;
+  background: #232323;
+}
+
+.panel .area-row-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+}
+
+.panel .area-row-main:hover {
+  background: #2a2a2a;
+}
+
+.area-chip {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 60%);
+}
+
+.area-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.direction-glyph {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.area-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.panel .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.panel .icon-button:hover {
+  background: #2d2d2d;
+  border-color: #3d3d3d;
+  color: var(--text);
+}
+
+.panel .icon-button.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+}
+
+.panel .icon-button.muted {
+  opacity: 0.45;
+}
+
+.panel .icon-button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.hint-text {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .layer-list {
   display: flex;
   flex-direction: column;
@@ -518,5 +881,27 @@ body {
     position: sticky;
     bottom: 0;
     z-index: 1;
+  }
+}
+
+@media (max-width: 940px) {
+  .stage-column {
+    justify-content: center;
+  }
+
+  .stage-toolbar {
+    justify-content: center;
+  }
+
+  .toolbar-hint {
+    display: none;
+  }
+
+  .tab-bar {
+    width: 100%;
+  }
+
+  .panel .area-row-actions {
+    flex-wrap: wrap;
   }
 }

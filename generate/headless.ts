@@ -58,14 +58,14 @@ async function renderGeneration(
   await page.goto(url, { waitUntil: "networkidle0" });
 
   await page.waitForFunction(() => {
-    const canvas = document.querySelector("canvas");
+    const canvas = document.querySelector("canvas.base-layer");
     return canvas !== null;
   });
 
   await new Promise((r) => setTimeout(r, 500));
 
   const dataUrl = await page.evaluate(() => {
-    const canvas = document.querySelector("canvas") as HTMLCanvasElement;
+    const canvas = document.querySelector("canvas.base-layer") as HTMLCanvasElement;
     return canvas.toDataURL("image/png");
   });
 
