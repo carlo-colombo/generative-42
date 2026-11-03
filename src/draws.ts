@@ -5,7 +5,6 @@ import type { Generation } from "./types";
 export interface DrawContext {
   p: p5;
   img: p5.Image;
-  text: string;
   seed: number;
   generation: Generation;
 }

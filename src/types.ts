@@ -5,27 +5,23 @@ export type ColorSortDirection = "horizontal" | "vertical";
 export type SectionDirection = "vertical" | "horizontal";
 export type DetailNoiseMode = "bw" | "color";
 
+export type TextLayer = {
+  text: string;
+  align: TextAlign;
+  vAlign: TextVAlign;
+  x: number;
+  y: number;
+  size: number;
+  font: string;
+  opacity: number;
+};
+
 export interface Generation {
   seed: number;
   image: string;
   draw: string;
   grayLevels: number;
-  text: string;
-  textAlign: TextAlign;
-  textVAlign: TextVAlign;
-  textX: number;
-  textY: number;
-  textSize: number;
-  font: string;
-  textOpacity: number;
-  text2: string;
-  text2Align: TextAlign;
-  text2VAlign: TextVAlign;
-  text2X: number;
-  text2Y: number;
-  text2Size: number;
-  text2Font: string;
-  text2Opacity: number;
+  texts: TextLayer[];
   cropFormat: CropFormat;
   cropX: number;
   cropY: number;
@@ -46,22 +42,28 @@ export const DEFAULT_GENERATION: Generation = {
   image: "/assets/door.jpg",
   draw: "grey-squares",
   grayLevels: 8,
-  text: "ATTENZIONE\nAL\nLEOPARDO",
-  textAlign: "right",
-  textVAlign: "center",
-  textX: 95,
-  textY: 50,
-  textSize: 375,
-  font: "/fonts/SpaceMono-Regular.ttf",
-  textOpacity: 100,
-  text2: "",
-  text2Align: "left",
-  text2VAlign: "bottom",
-  text2X: 5,
-  text2Y: 95,
-  text2Size: 100,
-  text2Font: "/fonts/SpaceMono-Regular.ttf",
-  text2Opacity: 100,
+  texts: [
+    {
+      text: "ATTENZIONE\nAL\nLEOPARDO",
+      align: "right",
+      vAlign: "center",
+      x: 95,
+      y: 50,
+      size: 375,
+      font: "/fonts/SpaceMono-Regular.ttf",
+      opacity: 100,
+    },
+    {
+      text: "",
+      align: "left",
+      vAlign: "bottom",
+      x: 5,
+      y: 95,
+      size: 100,
+      font: "/fonts/SpaceMono-Regular.ttf",
+      opacity: 100,
+    },
+  ],
   cropFormat: "original",
   cropX: 50,
   cropY: 50,

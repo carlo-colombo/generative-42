@@ -27,31 +27,45 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   left and right panels. A `ResizeObserver` sizes the stage to the available
   space while preserving the canvas aspect ratio.
 - `src/app.tsx` — `LeftPanel` (image, effects, selection, seed/generate actions)
-  and `RightPanel` (text layers 1 and 2), plus the image manifest fetch.
+  and `RightPanel` (the text layer list and the selected layer's controls),
+  plus the image manifest fetch.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`),
   URL and localStorage serialization. `applyGeneration` navigates to a new URL,
   so the sketch re-runs from scratch.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
-  `TextControls`, `Actions`, `ControlField`).
+  `TextLayerList`, `TextLayerActions`, `TextControls`, `Actions`,
+  `ControlField`).
 - `src/style.css` — three-column layout: left controls, centered stage, right
   text controls; stacks vertically below 940px.
 - `src/types.ts` — `Generation` interface and `DEFAULT_GENERATION`. Adding a
   new generation option means updating `Generation`, `DEFAULT_GENERATION`,
   the URL param read/write in `generation-state.ts`, and the UI controls.
-- `src/sketch.ts` — the p5 sketch. `createSketch(gen)` preloads the font and
-  image, creates a canvas at the image's pixel size, seeds `randomSeed`/
+- `src/sketch.ts` — the p5 sketch. `createSketch(gen)` preloads every font and
+  the image, creates a canvas at the image's pixel size, seeds `randomSeed`/
   `noiseSeed` with `gen.seed`, runs the draw function, then draws the text
   overlay and the `seed=` label. `extractImage`/`downloadImage` export the
   canvas.
 - `src/draws.ts` — registry of draw functions (`DRAWS`). Each takes a
-  `DrawContext` (`p`, `img`, `text`, `seed`). Add new draw styles here and
-  they appear in the UI dropdown automatically.
+  `DrawContext` (`p`, `img`, `seed`, `generation`). Add new draw styles here
+  and they appear in the UI dropdown automatically.
 - `src/color.ts` — color helpers (e.g. `averageColorInArea`).
 - `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
-  files live in `public/fonts/`.
+  files live in `public/fonts/`; every `FONTS` entry must exist there, because
+  the sketch preloads all of them.
 - `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview`
   on port 4173, opens the app with `?seed=N`, captures the canvas, and writes
   PNGs to `output/`.
+
+## Text layers
+
+`Generation.texts` holds the text layers (`TextLayer` in `src/types.ts`),
+capped at `MAX_TEXT_LAYERS` (8) in `generation-state.ts`. A URL carries them in
+a single `texts` param: base64url-encoded JSON. When that payload exceeds 1500
+characters the URL stores `texts=<id>` instead and the layers go to
+`localStorage` under `texts:<id>`, so such a URL only resolves in the browser
+that created it. Pre-change per-layer params (`text`, `textSize`, `text2`, ...)
+and `localStorage.generation` blobs are still migrated through the same legacy
+key map.
 
 ## Conventions
 

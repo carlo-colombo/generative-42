@@ -1,24 +1,33 @@
 import p5 from "p5";
-import type { Generation } from "./types";
+import type { Generation, TextAlign, TextVAlign } from "./types";
 import { DRAWS } from "./draws";
 import { cropImage } from './crop';
+import { DEFAULT_FONT, FONTS } from './fonts';
 
 type TextCanvas = p5 | p5.Graphics
 type SketchReady = (baseCanvas: HTMLCanvasElement, textCanvas: HTMLCanvasElement, renderText: (generation: Generation) => void) => void
 
 export function createSketch(gen: Generation, onReady?: SketchReady) {
-  let font: p5.Font;
-  let font2: p5.Font;
+  const fonts: Record<string, p5.Font> = {};
   let img: p5.Image;
   let textLayer: p5.Graphics;
 
   const drawDefinition = DRAWS[gen.draw] ?? DRAWS["rect"];
   const drawFn = drawDefinition.draw;
 
+  function fontFor(path: string) {
+    return fonts[path] ?? fonts[DEFAULT_FONT] ?? Object.values(fonts)[0];
+  }
+
   const sketch = (p: p5) => {
     p.preload = () => {
-      font = p.loadFont(gen.font);
-      font2 = p.loadFont(gen.text2Font);
+      const fontPaths = new Set([...FONTS.map((font) => font.path), ...gen.texts.map((layer) => layer.font)]);
+      for (const path of fontPaths) {
+        fonts[path] = p.loadFont(path, undefined, () => {
+          delete fonts[path];
+          (p as unknown as { _decrementPreload: () => void })._decrementPreload();
+        });
+      }
       img = p.loadImage(gen.image);
     };
 
@@ -42,25 +51,27 @@ export function createSketch(gen: Generation, onReady?: SketchReady) {
     };
 
     p.draw = () => {
-      drawFn({ p, img, text: gen.text, seed: gen.seed, generation: gen });
+      drawFn({ p, img, seed: gen.seed, generation: gen });
       p.noLoop();
     };
   };
 
-  function drawTextLayer(layer: p5.Graphics, generation: Generation) {
-    layer.clear();
-    drawText(layer, generation.text, generation.textSize, generation.textOpacity, generation.textX, generation.textY, generation.textAlign, generation.textVAlign, font);
-    if (generation.text2) {
-      drawText(layer, generation.text2, generation.text2Size, generation.text2Opacity, generation.text2X, generation.text2Y, generation.text2Align, generation.text2VAlign, font2);
+  function drawTextLayer(target: p5.Graphics, generation: Generation) {
+    target.clear();
+    const labelFont = fontFor(generation.texts[0]?.font ?? DEFAULT_FONT);
+    if (!labelFont) return;
+    for (const layer of generation.texts) {
+      if (!layer.text) continue;
+      drawText(target, layer.text, layer.size, layer.opacity, layer.x, layer.y, layer.align, layer.vAlign, fontFor(layer.font) ?? labelFont);
     }
 
-    layer.textAlign(layer.LEFT);
-    layer.fill(255);
-    layer.noStroke();
-    layer.textFont(font);
-    const unit = Math.min(layer.width, layer.height) / 926;
-    layer.textSize(24 * unit);
-    layer.text(`seed=${generation.seed}`, 20 * unit, 40 * unit);
+    target.textAlign(target.LEFT);
+    target.fill(255);
+    target.noStroke();
+    target.textFont(labelFont);
+    const unit = Math.min(target.width, target.height) / 926;
+    target.textSize(24 * unit);
+    target.text(`seed=${generation.seed}`, 20 * unit, 40 * unit);
   }
 
   function drawText(
@@ -70,8 +81,8 @@ export function createSketch(gen: Generation, onReady?: SketchReady) {
     opacity: number,
     x: number,
     y: number,
-    align: Generation["textAlign"],
-    vAlign: Generation["textVAlign"],
+    align: TextAlign,
+    vAlign: TextVAlign,
     loadedFont: p5.Font
   ) {
     const alpha = Math.round((opacity / 100) * 255);
