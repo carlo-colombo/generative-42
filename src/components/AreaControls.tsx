@@ -58,8 +58,8 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
           <dd>The axis of the runs: every row left to right, or every column top to bottom. Runs are cut wherever the mask is empty.</dd>
           <dt>Reverse</dt>
           <dd>Which end of a run is read first. The sorted block moves from the start of the run to its end.</dd>
-          <dt>Amount</dt>
-          <dd>How much of each run is sorted, per run, with a small random wobble. The sorted block stays anchored to one end, so the rest of the run is left as it was.</dd>
+          <dt>Randomness</dt>
+          <dd>How far each run's sorted block starts in from the border, drawn at random up to that share of the run. At 0 the whole run is sorted, so the area border stays sharp; higher values leave the original pixels along the border for an organic edge.</dd>
           <dt>Feather</dt>
           <dd>Width of the soft ramp measured inward from the whole shape border, as a share of the shorter canvas side. Near the border the sorted result fades back into the artwork.</dd>
           <dt>Blend</dt>
@@ -118,7 +118,7 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
       </div>
     </ControlField>
 
-    <SliderField label="Amount" value={area.sort.amount} min={0} max={100} step={1} unit="%" onChange={(amount) => update((current) => ({ ...current, sort: { ...current.sort, amount } }))} />
+    <SliderField label="Randomness" value={area.sort.randomness} min={0} max={100} step={1} unit="%" onChange={(randomness) => update((current) => ({ ...current, sort: { ...current.sort, randomness } }))} />
     <SliderField label="Opacity" value={area.opacity} min={0} max={100} step={1} unit="%" onChange={(opacity) => update((current) => ({ ...current, opacity }))} />
 
     <Segmented<EdgeMode>

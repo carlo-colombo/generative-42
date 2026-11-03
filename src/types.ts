@@ -35,7 +35,7 @@ export type SortArea = {
   sort: {
     direction: ColorSortDirection;
     reverse: boolean;
-    amount: number;
+    randomness: number;
   };
   opacity: number;
 };

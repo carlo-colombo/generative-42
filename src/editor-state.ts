@@ -86,7 +86,7 @@ export function createSortArea(shape: AreaShape, generation: Generation): SortAr
     sort: {
       direction: generation.colorSortDirection,
       reverse: false,
-      amount: generation.colorSortAmount,
+      randomness: 0,
     },
     opacity: 100,
   }

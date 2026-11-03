@@ -281,7 +281,7 @@ function compactArea(area: SortArea): SortArea {
   const sort: SortArea['sort'] = {
     direction: area.sort.direction,
     reverse: area.sort.reverse,
-    amount: quantize(area.sort.amount),
+    randomness: quantize(area.sort.randomness),
   }
 
   return {
@@ -388,6 +388,9 @@ function parseArea(value: unknown): SortArea | null {
   const edgeRecord = typeof record.edge === 'object' && record.edge !== null ? (record.edge as Record<string, unknown>) : {}
   const sortRecord = typeof record.sort === 'object' && record.sort !== null ? (record.sort as Record<string, unknown>) : {}
   const mode: EdgeMode = edgeRecord.mode === 'ragged' ? 'ragged' : 'blend'
+  // Stored areas used to carry the sorted share; the remainder becomes the random trim.
+  const legacyAmount = numeric(sortRecord, 'amount')
+  const randomness = numeric(sortRecord, 'randomness') ?? (legacyAmount === null ? 0 : 100 - legacyAmount)
 
   return {
     id: record.id,
@@ -403,7 +406,7 @@ function parseArea(value: unknown): SortArea | null {
     sort: {
       direction: sortRecord.direction === 'vertical' ? 'vertical' : 'horizontal',
       reverse: sortRecord.reverse === true,
-      amount: numeric(sortRecord, 'amount') ?? 100,
+      randomness,
     },
     opacity: numeric(record, 'opacity') ?? 100,
   }

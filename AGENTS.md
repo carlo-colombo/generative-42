@@ -92,23 +92,30 @@ key map.
 
 `Generation.areas` is an ordered list of `SortArea` shapes (rect, ellipse, or
 path, including concave rings and open curves with a `side`). Each area carries
-its own direction, reverse, feather, ragged edge, and opacity; coordinates are
-normalised 0..1 against the cropped canvas, so changing the crop re-anchors an
-area to the new frame rather than to image content. Feather and jitter are
-relative to `min(width, height)`.
+its own direction, reverse, randomness, feather, ragged edge, and opacity;
+coordinates are normalised 0..1 against the cropped canvas, so changing the
+crop re-anchors an area to the new frame rather than to image content. Feather
+and jitter are relative to `min(width, height)`.
 
 Feather is a ramp inward from the whole shape border: weight rises from 0 at
 the edge to 1 at `feather` pixels inside, on every side. Direction and reverse
 only order the runs and never change which part of the border is feathered, and
 the stage overlay draws the band uniformly to match.
 
-`amount` is the share of each run that gets sorted, drawn per run with a small
-random wobble and anchored to the run's start, or its end when `sort.reverse` is
-set; the rest of the run is left untouched. `edge.mode` decides how the sorted
-pixels land against the mask: `blend` cross-fades every pixel by the mask
-weight, so the feather ramp shows, while `ragged` writes hard pixels and instead
-displaces the start of each run by a random offset up to `edge.jitter`, one draw
-per run. Feather is therefore a blend-only control, and jitter a ragged-only one.
+Every run is sorted in full by default. `sort.randomness` is the share of the
+run, drawn at random per run, that is left unsorted at the end a run is read
+from (its start, or its end when `sort.reverse` is set). At 0 the sorted block
+fills the run, so the area border stays sharp; higher values keep the original
+pixels along that border, giving the area an organic edge. `edge.mode` decides
+how the sorted pixels land against the mask: `blend` cross-fades every pixel by
+the mask weight, so the feather ramp shows, while `ragged` writes hard pixels
+and instead displaces each run's sorted block by a random offset up to
+`edge.jitter`, one draw per run, clamped to the line rather than to the run.
+Feather is therefore a blend-only control, and jitter a ragged-only one.
+
+The legacy `color-sorting` draw still passes `colorSortAmount` as a
+deterministic share of each run, with the same per-line wobble as before, and
+never randomises a run.
 
 Ellipse rings use `clamp(ceil(perimeter / 2), 96, 512)` segments. An open path
 closes along the canvas border between its first and last crossing; when the

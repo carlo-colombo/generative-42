@@ -193,6 +193,7 @@ function colorSorting({ p, img, generation }: DrawContext) {
     'layers',
     generation.seed,
     () => () => p.random(),
+    generation.colorSortAmount,
   )
   drawPixels(p, img.width, img.height, sorted)
 }

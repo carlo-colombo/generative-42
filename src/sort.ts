@@ -6,7 +6,7 @@ const LUMINANCE_BUCKETS = 16384
 // touch. Both produce the same ascending bucket order with stable ties.
 const DENSE_RUN_LENGTH = 1024
 
-export type SortParams = SortArea['sort'] & { edge: SortArea['edge'] }
+export type SortParams = SortArea['sort'] & { edge: SortArea['edge']; amount: number | null }
 
 export type AreaRandom = (area: SortArea) => () => number
 
@@ -25,7 +25,7 @@ export function legacySortArea(generation: Generation): SortArea {
     sort: {
       direction: generation.colorSortDirection,
       reverse: false,
-      amount: generation.colorSortAmount,
+      randomness: 0,
     },
     opacity: 100,
   }
@@ -65,7 +65,9 @@ function sortPixels(
   const lineLength = horizontal ? width : height
   const lineCount = horizontal ? height : width
   const step = horizontal ? 1 : width
-  const amount = Math.max(0, Math.min(100, params.amount))
+  // Legacy draws pass an amount; areas sort the whole run and randomise its start.
+  const amount = params.amount === null ? null : Math.max(0, Math.min(100, params.amount))
+  const randomness = Math.max(0, Math.min(100, params.randomness)) / 100
   const blend = params.edge.mode === 'blend'
   const jitter = params.edge.mode === 'ragged' ? (Math.max(0, params.edge.jitter) / 100) * Math.min(width, height) : 0
   const bucketScale = LUMINANCE_BUCKETS / 255
@@ -78,13 +80,17 @@ function sortPixels(
 
   function sortRun(lineStart: number, start: number, end: number, lineAmount: number) {
     const runLength = end - start
-    const sortedLength = Math.round((runLength * lineAmount) / 100)
+    if (runLength < 2) return
+    const span = amount === null ? runLength : Math.min(runLength, Math.round((runLength * lineAmount) / 100))
+    // The block is trimmed from the end a run is read from, so 0 sorts the whole run.
+    const skip = randomness > 0 ? Math.round(random() * span * randomness) : 0
+    const sortedLength = span - skip
     if (sortedLength < 2) return
 
-    let from = params.reverse ? end - sortedLength : start
+    let from = params.reverse ? end - span : start + skip
     if (jitter > 0) {
       const shift = Math.round((random() * 2 - 1) * jitter)
-      from = Math.min(end - sortedLength, Math.max(start, from + shift))
+      from = Math.min(lineLength - sortedLength, Math.max(0, from + shift))
     }
 
     if (sortedLength >= DENSE_RUN_LENGTH) {
@@ -163,7 +169,7 @@ function sortPixels(
 
   for (let line = 0; line < lineCount; line++) {
     // (1.15 - 0.85) is spelled out to keep the legacy p5.random(0.85, 1.15) float sequence identical
-    const lineAmount = Math.max(0, Math.min(100, amount * (random() * (1.15 - 0.85) + 0.85)))
+    const lineAmount = amount === null ? 100 : Math.max(0, Math.min(100, amount * (random() * (1.15 - 0.85) + 0.85)))
     const lineStart = horizontal ? line * width : line
     if (weight === null) {
       sortRun(lineStart, 0, lineLength, lineAmount)
@@ -243,6 +249,7 @@ export function sortAreas(
   areasMode: Generation['areasMode'],
   seed: number,
   randomFor: AreaRandom,
+  amount: number | null = null,
 ): Uint8ClampedArray {
   const visible = areas.filter((area) => area.visible)
   if (visible.length === 0) return new Uint8ClampedArray(source)
@@ -250,7 +257,7 @@ export function sortAreas(
   if (visible.length === 1 && fullCoverage(visible[0])) {
     // A single full-canvas blend area needs no mask: every line is one run.
     const area = visible[0]
-    return sortPixels(source, width, height, null, { ...area.sort, edge: area.edge }, randomFor(area))
+    return sortPixels(source, width, height, null, { ...area.sort, edge: area.edge, amount }, randomFor(area))
   }
 
   const result = new Uint8ClampedArray(source)
@@ -258,14 +265,14 @@ export function sortAreas(
     // Union resolves the mask per pixel and sorts it once with the topmost area's options.
     const top = visible[visible.length - 1]
     const weight = unionWeight(visible, width, height, seed)
-    const pass = sortPixels(source, width, height, weight, { ...top.sort, edge: top.edge }, randomFor(top))
+    const pass = sortPixels(source, width, height, weight, { ...top.sort, edge: top.edge, amount }, randomFor(top))
     composite(result, pass, weight, top.opacity, top.edge.mode)
     return result
   }
 
   for (const area of visible) {
     const weight = areaWeight(area, width, height, seed)
-    const pass = sortPixels(source, width, height, weight, { ...area.sort, edge: area.edge }, randomFor(area))
+    const pass = sortPixels(source, width, height, weight, { ...area.sort, edge: area.edge, amount }, randomFor(area))
     composite(result, pass, weight, area.opacity, area.edge.mode)
   }
   return result
