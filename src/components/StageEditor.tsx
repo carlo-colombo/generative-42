@@ -144,6 +144,18 @@ function handlePoints(shape: AreaShape, size: Size): (Handle & { point: Px })[] 
   }))
 }
 
+function resizeCursor(shape: AreaShape, handle: Handle, size: Size): string {
+  const angle = shape.kind === 'rect' ? rectFrame(shape, size).angle : shape.kind === 'ellipse' ? ellipseFrame(shape, size).angle : 0
+  const direction = rotateVector({ x: handle.ux, y: handle.uy }, angle)
+  let heading = Math.atan2(direction.y, direction.x) % Math.PI
+  if (heading < 0) heading += Math.PI
+  const slice = Math.PI / 8
+  if (heading < slice || heading >= 7 * slice) return 'ew-resize'
+  if (heading < 3 * slice) return 'nwse-resize'
+  if (heading < 5 * slice) return 'ns-resize'
+  return 'nesw-resize'
+}
+
 function distanceToSegment(point: Px, a: Px, b: Px): { distance: number; point: Px } {
   const dx = b.x - a.x
   const dy = b.y - a.y
@@ -317,29 +329,11 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   function drawFeatherBand(context: CanvasRenderingContext2D, area: SortArea, size: Size) {
     const featherPx = (area.edge.feather / 100) * Math.min(size.width, size.height)
     if (featherPx < 0.75) return
-    const bounds = shapeBounds(area.shape, size)
-    const horizontal = area.sort.direction === 'horizontal'
-    const upstreamLow = !area.sort.reverse
-
     context.save()
     const region = regionPoints(area.shape, size)
     context.beginPath()
     region.forEach((point, index) => (index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y)))
     context.closePath()
-    context.clip()
-
-    context.beginPath()
-    if (horizontal) {
-      const mid = (bounds.minX + bounds.maxX) / 2
-      const left = upstreamLow ? bounds.minX - featherPx : mid
-      const right = upstreamLow ? mid : bounds.maxX + featherPx
-      context.rect(left, bounds.minY - featherPx, right - left, bounds.maxY - bounds.minY + featherPx * 2)
-    } else {
-      const mid = (bounds.minY + bounds.maxY) / 2
-      const top = upstreamLow ? bounds.minY - featherPx : mid
-      const bottom = upstreamLow ? mid : bounds.maxY + featherPx
-      context.rect(bounds.minX - featherPx, top, bounds.maxX - bounds.minX + featherPx * 2, bottom - top)
-    }
     context.clip()
 
     context.beginPath()
@@ -552,6 +546,10 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     for (const area of areas) drawArea(context, area, size, area.id === selectedId, scale)
     drawPending(context, size, scale)
   }
+
+  useEffect(() => {
+    setCursor(tool === 'select' ? 'default' : 'crosshair')
+  }, [tool])
 
   useEffect(() => {
     selectedRef.current = selected
@@ -819,19 +817,48 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
     scheduleDraw()
   }
 
+  function setCursor(value: string) {
+    const canvas = canvasRef.current
+    if (canvas) canvas.style.cursor = value
+  }
+
+  function hoverCursor(point: Px, size: Size, scale: number): string {
+    if (maskPreview) return 'default'
+    if (tool !== 'select') return 'crosshair'
+    if (selected) {
+      if (selected.shape.kind === 'path') {
+        for (const vertex of pathPoints(selected.shape, size)) {
+          if (Math.hypot(point.x - vertex.x, point.y - vertex.y) <= VERTEX_HIT * scale) return 'grab'
+        }
+      }
+      const handle = handlePoints(selected.shape, size).find(
+        (candidate) => Math.hypot(point.x - candidate.point.x, point.y - candidate.point.y) <= HANDLE_HIT * scale,
+      )
+      if (handle) return resizeCursor(selected.shape, handle, size)
+    }
+    const hit = [...areas].reverse().find((area) => hitShape(area.shape, point, size, EDGE_HIT * scale))
+    return hit ? 'move' : 'default'
+  }
+
   function handlePointerMove(event: PointerEvent) {
     const point = pointerToPx(event)
     const size = canvasSize()
-    if (!point || !size) return
+    const canvas = canvasRef.current
+    if (!point || !size || !canvas) return
     const drag = dragRef.current
 
     if (drag.kind === 'none') {
+      setCursor(hoverCursor(point, size, uiScaleOf(canvas)))
       if (tool === 'polygon' && polygonRef.current.length > 0) {
         hoverRef.current = point
         scheduleDraw()
       }
       return
     }
+
+    if (drag.kind === 'resize') setCursor(resizeCursor(drag.shape, drag.handle, size))
+    else if (drag.kind === 'move' || drag.kind === 'vertex') setCursor('grabbing')
+    else setCursor('crosshair')
 
     if (drag.kind === 'shape') {
       drag.current = point
@@ -984,6 +1011,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
+        onPointerLeave={() => setCursor(tool === 'select' ? 'default' : 'crosshair')}
         onDblClick={() => {
           if (tool === 'polygon' && polygonRef.current.length >= 3) closePolygon()
         }}

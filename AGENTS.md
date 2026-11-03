@@ -97,6 +97,19 @@ normalised 0..1 against the cropped canvas, so changing the crop re-anchors an
 area to the new frame rather than to image content. Feather and jitter are
 relative to `min(width, height)`.
 
+Feather is a ramp inward from the whole shape border: weight rises from 0 at
+the edge to 1 at `feather` pixels inside, on every side. Direction and reverse
+only order the runs and never change which part of the border is feathered, and
+the stage overlay draws the band uniformly to match.
+
+`amount` is the share of each run that gets sorted, drawn per run with a small
+random wobble and anchored to the run's start, or its end when `sort.reverse` is
+set; the rest of the run is left untouched. `edge.mode` decides how the sorted
+pixels land against the mask: `blend` cross-fades every pixel by the mask
+weight, so the feather ramp shows, while `ragged` writes hard pixels and instead
+displaces the start of each run by a random offset up to `edge.jitter`, one draw
+per run. Feather is therefore a blend-only control, and jitter a ragged-only one.
+
 Ellipse rings use `clamp(ceil(perimeter / 2), 96, 512)` segments. An open path
 closes along the canvas border between its first and last crossing; when the
 stroke crosses the border more than twice the ring closes over the widest

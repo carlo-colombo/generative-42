@@ -3,6 +3,7 @@ import { updateArea } from '../editor-state'
 import type { GenerationModel } from '../generation-state'
 import type { EdgeMode, SortArea } from '../types'
 import { ControlField } from './ControlField'
+import { HelpPopover } from './HelpPopover'
 import { Segmented } from './Segmented'
 
 function clamp(value: number, min: number, max: number) {
@@ -49,7 +50,31 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
     : area.sort.reverse ? 'to top' : 'to bottom'
 
   return <section className="panel-section">
-    <h2 className="section-title">Area</h2>
+    <div className="section-heading">
+      <h2 className="section-title">Area</h2>
+      <HelpPopover label="How areas sort">
+        <dl className="help-list">
+          <dt>Direction</dt>
+          <dd>The axis of the runs: every row left to right, or every column top to bottom. Runs are cut wherever the mask is empty.</dd>
+          <dt>Reverse</dt>
+          <dd>Which end of a run is read first. The sorted block moves from the start of the run to its end.</dd>
+          <dt>Amount</dt>
+          <dd>How much of each run is sorted, per run, with a small random wobble. The sorted block stays anchored to one end, so the rest of the run is left as it was.</dd>
+          <dt>Feather</dt>
+          <dd>Width of the soft ramp measured inward from the whole shape border, as a share of the shorter canvas side. Near the border the sorted result fades back into the artwork.</dd>
+          <dt>Blend</dt>
+          <dd>Lays the sorted pixels down by cross-fading with that feather ramp. Soft edges, no offset.</dd>
+          <dt>Ragged</dt>
+          <dd>Lays the sorted pixels down hard, so the border stays crisp, and instead pushes each run's sorted block away from the border by a random amount. Feather has no effect here.</dd>
+          <dt>Jitter</dt>
+          <dd>How far a run's sorted block may be pushed, up to that share of the shorter canvas side, in either direction. Only used by ragged.</dd>
+          <dt>Opacity</dt>
+          <dd>How much of this area's whole result is mixed over the areas below it.</dd>
+          <dt>Order</dt>
+          <dd>Later areas composite over earlier ones. Solo renders only one area. Mask preview shows the raw weight map.</dd>
+        </dl>
+      </HelpPopover>
+    </div>
     <p className="hint-text">{area.shape.kind} · {area.id}</p>
 
     <ControlField label="Label">
@@ -102,6 +127,9 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
       options={[{ value: 'blend', label: 'Blend' }, { value: 'ragged', label: 'Ragged' }]}
       onChange={(mode) => update((current) => ({ ...current, edge: { ...current.edge, mode } }))}
     />
+    <p className="hint-text">{area.edge.mode === 'ragged'
+      ? 'Hard pixels, run starts pushed by the jitter.'
+      : 'Sorted pixels cross-faded along the feather ramp.'}</p>
 
     <ControlField label="Feather" value={area.edge.mode === 'ragged' ? 'blend only' : `${area.edge.feather}% · ${featherPixels}px`}>
       <div className="slider-row">
@@ -130,6 +158,7 @@ export function AreaControls({ model, editor }: { model: GenerationModel; editor
     />
     {area.edge.mode !== 'ragged' && <p className="hint-text">Jitter applies to ragged edges only.</p>}
     {area.edge.mode === 'ragged' && <p className="hint-text">Feather applies to blend edges only.</p>}
+    {area.edge.mode !== 'ragged' && featherPixels > 0 && <p className="hint-text">Fades in from the whole border, {featherPixels}px inward.</p>}
     <p className="hint-text">Feather and jitter are percentages of the shorter canvas side{minSide > 0 ? ` (${minSide}px)` : ''}.</p>
 
     {area.shape.kind === 'path' && !area.shape.closed && <Segmented<'a' | 'b'>
