@@ -25,7 +25,7 @@ export type EffectRenderContext = {
 };
 
 export type EffectControl =
-  | { type: 'range'; key: keyof EffectParams; label: string; min: number; max: number; step: number }
+  | { type: 'range'; key: keyof EffectParams; label: string; min: number; max: number; step: number; fallback?: number }
   | { type: 'select'; key: keyof EffectParams; label: string; options: { value: string; label: string }[] }
   | { type: 'toggle'; key: keyof EffectParams; label: string };
 
@@ -456,13 +456,16 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
   'pixel-sort': {
     id: 'pixel-sort',
     label: 'Pixel sort',
-    defaults: {},
+    // A live pixel-sort layer sorts a share of every run, so `amount` is a real
+    // control; legacy layers may still carry null, which shows as the fallback.
+    defaults: { amount: 100 },
     controls: [
       { type: 'select', key: 'direction', label: 'Direction', options: [
         { value: 'horizontal', label: 'Horizontal' },
         { value: 'vertical', label: 'Vertical' },
       ] },
       { type: 'toggle', key: 'reverse', label: '⇄ Reverse' },
+      { type: 'range', key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, fallback: 100 },
       { type: 'range', key: 'randomness', label: 'Randomness', min: 0, max: 100, step: 1 },
       { type: 'toggle', key: 'containedBlocks', label: 'Contained blocks' },
       { type: 'range', key: 'spanWidth', label: 'Span width', min: 1, max: MAX_SPAN_WIDTH, step: 1 },
