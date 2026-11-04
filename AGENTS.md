@@ -71,7 +71,12 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   mirrors the grouping and a trailing partial span stays partial; a span's
   per-channel average (alpha included, rounded) is both its luminance sort key
   and the colour flooded back over its pixels; at 1 the span is the pixel, so
-  the output is unchanged. It writes raw sorted pixels; the generic mask
+  the output is unchanged. `params.containedBlocks` (default off) switches the
+  ragged block geometry between the two historical behaviours: off slides the
+  whole-run block along the line under jitter (blocks may leave the mask run, and
+  the compositor clips what lands outside), on shortens the block by the per-line
+  0.85..1.15 wobble and clamps jitter to `[start, end - sortedLength]` so blocks
+  only move inside the run. It writes raw sorted pixels; the generic mask
   compositor applies feather/ragged alpha exactly once.
 - `src/areas.ts` — p5-free shape math: `maskWeight` builds the 0..1 mask for a
   rect, ellipse, or path shape (feather ramp, ragged noise); also `hashString`,
@@ -142,7 +147,11 @@ compositor applies edge coverage once:
 `blend` alpha = `bufferAlpha * maskWeight * opacity`, `ragged` alpha =
 `bufferAlpha * (maskWeight > 0 ? 1 : 0) * opacity`. Feather is a ramp inward from
 the whole shape border and therefore a blend-only control; jitter displaces each
-pixel-sort run's sorted block and is a ragged-only control. A single unrotated
+pixel-sort run's sorted block and is a ragged-only control. With
+`containedBlocks` off the block keeps the run's length and slides along the whole
+line, so pixels it leaves uncovered inside the run stay unsorted; with it on the
+block is shorter than the run and stays inside it, so raggedness comes only from
+the mask edge noise and the per-line block length. A single unrotated
 rect covering the whole canvas at feather 0 and jitter 0 skips the mask
 entirely.
 

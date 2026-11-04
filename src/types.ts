@@ -40,6 +40,9 @@ export interface EffectParams {
   // Consecutive pixels along the sort axis averaged into one sortable span;
   // read by pixel-sort only.
   spanWidth: number;
+  // Legacy ragged geometry: the per-line block is shortened and stays inside the
+  // mask run instead of sliding along the whole line. Read by pixel-sort only.
+  containedBlocks: boolean;
   // Read by pixel-sort only. A legacy colorSortAmount can survive on any
   // migrated layer; switching the effect resets it to null.
   amount: number | null;
@@ -57,6 +60,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   reverse: false,
   randomness: 0,
   spanWidth: 1,
+  containedBlocks: false,
   amount: null,
   sectionCount: 3,
   sectionOffset: 33,
