@@ -6,13 +6,15 @@ import { createCompositionEngine, type CompositionEngine } from './compose';
 import { drawSeedLabel } from './text';
 
 type RenderResult = { imageChanged: boolean; resized: boolean }
+export type SketchStatus = 'rendered' | 'image-changed' | 'image-failed'
 type SketchReady = (
   baseCanvas: HTMLCanvasElement,
   seedCanvas: HTMLCanvasElement,
   render: (generation: Generation) => RenderResult,
 ) => void
+type SketchStatusListener = (status: SketchStatus) => void
 
-export function createSketch(initial: Generation, onReady?: SketchReady) {
+export function createSketch(initial: Generation, onReady?: SketchReady, onStatus?: SketchStatusListener) {
   const fonts: Record<string, p5.Font> = {};
   let renderer: p5;
   let sourceImage: p5.Image;
@@ -21,6 +23,7 @@ export function createSketch(initial: Generation, onReady?: SketchReady) {
   let engine: CompositionEngine;
   let current = initial;
   let cropKey = cropSignature(initial);
+  let imageFailed = false;
 
   function cropSignature(gen: Generation) {
     return `${gen.cropFormat}:${gen.cropX}:${gen.cropY}:${gen.cropSize}`;
@@ -31,7 +34,10 @@ export function createSketch(initial: Generation, onReady?: SketchReady) {
   }
 
   function render(next: Generation): RenderResult {
-    if (next.image !== current.image) return { imageChanged: true, resized: false };
+    if (next.image !== current.image) {
+      onStatus?.('image-changed');
+      return { imageChanged: true, resized: false };
+    }
     const nextCrop = cropSignature(next);
     let resized = false;
     if (nextCrop !== cropKey) {
@@ -51,6 +57,7 @@ export function createSketch(initial: Generation, onReady?: SketchReady) {
     renderer.noLoop();
     const baseCanvas = (renderer as unknown as { canvas: HTMLCanvasElement }).canvas;
     baseCanvas.dataset.composed = String(next.seed);
+    onStatus?.('rendered');
     return { imageChanged: false, resized };
   }
 
@@ -73,10 +80,17 @@ export function createSketch(initial: Generation, onReady?: SketchReady) {
           (p as unknown as { _decrementPreload: () => void })._decrementPreload();
         });
       }
-      sourceImage = p.loadImage(initial.image);
+      sourceImage = p.loadImage(initial.image, undefined, () => {
+        imageFailed = true;
+        onStatus?.('image-failed');
+      });
     };
 
     p.setup = () => {
+      if (imageFailed) {
+        p.noLoop();
+        return;
+      }
       renderer = p;
       p.pixelDensity(1);
       p.imageMode(p.CORNER);
