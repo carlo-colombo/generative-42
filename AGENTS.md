@@ -52,9 +52,10 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   automatically. Effects: `pixel-sort`, `galaxy`, `sections`, `detail-noise`,
   `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
   `horizontal-lines`. `normalizeEffectId` aliases the legacy `color-sorting` and
-  `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is hidden from the
-  controls and only pixel-sort reads it; a legacy `colorSortAmount` survives on
-  any migrated layer, but switching that layer's effect resets it.
+  `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is the share of each
+  run a pixel-sort layer sorts (control, shown as 100 when a migrated layer
+  still carries null); only pixel-sort reads it, and switching a layer's effect
+  resets it to that effect's defaults.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
@@ -71,7 +72,11 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   mirrors the grouping and a trailing partial span stays partial; a span's
   per-channel average (alpha included, rounded) is both its luminance sort key
   and the colour flooded back over its pixels; at 1 the span is the pixel, so
-  the output is unchanged. `params.containedBlocks` (default off) switches the
+  the output is unchanged. `params.amount` (0..100, 100 on a new layer) shrinks
+  each line's sorted block to that share of the run with the legacy 0.85..1.15
+  wobble, so the rest of the run keeps the source: the lower it is, the more the
+  sorted gradient and the photograph sit side by side inside one run.
+  `params.containedBlocks` (default off) switches the
   ragged block geometry between the two historical behaviours: off slides the
   whole-run block along the line under jitter (blocks may leave the mask run, and
   the compositor clips what lands outside), on shortens the block by the per-line
@@ -180,8 +185,8 @@ When a URL or stored generation has no `layers`, it is migrated:
   cap never truncates the texts. `soloAreaId` becomes `soloLayerId` when it maps
   to one of them.
 - `draw=color-sorting`: one full-canvas pixel-sort layer carrying the legacy
-  `colorSortAmount` as the hidden `amount` and `colorSortDirection`; reverse off
-  and randomness 0.
+  `colorSortAmount` as `amount` and `colorSortDirection`; reverse off and
+  randomness 0.
 - Any other draw: one full-canvas effect layer from `draw` plus the legacy
   effect fields (`grayLevels`, `section*`, `detailNoiseMode`, and any
   `colorSortAmount`), with the legacy text layers above it.
@@ -191,8 +196,10 @@ When a URL or stored generation has no `layers`, it is migrated:
 
 Per-layer seeds mean migrated renders need not be pixel-identical to the old
 ones. The legacy `amount` behavior (each run sorted by a deterministic share with
-the old per-line wobble) only applies while a migrated layer still runs
-`pixel-sort`; switching its effect resets `amount` to null.
+the old per-line wobble) is the same code a live layer runs whenever `amount` is
+set; a migrated layer keeps its `amount`, and a layer created after the change
+defaults to 100. Switching a layer's effect resets `amount` to that effect's
+defaults, which is null for every effect but pixel-sort.
 
 ## Conventions
 

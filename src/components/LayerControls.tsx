@@ -48,7 +48,7 @@ function EffectParamControl({ control, params, onChange }: {
   if (control.type === 'range') {
     return <SliderField
       label={control.label}
-      value={Number(params[control.key])}
+      value={Number(params[control.key] ?? control.fallback ?? 0)}
       min={control.min}
       max={control.max}
       step={control.step}
