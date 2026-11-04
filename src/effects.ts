@@ -2,7 +2,7 @@ import p5 from "p5";
 import { averageColorInArea, type Point } from "./color";
 import { mulberry32 } from "./areas";
 import { sortPixels } from "./sort";
-import { DEFAULT_EFFECT_PARAMS } from "./types";
+import { DEFAULT_EFFECT_PARAMS, MAX_SPAN_WIDTH } from "./types";
 import type {
   ColorSortDirection,
   DetailNoiseMode,
@@ -85,6 +85,7 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     direction: directionOf(record.direction, base.direction),
     reverse: typeof record.reverse === 'boolean' ? record.reverse : base.reverse,
     randomness: clampNumber(record.randomness, 0, 100, base.randomness),
+    spanWidth: Math.round(clampNumber(record.spanWidth, 1, MAX_SPAN_WIDTH, base.spanWidth)),
     amount: amount === null ? null : amount === undefined ? base.amount : clampNumber(amount, 0, 100, base.amount ?? 100),
     sectionCount: Math.round(clampNumber(record.sectionCount, 1, 20, base.sectionCount)),
     sectionOffset: clampNumber(record.sectionOffset, 0, 100, base.sectionOffset),
@@ -258,6 +259,7 @@ function pixelSort({ p, source, mask, seed, params, edge }: EffectRenderContext)
       direction: params.direction,
       reverse: params.reverse,
       randomness: params.randomness,
+      spanWidth: params.spanWidth,
       jitter: edge.mode === 'ragged' ? edge.jitter : 0,
       amount: params.amount,
     },
@@ -460,6 +462,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       ] },
       { type: 'toggle', key: 'reverse', label: '⇄ Reverse' },
       { type: 'range', key: 'randomness', label: 'Randomness', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'spanWidth', label: 'Span width', min: 1, max: MAX_SPAN_WIDTH, step: 1 },
     ],
     render: pixelSort,
   },

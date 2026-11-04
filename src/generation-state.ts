@@ -376,6 +376,7 @@ function compactParams(params: EffectParams): EffectParams {
     direction: params.direction,
     reverse: params.reverse,
     randomness: quantize(params.randomness),
+    spanWidth: params.spanWidth,
     amount: params.amount === null ? null : quantize(params.amount),
     sectionCount: params.sectionCount,
     sectionOffset: quantize(params.sectionOffset),

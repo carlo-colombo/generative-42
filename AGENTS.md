@@ -65,8 +65,14 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   top-layer edit does not re-render lower effects. Masks and buffers are cleared
   on crop, canvas-size, or seed change.
 - `src/sort.ts` — raw pixel sort (`sortPixels`): bucketed luminance runs,
-  mask-segmented runs, ragged block offsets. It writes raw sorted pixels; the
-  generic mask compositor applies feather/ragged alpha exactly once.
+  mask-segmented runs, ragged block offsets. `params.spanWidth` (1..64, default
+  1) groups each sorted block into spans of that many consecutive pixels along
+  the sort axis, aligned from the edge the block is read from so `reverse`
+  mirrors the grouping and a trailing partial span stays partial; a span's
+  per-channel average (alpha included, rounded) is both its luminance sort key
+  and the colour flooded back over its pixels; at 1 the span is the pixel, so
+  the output is unchanged. It writes raw sorted pixels; the generic mask
+  compositor applies feather/ragged alpha exactly once.
 - `src/areas.ts` — p5-free shape math: `maskWeight` builds the 0..1 mask for a
   rect, ellipse, or path shape (feather ramp, ragged noise); also `hashString`,
   `mulberry32`, and `shapePolygon`. `maskWeight` reuses one scratch buffer, so a
