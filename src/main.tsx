@@ -1,10 +1,11 @@
 import p5 from 'p5'
 import { render } from 'preact'
+import { signal } from '@preact/signals'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { StageToolbar } from './components/ToolButtons'
 import { createEditorModel } from './editor-state'
-import { createSketch } from './sketch'
+import { createSketch, type SketchStatus } from './sketch'
 import { createGenerationModel, getGeneration } from './generation-state'
 import type { Generation } from './types'
 import './style.css'
@@ -20,6 +21,21 @@ let renderComposition: ((generation: Generation) => { imageChanged: boolean; res
 let drawnSignature = ''
 let previewTimer = 0
 let pendingPreview: Generation | null = null
+
+type StageStatus = SketchStatus | 'loading'
+const stageStatus = signal<StageStatus>('loading')
+
+function StageLoading() {
+  const status = stageStatus.value
+  if (status === 'rendered') return null
+  const failed = status === 'image-failed'
+  return (
+    <div className={failed ? 'stage-loading is-error' : 'stage-loading'} role="status" aria-live="polite">
+      {!failed && <span className="stage-loading-spinner" aria-hidden="true" />}
+      <span className="stage-loading-label">{failed ? 'IMAGE FAILED' : 'LOADING'}</span>
+    </div>
+  )
+}
 
 const leftPanelRoot = document.createElement('div')
 leftPanelRoot.className = 'panel-root'
@@ -44,6 +60,11 @@ stageColumn.appendChild(stage)
 const editorRoot = document.createElement('div')
 editorRoot.className = 'stage-editor-root'
 stage.appendChild(editorRoot)
+
+const loadingRoot = document.createElement('div')
+loadingRoot.className = 'stage-loading-root'
+stage.appendChild(loadingRoot)
+render(<StageLoading />, loadingRoot)
 
 let aspectRatio = 1
 function fitStage() {
@@ -119,6 +140,8 @@ const instance = new p5(createSketch(generation, (base, seed, renderLayer) => {
   fitStage()
   drawnSignature = compositionSignature(model.draft.value)
   renderEditor()
+}, (status) => {
+  stageStatus.value = status
 }), stage)
 
 function renderEditor() {

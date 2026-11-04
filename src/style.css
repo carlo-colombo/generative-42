@@ -501,6 +501,56 @@ body {
   z-index: 2;
 }
 
+.stage-loading-root {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.stage-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8em;
+  background: rgb(0 0 0 / 68%);
+  color: var(--text);
+  font-family: inherit;
+  font-size: clamp(9px, 2vmin, 14px);
+  line-height: 1;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.stage-loading.is-error {
+  color: #e8a4a4;
+  letter-spacing: 0.18em;
+}
+
+.stage-loading-spinner {
+  width: 2.2em;
+  height: 2.2em;
+  border: 2px solid rgb(238 238 238 / 22%);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: stage-loading-spin 800ms linear infinite;
+}
+
+@keyframes stage-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-loading-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .stage-editor {
   position: absolute;
   inset: 0;
