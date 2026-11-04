@@ -28,11 +28,18 @@ export type EffectId =
   | 'sections'
   | 'detail-noise';
 
+// Spans are measured in source pixels along the sort axis; past this width a
+// typical run collapses into a handful of sortable units.
+export const MAX_SPAN_WIDTH = 64;
+
 export interface EffectParams {
   grayLevels: number;
   direction: ColorSortDirection;
   reverse: boolean;
   randomness: number;
+  // Consecutive pixels along the sort axis averaged into one sortable span;
+  // read by pixel-sort only.
+  spanWidth: number;
   // Read by pixel-sort only. A legacy colorSortAmount can survive on any
   // migrated layer; switching the effect resets it to null.
   amount: number | null;
@@ -49,6 +56,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   direction: "horizontal",
   reverse: false,
   randomness: 0,
+  spanWidth: 1,
   amount: null,
   sectionCount: 3,
   sectionOffset: 33,
