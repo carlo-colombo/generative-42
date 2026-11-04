@@ -70,18 +70,18 @@ export function CropControls({ model }: { model: GenerationModel }) {
     </div>
     <div className="field-grid">
       <ControlField label="Format">
-        <select value={generation.cropFormat} onChange={(event) => model.setField('cropFormat', event.currentTarget.value as CropFormat)}>
+        <select aria-label="Crop format" value={generation.cropFormat} onChange={(event) => model.setField('cropFormat', event.currentTarget.value as CropFormat)}>
           {formats.map((format) => <option value={format.value}>{format.label}</option>)}
         </select>
       </ControlField>
       <ControlField label="Size" value={`${generation.cropSize}%`}>
-        <input type="range" min="1" max="100" value={generation.cropSize} onInput={(event) => model.setField('cropSize', Number(event.currentTarget.value))} />
+        <input aria-label="Crop size (%)" type="range" min="1" max="100" value={generation.cropSize} onInput={(event) => model.setField('cropSize', Number(event.currentTarget.value))} />
       </ControlField>
       <ControlField label="X (%)" value={generation.cropX}>
-        <input type="range" min="0" max="100" value={generation.cropX} onInput={(event) => model.setField('cropX', Number(event.currentTarget.value))} />
+        <input aria-label="Crop X (%)" type="range" min="0" max="100" value={generation.cropX} onInput={(event) => model.setField('cropX', Number(event.currentTarget.value))} />
       </ControlField>
       <ControlField label="Y (%)" value={generation.cropY}>
-        <input type="range" min="0" max="100" value={generation.cropY} onInput={(event) => model.setField('cropY', Number(event.currentTarget.value))} />
+        <input aria-label="Crop Y (%)" type="range" min="0" max="100" value={generation.cropY} onInput={(event) => model.setField('cropY', Number(event.currentTarget.value))} />
       </ControlField>
     </div>
     <label className="checkbox-field">

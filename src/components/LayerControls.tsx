@@ -34,8 +34,8 @@ function SliderField({ label, value, min, max, step, unit, disabled, onChange }:
   }
   return <ControlField label={label} value={`${value}${unit ?? ''}`}>
     <div className="slider-row">
-      <input type="range" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
-      <input className="slider-input" type="number" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
+      <input aria-label={label} type="range" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
+      <input aria-label={label} className="slider-input" type="number" min={min} max={max} step={step} value={value} disabled={disabled} onInput={(event) => apply(Number(event.currentTarget.value))} />
     </div>
   </ControlField>
 }
@@ -57,7 +57,7 @@ function EffectParamControl({ control, params, onChange }: {
   }
   if (control.type === 'select') {
     return <ControlField label={control.label}>
-      <select value={String(params[control.key])} onChange={(event) => onChange(control.key, event.currentTarget.value)}>
+      <select aria-label={control.label} value={String(params[control.key])} onChange={(event) => onChange(control.key, event.currentTarget.value)}>
         {control.options.map((option) => <option value={option.value}>{option.label}</option>)}
       </select>
     </ControlField>
@@ -115,7 +115,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
     <p className="hint-text">{layer.shape.kind} · {layer.id}</p>
 
     <ControlField label="Effect">
-      <select value={layer.effect} onChange={(event) => setEffect(model, layer.id, event.currentTarget.value as EffectId)}>
+      <select aria-label="Effect" value={layer.effect} onChange={(event) => setEffect(model, layer.id, event.currentTarget.value as EffectId)}>
         {EFFECT_LIST.map((entry) => <option value={entry.id}>{entry.label}</option>)}
       </select>
     </ControlField>
@@ -128,7 +128,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
     />)}
 
     <ControlField label="Label">
-      <input type="text" value={layer.label} onInput={(event) => {
+      <input aria-label="Label" type="text" value={layer.label} onInput={(event) => {
         const label = event.currentTarget.value.toUpperCase()
         update((current) => ({ ...current, label }))
       }} />
@@ -136,7 +136,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
 
     <ControlField label="Colour" value={layer.color}>
       <div className="color-row">
-        <input type="color" value={layer.color} onInput={(event) => {
+        <input aria-label="Colour" type="color" value={layer.color} onInput={(event) => {
           const color = event.currentTarget.value
           update((current) => ({ ...current, color }))
         }} />
@@ -164,11 +164,11 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
 
     <ControlField label="Feather" value={layer.edge.mode === 'ragged' ? 'blend only' : `${layer.edge.feather}% · ${featherPixels}px`}>
       <div className="slider-row">
-        <input type="range" min={0} max={100} step={1} value={layer.edge.feather} onInput={(event) => {
+        <input aria-label="Feather" type="range" min={0} max={100} step={1} value={layer.edge.feather} onInput={(event) => {
           const feather = clamp(Number(event.currentTarget.value), 0, 100)
           update((current) => ({ ...current, edge: { ...current.edge, feather } }))
         }} />
-        <input className="slider-input" type="number" min={0} max={100} step={1} value={layer.edge.feather} onInput={(event) => {
+        <input aria-label="Feather" className="slider-input" type="number" min={0} max={100} step={1} value={layer.edge.feather} onInput={(event) => {
           const feather = Number(event.currentTarget.value)
           if (!Number.isFinite(feather)) return
           update((current) => ({ ...current, edge: { ...current.edge, feather: clamp(feather, 0, 100) } }))
@@ -215,35 +215,35 @@ function TextInspector({ model, layer }: { model: GenerationModel; layer: TextLa
     </div>
     <p className="hint-text">text · {layer.id}</p>
     <ControlField label="Content">
-      <textarea rows={3} value={layer.text} onInput={(event) => field('text')(event.currentTarget.value)} />
+      <textarea aria-label="Content" rows={3} value={layer.text} onInput={(event) => field('text')(event.currentTarget.value)} />
     </ControlField>
     <ControlField label="Font">
-      <select id="text-font" value={FONTS.some((font) => font.path === layer.font) ? layer.font : DEFAULT_FONT} onChange={(event) => field('font')(event.currentTarget.value)}>
+      <select aria-label="Font" id="text-font" value={FONTS.some((font) => font.path === layer.font) ? layer.font : DEFAULT_FONT} onChange={(event) => field('font')(event.currentTarget.value)}>
         {FONTS.map((font) => <option value={font.path}>{font.label}</option>)}
       </select>
     </ControlField>
     <div className="field-grid">
       <ControlField label="Size">
-        <input type="number" min="10" max="3000" step="5" value={layer.size} onInput={(event) => field('size')(event.currentTarget.value)} />
+        <input aria-label="Size" type="number" min="10" max="3000" step="5" value={layer.size} onInput={(event) => field('size')(event.currentTarget.value)} />
       </ControlField>
       <ControlField label="Opacity" value={`${layer.opacity}%`}>
-        <input type="range" min="0" max="100" value={layer.opacity} onInput={(event) => field('opacity')(event.currentTarget.value)} />
+        <input aria-label="Opacity" type="range" min="0" max="100" value={layer.opacity} onInput={(event) => field('opacity')(event.currentTarget.value)} />
       </ControlField>
       <ControlField label="Align">
-        <select value={layer.align} onChange={(event) => field('align')(event.currentTarget.value)}>
+        <select aria-label="Align" value={layer.align} onChange={(event) => field('align')(event.currentTarget.value)}>
           {alignments.map((value) => <option value={value}>{value}</option>)}
         </select>
       </ControlField>
       <ControlField label="Vertical">
-        <select value={layer.vAlign} onChange={(event) => field('vAlign')(event.currentTarget.value)}>
+        <select aria-label="Vertical align" value={layer.vAlign} onChange={(event) => field('vAlign')(event.currentTarget.value)}>
           {verticalAlignments.map((value) => <option value={value}>{value}</option>)}
         </select>
       </ControlField>
       <ControlField label="X (%)">
-        <input type="number" min="0" max="100" value={layer.x} onInput={(event) => field('x')(event.currentTarget.value)} />
+        <input aria-label="X (%)" type="number" min="0" max="100" value={layer.x} onInput={(event) => field('x')(event.currentTarget.value)} />
       </ControlField>
       <ControlField label="Y (%)">
-        <input type="number" min="0" max="100" value={layer.y} onInput={(event) => field('y')(event.currentTarget.value)} />
+        <input aria-label="Y (%)" type="number" min="0" max="100" value={layer.y} onInput={(event) => field('y')(event.currentTarget.value)} />
       </ControlField>
     </div>
   </section>

@@ -9,6 +9,47 @@ export function hashString(value: string): number {
   return hash >>> 0
 }
 
+export function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value
+}
+
+export function clampShape(shape: AreaShape): AreaShape {
+  if (shape.kind === 'rect') {
+    const x = clamp01(Math.min(shape.x, shape.x + shape.w))
+    const y = clamp01(Math.min(shape.y, shape.y + shape.h))
+    return {
+      kind: 'rect',
+      x,
+      y,
+      w: clamp01(Math.max(shape.x, shape.x + shape.w)) - x,
+      h: clamp01(Math.max(shape.y, shape.y + shape.h)) - y,
+      rotation: shape.rotation,
+    }
+  }
+  if (shape.kind === 'ellipse') {
+    return {
+      kind: 'ellipse',
+      cx: clamp01(shape.cx),
+      cy: clamp01(shape.cy),
+      rx: Math.min(0.5, Math.abs(shape.rx)),
+      ry: Math.min(0.5, Math.abs(shape.ry)),
+      rotation: shape.rotation,
+    }
+  }
+  return {
+    kind: 'path',
+    closed: shape.closed,
+    side: shape.side,
+    tension: shape.tension,
+    points: shape.points.map((point) => ({ x: clamp01(point.x), y: clamp01(point.y) })),
+  }
+}
+
+// The key the composition engine and the stage preview both use for a layer mask.
+export function maskKey(shape: AreaShape, edge: LayerEdge, width: number, height: number, seed: number, id: string): string {
+  return `${width}x${height}:${seed}:${id}:${JSON.stringify(shape)}:${edge.feather}:${edge.jitter}:${edge.mode}`
+}
+
 export function mulberry32(seed: number): () => number {
   let state = seed >>> 0
   return () => {

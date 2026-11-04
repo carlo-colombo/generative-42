@@ -9,7 +9,6 @@ import { CropControls } from './components/CropControls'
 import { LayerControls } from './components/LayerControls'
 import { LayerList } from './components/LayerList'
 import { SourceControls } from './components/SourceControls'
-import { ToolButtons } from './components/ToolButtons'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
 function useImages(model: GenerationModel) {
@@ -89,7 +88,7 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
       <section className="panel-section">
         <h2 className="section-title">Add layer</h2>
         <ControlField label="Effect">
-          <select value={newEffect} onChange={(event) => { editor.newEffect.value = event.currentTarget.value as EffectId }}>
+          <select aria-label="New layer effect" value={newEffect} onChange={(event) => { editor.newEffect.value = event.currentTarget.value as EffectId }}>
             {EFFECT_LIST.map((entry) => <option value={entry.id}>{entry.label}</option>)}
           </select>
         </ControlField>
@@ -99,12 +98,11 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
         </div>
         {atCapacity && <p className="text-hint">Limit of {MAX_LAYERS} layers</p>}
         <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole frame.</p>
-        <ToolButtons editor={editor} disabled={atCapacity} />
       </section>
       <LayerControls model={model} editor={editor} />
       <section className="panel-section">
         <label className="checkbox-field">
-          <input type="checkbox" checked={editor.maskPreview.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />
+          <input type="checkbox" checked={editor.maskPreview.value} disabled={!editor.showMasks.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />
           Preview effect masks
         </label>
       </section>

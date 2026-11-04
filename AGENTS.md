@@ -53,7 +53,8 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
   `horizontal-lines`. `normalizeEffectId` aliases the legacy `color-sorting` and
   `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is hidden from the
-  controls and only migrated legacy `color-sorting` layers carry it.
+  controls and only pixel-sort reads it; a legacy `colorSortAmount` survives on
+  any migrated layer, but switching that layer's effect resets it.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
@@ -73,7 +74,7 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   mask ring the editor draws, and the ring distance pass is skipped entirely
   when feather and jitter are both 0.
 - `src/text.ts` — glyph rasterization (opaque; the engine applies layer opacity)
-  and the non-exported `seed=` label.
+  and the exported `drawSeedLabel` for the `seed=` overlay.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
   `maskPreview`, `showMasks`, `canvasSize`, `newEffect`) and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
@@ -95,8 +96,8 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   the render function to `main.tsx`. One `renderComposition` call replaces the
   old draw function + separate text canvas. Sets `canvas.base-layer.dataset.composed`
   to the rendered seed for headless capture. The `seed=` label stays on a
-  separate non-exported overlay canvas. `downloadImage` exports the base
-  composition (text included).
+  separate overlay canvas that is never exported. `downloadImage` exports the
+  base composition (text included).
 - `src/color.ts` — color helpers (e.g. `averageColorInArea`).
 - `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
   files live in `public/fonts/`; every `FONTS` entry must exist there, because
@@ -114,10 +115,11 @@ stack renders the source and nothing else.
 `Layer = EffectLayer | TextLayer`, and both carry `id`, `label`, `visible`, and
 `opacity`.
 
-- `EffectLayer` adds `color` (overlay colour), `shape` (`rect`, `ellipse`, or
-  `path`, normalised 0..1), `edge` (`feather`, `jitter`, `mode`), `effect`, and
-  `params`. The effect paints inside the shape mask. A full-canvas effect is a
-  rect layer covering 0..1; there is no global draw selector.
+- `EffectLayer` adds `color` (the editor outline and chip tint, not part of the
+  render), `shape` (`rect`, `ellipse`, or `path`, normalised 0..1), `edge`
+  (`feather`, `jitter`, `mode`), `effect`, and `params`. The effect paints inside
+  the shape mask. A full-canvas effect is a rect layer covering 0..1; there is
+  no global draw selector.
 - `TextLayer` adds `text`, `align`, `vAlign`, `x`, `y`, `size`, and `font`. Text
   layers are full-canvas positioned, are not stage-editable, and have no shape
   mask in this pass. Text is rasterized into a transparent scratch, composited
@@ -159,20 +161,23 @@ When a URL or stored generation has no `layers`, it is migrated:
 
 - `draw=pixel-sort-areas`: one pixel-sort layer per legacy area, in area order,
   with that area's shape, edge, direction, reverse, and randomness; no global
-  effect layer. `soloAreaId` becomes `soloLayerId` when it maps to one of them.
+  effect layer. Areas are budgeted against the text layers so the `MAX_LAYERS`
+  cap never truncates the texts. `soloAreaId` becomes `soloLayerId` when it maps
+  to one of them.
 - `draw=color-sorting`: one full-canvas pixel-sort layer carrying the legacy
   `colorSortAmount` as the hidden `amount` and `colorSortDirection`; reverse off
   and randomness 0.
 - Any other draw: one full-canvas effect layer from `draw` plus the legacy
-  effect fields (`grayLevels`, `section*`, `detailNoiseMode`), with the legacy
-  text layers above it.
+  effect fields (`grayLevels`, `section*`, `detailNoiseMode`, and any
+  `colorSortAmount`), with the legacy text layers above it.
 - Legacy texts come from the `texts` param (inline or `texts:<id>` storage),
   then the pre-change per-layer params (`text`, `textSize`, `text2`, ...), then
   the two default text layers.
 
 Per-layer seeds mean migrated renders need not be pixel-identical to the old
 ones. The legacy `amount` behavior (each run sorted by a deterministic share with
-the old per-line wobble) is retained for migrated `color-sorting` layers only.
+the old per-line wobble) only applies while a migrated layer still runs
+`pixel-sort`; switching its effect resets `amount` to null.
 
 ## Conventions
 

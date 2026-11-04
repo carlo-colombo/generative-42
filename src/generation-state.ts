@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals'
-import { hashString } from './areas'
+import { clampShape, hashString } from './areas'
 import { DEFAULT_GENERATION, DEFAULT_EFFECT_PARAMS, LAYER_COLORS } from './types'
 import { DEFAULT_FONT, FONTS } from './fonts'
 import { effectLabel, normalizeEffectId, sanitizeParams } from './effects'
@@ -21,6 +21,9 @@ export const MAX_LAYERS = 20
 
 const INLINE_LAYERS_LIMIT = 6000
 const LAYERS_STORAGE_PREFIX = 'layers:'
+// Stored payloads are content addressed, so a run of large stacks would grow
+// without bound. Keep the most recent few for back navigation.
+const LAYERS_STORAGE_KEEP = 8
 
 const legacyTextKeys = [
   { text: 'text', align: 'textAlign', vAlign: 'textVAlign', x: 'textX', y: 'textY', size: 'textSize', font: 'font', opacity: 'textOpacity' },
@@ -156,11 +159,11 @@ function sanitizeLegacyText(value: unknown, index: number): LegacyText {
     text: typeof source.text === 'string' ? source.text : fallback.text,
     align: alignments.has(align) ? align : fallback.align,
     vAlign: verticalAlignments.has(vAlign) ? vAlign : fallback.vAlign,
-    x: sanitizeNumber(source.x, fallback.x),
-    y: sanitizeNumber(source.y, fallback.y),
-    size: sanitizeNumber(source.size, fallback.size),
+    x: clampNumber(source.x, 0, 100, fallback.x),
+    y: clampNumber(source.y, 0, 100, fallback.y),
+    size: clampNumber(source.size, 10, 3000, fallback.size),
     font: knownFonts.has(font) ? font : DEFAULT_FONT,
-    opacity: sanitizeNumber(source.opacity, fallback.opacity),
+    opacity: clampNumber(source.opacity, 0, 100, fallback.opacity),
   }
 }
 
@@ -208,7 +211,7 @@ function parseShape(value: unknown): AreaShape | null {
     const w = numeric(record, 'w')
     const h = numeric(record, 'h')
     if (x === null || y === null || w === null || h === null) return null
-    return { kind: 'rect', x, y, w, h, rotation: numeric(record, 'rotation') ?? 0 }
+    return clampShape({ kind: 'rect', x, y, w, h, rotation: numeric(record, 'rotation') ?? 0 })
   }
 
   if (record.kind === 'ellipse') {
@@ -217,7 +220,7 @@ function parseShape(value: unknown): AreaShape | null {
     const rx = numeric(record, 'rx')
     const ry = numeric(record, 'ry')
     if (cx === null || cy === null || rx === null || ry === null) return null
-    return { kind: 'ellipse', cx, cy, rx, ry, rotation: numeric(record, 'rotation') ?? 0 }
+    return clampShape({ kind: 'ellipse', cx, cy, rx, ry, rotation: numeric(record, 'rotation') ?? 0 })
   }
 
   if (record.kind === 'path') {
@@ -230,13 +233,13 @@ function parseShape(value: unknown): AreaShape | null {
       if (x === null || y === null) return null
       points.push({ x, y })
     }
-    return {
+    return clampShape({
       kind: 'path',
       closed: record.closed === true,
       side: record.side === 'b' ? 'b' : 'a',
       tension: numeric(record, 'tension') ?? 0,
       points,
-    }
+    })
   }
 
   return null
@@ -286,9 +289,9 @@ function parseTextLayer(record: Record<string, unknown>, id: string, index: numb
     text: typeof record.text === 'string' ? record.text : '',
     align: alignments.has(align) ? align : fallback.align,
     vAlign: verticalAlignments.has(vAlign) ? vAlign : fallback.vAlign,
-    x: sanitizeNumber(record.x, fallback.x),
-    y: sanitizeNumber(record.y, fallback.y),
-    size: sanitizeNumber(record.size, fallback.size),
+    x: clampNumber(record.x, 0, 100, fallback.x),
+    y: clampNumber(record.y, 0, 100, fallback.y),
+    size: clampNumber(record.size, 10, 3000, fallback.size),
     font: knownFonts.has(font) ? font : DEFAULT_FONT,
   }
 }
@@ -441,10 +444,23 @@ function persistLayers(layers: Layer[]): string {
   const id = `${hashString(payload).toString(36)}${payload.length.toString(36)}`
   try {
     localStorage.setItem(LAYERS_STORAGE_PREFIX + id, payload)
+    pruneStoredLayers(id)
     return id
   } catch {
     // A quota failure falls back to the inline value, however long.
     return encoded
+  }
+}
+
+function pruneStoredLayers(keep: string) {
+  const stale: string[] = []
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (key && key.startsWith(LAYERS_STORAGE_PREFIX) && key !== LAYERS_STORAGE_PREFIX + keep) stale.push(key)
+  }
+  while (stale.length >= LAYERS_STORAGE_KEEP) {
+    const oldest = stale.shift()
+    if (oldest) localStorage.removeItem(oldest)
   }
 }
 
@@ -574,7 +590,10 @@ function migrateLayers(input: LegacyInput): { layers: Layer[]; soloLayerId: stri
   const soloIds = new Map<string, string>()
 
   if (input.draw === 'pixel-sort-areas') {
-    for (const area of input.areas) {
+    // Text layers sit above the areas, so budget the areas against them instead
+    // of letting the MAX_LAYERS truncation drop the text layers.
+    const areaBudget = Math.max(0, MAX_LAYERS - input.texts.length)
+    for (const area of input.areas.slice(0, areaBudget)) {
       const id = `e${layers.length + 1}`
       soloIds.set(area.id, id)
       layers.push({

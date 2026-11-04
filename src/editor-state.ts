@@ -5,6 +5,10 @@ import { defaultParams, effectLabel } from './effects'
 import { LAYER_COLORS } from './types'
 import type { AreaShape, EffectId, EffectLayer, EffectParams, Generation, Layer, TextAlign, TextLayer, TextVAlign } from './types'
 
+// Shape clamping is shape math, so it lives with the masks in areas.ts and is
+// re-exported here for the editor call sites.
+export { clamp01, clampShape } from './areas'
+
 export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'curve'
 export type TextField = 'text' | 'align' | 'vAlign' | 'x' | 'y' | 'size' | 'font' | 'opacity'
 
@@ -21,42 +25,6 @@ export function createEditorModel() {
 }
 
 export type EditorModel = ReturnType<typeof createEditorModel>
-
-export function clamp01(value: number): number {
-  return value < 0 ? 0 : value > 1 ? 1 : value
-}
-
-export function clampShape(shape: AreaShape): AreaShape {
-  if (shape.kind === 'rect') {
-    const x = clamp01(Math.min(shape.x, shape.x + shape.w))
-    const y = clamp01(Math.min(shape.y, shape.y + shape.h))
-    return {
-      kind: 'rect',
-      x,
-      y,
-      w: clamp01(Math.max(shape.x, shape.x + shape.w)) - x,
-      h: clamp01(Math.max(shape.y, shape.y + shape.h)) - y,
-      rotation: shape.rotation,
-    }
-  }
-  if (shape.kind === 'ellipse') {
-    return {
-      kind: 'ellipse',
-      cx: clamp01(shape.cx),
-      cy: clamp01(shape.cy),
-      rx: Math.min(0.5, Math.abs(shape.rx)),
-      ry: Math.min(0.5, Math.abs(shape.ry)),
-      rotation: shape.rotation,
-    }
-  }
-  return {
-    kind: 'path',
-    closed: shape.closed,
-    side: shape.side,
-    tension: shape.tension,
-    points: shape.points.map((point) => ({ x: clamp01(point.x), y: clamp01(point.y) })),
-  }
-}
 
 export function translateShape(shape: AreaShape, dx: number, dy: number): AreaShape {
   if (shape.kind === 'rect') return { ...shape, x: shape.x + dx, y: shape.y + dy }
@@ -172,7 +140,9 @@ export function updateTextLayerField(model: GenerationModel, id: string, field: 
     if (value.trim() === '') return layer
     const parsed = Number(value)
     if (!Number.isFinite(parsed)) return layer
-    return { ...layer, [field]: parsed }
+    if (field === 'x' || field === 'y') return { ...layer, [field]: Math.min(100, Math.max(0, parsed)) }
+    if (field === 'size') return { ...layer, size: Math.min(3000, Math.max(10, parsed)) }
+    return { ...layer, opacity: Math.min(100, Math.max(0, parsed)) }
   })
 }
 
@@ -187,7 +157,7 @@ export function setEffect(model: GenerationModel, id: string, effect: EffectId) 
   updateEffectLayer(model, id, (layer) => ({
     ...layer,
     effect,
-    label: layer.label || effectLabel(effect),
+    label: layer.label === effectLabel(layer.effect) ? effectLabel(effect) : layer.label,
     params: defaultParams(effect),
   }))
 }

@@ -823,14 +823,6 @@ body {
   border-color: transparent;
 }
 
-.layer-index {
-  flex-shrink: 0;
-  min-width: 12px;
-  font-size: 10px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
 .layer-preview {
   flex: 1;
   min-width: 0;

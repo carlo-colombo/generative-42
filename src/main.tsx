@@ -79,8 +79,10 @@ function selectFallbackLayer(generation: Generation) {
 
 function applyPreview(generation: Generation) {
   if (!renderComposition) return
-  drawnSignature = compositionSignature(generation)
   const result = renderComposition(generation)
+  // A source-image swap cannot be rendered in place, so do not claim the drawn
+  // signature matches one.
+  drawnSignature = result.imageChanged ? '' : compositionSignature(generation)
   if (result.resized && baseCanvas) {
     editor.canvasSize.value = { width: baseCanvas.width, height: baseCanvas.height }
     aspectRatio = baseCanvas.width / baseCanvas.height

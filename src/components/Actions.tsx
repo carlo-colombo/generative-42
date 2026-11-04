@@ -13,7 +13,7 @@ export function Actions({ model }: { model: GenerationModel }) {
   return <footer className="panel-footer">
     <ControlField label="Seed">
       <div className="seed-row">
-        <input type="number" min="1" step="1" value={generation.seed} onInput={(event) => model.setField('seed', Math.max(1, parseInt(event.currentTarget.value, 10) || 1))} />
+        <input aria-label="Seed" type="number" min="1" step="1" value={generation.seed} onInput={(event) => model.setField('seed', Math.max(1, parseInt(event.currentTarget.value, 10) || 1))} />
         <button type="button" onClick={model.nextSeed}>Next</button>
       </div>
     </ControlField>

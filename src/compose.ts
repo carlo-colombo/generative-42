@@ -1,5 +1,5 @@
 import p5 from 'p5'
-import { hashString, maskWeight } from './areas'
+import { hashString, maskKey, maskWeight } from './areas'
 import { EFFECTS } from './effects'
 import { drawTextLayer } from './text'
 import type { AreaShape, EffectLayer, Generation, Layer } from './types'
@@ -91,7 +91,7 @@ export function createCompositionEngine(renderer: p5): CompositionEngine {
 
   function maskFor(layer: EffectLayer, generation: Generation, seed: number): Float32Array | null {
     if (!usesMask(layer)) return null
-    const key = `${width}x${height}:${seed}:${layer.id}:${JSON.stringify(layer.shape)}:${layer.edge.feather}:${layer.edge.jitter}:${layer.edge.mode}`
+    const key = maskKey(layer.shape, layer.edge, width, height, seed, layer.id)
     if (maskCache.has(key)) return maskCache.get(key) ?? null
     // maskWeight reuses one scratch buffer, so keep a copy before anything else runs.
     const weights = new Float32Array(maskWeight(layer.shape, layer.edge, width, height, generation.seed, layer.id))

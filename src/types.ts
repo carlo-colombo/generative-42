@@ -33,8 +33,8 @@ export interface EffectParams {
   direction: ColorSortDirection;
   reverse: boolean;
   randomness: number;
-  // Only migrated legacy color-sorting layers carry an amount; the pixel-sort
-  // controls sort whole runs and leave `amount` null.
+  // Read by pixel-sort only. A legacy colorSortAmount can survive on any
+  // migrated layer; switching the effect resets it to null.
   amount: number | null;
   sectionCount: number;
   sectionOffset: number;
@@ -67,6 +67,7 @@ export type LayerBase = {
 
 export type EffectLayer = LayerBase & {
   kind: 'effect';
+  // Editor outline/chip tint only; the compositor never reads it.
   color: string;
   shape: AreaShape;
   edge: LayerEdge;

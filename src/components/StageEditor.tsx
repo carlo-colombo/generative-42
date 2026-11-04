@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { maskWeight, shapePolygon } from '../areas'
+import { maskKey, maskWeight, shapePolygon } from '../areas'
 import type { EditorModel } from '../editor-state'
 import { addLayer, clamp01, clampShape, createEffectLayer, translateShape, updateEffectLayer } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
@@ -240,11 +240,6 @@ function simplify(points: Px[], tolerance: number): Px[] {
 
 type MaskCache = Map<string, { version: string; mask: Uint8Array }>
 
-// Everything a preview mask depends on: canvas size, seed and the layer's own geometry and edge.
-function layerMaskVersion(layer: EffectLayer, size: Size, seed: number): string {
-  return `${size.width}x${size.height}:${seed}:${layer.id}:${JSON.stringify(layer.shape)}:${layer.edge.feather}:${layer.edge.jitter}:${layer.edge.mode}`
-}
-
 function withAlpha(color: string, alpha: number): string {
   const match = /^#([0-9a-f]{6})$/i.exec(color.trim())
   if (!match) return color
@@ -482,7 +477,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   function drawMaskPreview(context: CanvasRenderingContext2D, size: Size) {
     const renderable = layers.filter((layer) => layer.visible && (!draft.soloLayerId || draft.soloLayerId === layer.id))
     const pixelCount = size.width * size.height
-    const versions = renderable.map((layer) => layerMaskVersion(layer, size, draft.seed))
+    const versions = renderable.map((layer) => maskKey(layer.shape, layer.edge, size.width, size.height, draft.seed, layer.id))
     const key = `${size.width}x${size.height}:${draft.seed}:${versions.join('|')}`
     if (!maskCacheRef.current || maskCacheRef.current.key !== key) {
       const cache = layerMaskCacheRef.current
@@ -954,6 +949,9 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         scheduleDraw()
         return
       }
+
+      // Keyboard editing follows the same gate as pointer editing on the stage.
+      if (!editor.showMasks.value || editor.maskPreview.value) return
 
       if (event.key === 'Enter' && pendingCurve) {
         event.preventDefault()
