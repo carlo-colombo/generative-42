@@ -8,6 +8,7 @@ import { ControlField } from './components/ControlField'
 import { CropControls } from './components/CropControls'
 import { LayerControls } from './components/LayerControls'
 import { LayerList } from './components/LayerList'
+import { Presets } from './components/Presets'
 import { SourceControls } from './components/SourceControls'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
@@ -100,6 +101,7 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
         <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole frame.</p>
       </section>
       <LayerControls model={model} editor={editor} />
+      <Presets model={model} editor={editor} />
       <section className="panel-section">
         <label className="checkbox-field">
           <input type="checkbox" checked={editor.maskPreview.value} disabled={!editor.showMasks.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />

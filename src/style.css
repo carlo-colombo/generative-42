@@ -851,6 +851,63 @@ body {
   gap: 2px;
 }
 
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 2px 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--control-bg);
+}
+
+.preset-row:hover {
+  border-color: var(--line);
+}
+
+.preset-row.editing {
+  border-color: #6a6a6a;
+  background: #262626;
+}
+
+.preset-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.preset-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.preset-meta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.panel input.preset-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 5px;
+  font-size: 11px;
+}
+
 .panel button.layer-select {
   display: flex;
   align-items: center;

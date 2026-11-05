@@ -30,15 +30,15 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   calls the composition renderer; the render signature is
   `JSON.stringify(generation)`, so every layer field participates.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
-  the add-layer controls, the selected layer inspector, the mask preview toggle),
-  plus the image manifest fetch.
+  the add-layer controls, the selected layer inspector, the layer presets, the
+  mask preview toggle), plus the image manifest fetch.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
   migration. `applyGeneration` navigates to a new URL, so the sketch re-runs from
   scratch. `MAX_LAYERS` (20) caps the stack.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
-  `LayerList`, `LayerControls`, `Actions`, `ToolButtons`, `ControlField`,
-  `Segmented`, `HelpPopover`).
+  `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
+  `ControlField`, `Segmented`, `HelpPopover`).
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
@@ -96,6 +96,21 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
   duplicate/move), plus the shape clamp/translate/copy helpers. `newEffect` is
   the effect a newly drawn shape creates.
+- `src/presets.ts` — named layer-stack presets (`{ id, name, createdAt,
+  updatedAt, layers }`) persisted in `localStorage` under `layer-presets`. The
+  store is a signals list (`presets`) with save (same name replaces), duplicate,
+  rename, delete, JSON export/import, and `layersForPreset`, which clones a
+  preset's layers with fresh ids for the current stack. Layers are sanitized
+  with `sanitizeLayers` on read, so a hand-edited or foreign file cannot inject
+  a bad layer. Presets carry no seed, image, or crop, so a stack loads onto any
+  image; `MAX_LAYERS` trims the load.
+- `src/components/Presets.tsx` — the right-panel preset section: name + save,
+  load mode (`Add` appends on top of the stack, `Replace` swaps the whole
+  stack), the preset rows (load, duplicate, inline rename, delete), and
+  export/import of `layer-presets.json`, which holds
+  `{ kind, version, exportedAt, presets: [{ name, layers }] }`. Import also
+  accepts a bare preset list, a bare layer array, or a whole generation, and
+  renames name clashes instead of overwriting.
 - `src/components/StageEditor.tsx` — canvas overlay above the p5 stage. Only
   effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures. Shapes are stored normalised 0..1 against the cropped canvas. Sort
@@ -167,6 +182,10 @@ crossing pair and still walks the excursion vertices, so those interiors keep
 their even-odd parity. `AreaShape` `path.tension` is reserved and unused.
 
 ## Serialization and migration
+
+Presets are the one browser-local store that is not part of the generation:
+`localStorage.layer-presets` holds `{ version, presets }`. Nothing in the URL
+or the rendered output depends on it.
 
 `layers` is one URL param: base64url-encoded, quantized JSON. Past 6000
 characters the URL stores `layers=<id>` instead and the payload goes to

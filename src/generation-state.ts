@@ -305,7 +305,7 @@ function parseLayer(value: unknown, index: number): Layer | null {
   return null
 }
 
-function sanitizeLayers(value: unknown[]): Layer[] {
+export function sanitizeLayers(value: unknown[]): Layer[] {
   const layers: Layer[] = []
   const used = new Set<string>()
   for (const item of value) {
@@ -385,6 +385,7 @@ function compactParams(params: EffectParams): EffectParams {
     sectionInvertRatio: quantize(params.sectionInvertRatio),
     sectionPosterizeRatio: quantize(params.sectionPosterizeRatio),
     detailNoiseMode: params.detailNoiseMode,
+    voronoiPoints: Math.round(params.voronoiPoints),
   }
 }
 
