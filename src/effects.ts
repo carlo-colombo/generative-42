@@ -2,6 +2,7 @@ import p5 from "p5";
 import { averageColorInArea, type Point } from "./color";
 import { mulberry32 } from "./areas";
 import { sortPixels } from "./sort";
+import { poissonSites, voronoiCellPixels } from "./voronoi";
 import { DEFAULT_EFFECT_PARAMS, MAX_SPAN_WIDTH } from "./types";
 import type {
   ColorSortDirection,
@@ -40,6 +41,7 @@ export type EffectDefinition = {
 const EFFECT_IDS: EffectId[] = [
   'pixel-sort',
   'galaxy',
+  'voronoi',
   'sections',
   'detail-noise',
   'grey-squares',
@@ -98,6 +100,7 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     detailNoiseMode: (record.detailNoiseMode === 'bw' || record.detailNoiseMode === 'color'
       ? record.detailNoiseMode
       : base.detailNoiseMode) as DetailNoiseMode,
+    voronoiPoints: Math.round(clampNumber(record.voronoiPoints, 4, 12000, base.voronoiPoints)),
   };
 }
 
@@ -312,6 +315,19 @@ function galaxy({ p, source }: EffectRenderContext) {
   }
 }
 
+function voronoi({ p, source, seed, params }: EffectRenderContext) {
+  source.loadPixels();
+  const sites = poissonSites(source.width, source.height, params.voronoiPoints, seed);
+  const pixels = voronoiCellPixels(
+    source.pixels as unknown as Uint8ClampedArray,
+    source.width,
+    source.height,
+    sites.points,
+    sites.minDistance,
+  );
+  drawPixelBuffer(p, source.width, source.height, pixels);
+}
+
 function arrayRotate<T>(arr: T[], reverse: boolean, count: number): T[] {
   const times = Math.floor(count);
   for (let i = 0; i < times; i++) {
@@ -485,6 +501,13 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
   'vertical-lines': { id: 'vertical-lines', label: 'Vertical lines', defaults: {}, controls: [], render: verticalLines },
   'horizontal-lines': { id: 'horizontal-lines', label: 'Horizontal lines', defaults: {}, controls: [], render: horizontalLines },
   'galaxy': { id: 'galaxy', label: 'Galaxy', defaults: {}, controls: [], render: galaxy },
+  'voronoi': {
+    id: 'voronoi',
+    label: 'Voronoi',
+    defaults: { voronoiPoints: 1200 },
+    controls: [{ type: 'range', key: 'voronoiPoints', label: 'Points', min: 4, max: 12000, step: 1 }],
+    render: voronoi,
+  },
   'sections': {
     id: 'sections',
     label: 'Sections',

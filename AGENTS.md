@@ -49,13 +49,14 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
 - `src/effects.ts` — effect registry keyed by `EffectId`:
   `{ label, defaults, controls, render }`. Controls are range/select/toggle
   descriptors over `EffectParams`, and `LayerControls` renders them
-  automatically. Effects: `pixel-sort`, `galaxy`, `sections`, `detail-noise`,
-  `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
+  automatically. Effects: `pixel-sort`, `galaxy`, `voronoi`, `sections`,
+  `detail-noise`, `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
   `horizontal-lines`. `normalizeEffectId` aliases the legacy `color-sorting` and
   `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is the share of each
   run a pixel-sort layer sorts (control, shown as 100 when a migrated layer
   still carries null); only pixel-sort reads it, and switching a layer's effect
-  resets it to that effect's defaults.
+  resets it to that effect's defaults. `params.voronoiPoints` is the target site
+  count for `voronoi`, the only effect that reads it.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
@@ -83,6 +84,13 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   0.85..1.15 wobble and clamps jitter to `[start, end - sortedLength]` so blocks
   only move inside the run. It writes raw sorted pixels; the generic mask
   compositor applies feather/ragged alpha exactly once.
+- `src/voronoi.ts` — p5-free Voronoi helper for the `voronoi` effect.
+  `poissonSites` runs Bridson's Poisson-disc sampler with a minimum distance
+  guessed from the target point count (density ≈ 0.7 / r²) and corrected over a
+  few deterministic attempts, returning the points plus the radius they used.
+  `voronoiCellPixels` finds each pixel's nearest site through a grid widened by
+  radius / √2 (at most one site per cell), then paints each cell with the
+  average colour of the source pixels it covers.
 - `src/areas.ts` — p5-free shape math: `maskWeight` builds the 0..1 mask for a
   rect, ellipse, or path shape (feather ramp, ragged noise); also `hashString`,
   `mulberry32`, and `shapePolygon`. `maskWeight` reuses one scratch buffer, so a

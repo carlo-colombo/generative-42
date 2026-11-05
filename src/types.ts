@@ -25,6 +25,7 @@ export type EffectId =
   | 'vertical-lines'
   | 'horizontal-lines'
   | 'galaxy'
+  | 'voronoi'
   | 'sections'
   | 'detail-noise';
 
@@ -52,6 +53,8 @@ export interface EffectParams {
   sectionInvertRatio: number;
   sectionPosterizeRatio: number;
   detailNoiseMode: DetailNoiseMode;
+  // Target number of Poisson-disc sites; read by voronoi only.
+  voronoiPoints: number;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -68,6 +71,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   sectionInvertRatio: 5,
   sectionPosterizeRatio: 20,
   detailNoiseMode: "bw",
+  voronoiPoints: 1200,
 };
 
 export type LayerBase = {
