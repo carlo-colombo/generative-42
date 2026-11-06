@@ -6,6 +6,8 @@ import { poissonSites, voronoiCellPixels } from "./voronoi";
 import { DEFAULT_EFFECT_PARAMS, MAX_SPAN_WIDTH } from "./types";
 import type {
   ColorSortDirection,
+  CurtainAxis,
+  CurtainEffect,
   DetailNoiseMode,
   EffectId,
   EffectParams,
@@ -38,12 +40,15 @@ export type EffectDefinition = {
   render: (context: EffectRenderContext) => void;
 };
 
+const MAX_GRID_SQUARES = 200
+
 const EFFECT_IDS: EffectId[] = [
   'pixel-sort',
   'galaxy',
   'voronoi',
   'sections',
   'detail-noise',
+  'curtain-grid',
   'grey-squares',
   'rect',
   'circles',
@@ -101,15 +106,32 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
       ? record.detailNoiseMode
       : base.detailNoiseMode) as DetailNoiseMode,
     voronoiPoints: Math.round(clampNumber(record.voronoiPoints, 4, 12000, base.voronoiPoints)),
+    gridSize: Math.round(clampNumber(record.gridSize, 2, MAX_GRID_SQUARES, base.gridSize)),
+    gridMargin: clampNumber(record.gridMargin, 0, 40, base.gridMargin),
+    gridCurtainCount: Math.round(clampNumber(record.gridCurtainCount, 0, 8, base.gridCurtainCount)),
+    gridCurtainWidth: clampNumber(record.gridCurtainWidth, 1, 100, base.gridCurtainWidth),
+    gridCurtainRandomness: clampNumber(record.gridCurtainRandomness, 0, 100, base.gridCurtainRandomness),
+    gridCurtainEffect: (record.gridCurtainEffect === 'rasterize' || record.gridCurtainEffect === 'greyscale'
+      ? record.gridCurtainEffect
+      : record.gridCurtainEffect === 'inverse'
+        ? 'inverse'
+        : base.gridCurtainEffect) as CurtainEffect,
+    gridCurtainAxis: (record.gridCurtainAxis === 'columns' || record.gridCurtainAxis === 'rows'
+      ? record.gridCurtainAxis
+      : base.gridCurtainAxis) as CurtainAxis,
   };
 }
 
-function drawPixelBuffer(p: p5.Graphics, width: number, height: number, pixels: Uint8ClampedArray) {
+function pixelsToImage(p: p5.Graphics, width: number, height: number, pixels: Uint8ClampedArray): p5.Image {
   const image = p.createImage(width, height)
   image.loadPixels()
   ;(image.pixels as unknown as Uint8ClampedArray).set(pixels)
   image.updatePixels()
-  p.image(image, 0, 0)
+  return image
+}
+
+function drawPixelBuffer(p: p5.Graphics, width: number, height: number, pixels: Uint8ClampedArray) {
+  p.image(pixelsToImage(p, width, height, pixels), 0, 0)
 }
 
 function rect({ p, source }: EffectRenderContext) {
@@ -468,6 +490,166 @@ function detailNoise({ p, source, params }: EffectRenderContext) {
   p.image(out, 0, 0);
 }
 
+function fillPixelRect(
+  pixels: Uint8ClampedArray,
+  width: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  r: number,
+  g: number,
+  b: number,
+) {
+  const left = Math.max(0, x0)
+  const right = Math.min(width, x1)
+  if (right <= left) return
+  for (let y = Math.max(0, y0); y < y1; y++) {
+    let i = (y * width + left) * 4
+    for (let x = left; x < right; x++) {
+      pixels[i] = r
+      pixels[i + 1] = g
+      pixels[i + 2] = b
+      pixels[i + 3] = 255
+      i += 4
+    }
+  }
+}
+
+function curtainGrid({ p, source, seed, params }: EffectRenderContext) {
+  const w = source.width
+  const h = source.height
+  source.loadPixels()
+  const src = source.pixels as unknown as Uint8ClampedArray
+
+  const squares = Math.max(2, Math.round(params.gridSize))
+  const cell = Math.min(w, h) / squares
+  const cols = Math.max(1, Math.ceil(w / cell - 1e-6))
+  const rows = Math.max(1, Math.ceil(h / cell - 1e-6))
+  const cells = cols * rows
+
+  // One pass over the source collects every cell average and the frame colour.
+  const avg = new Float32Array(cells * 3)
+  let totalR = 0
+  let totalG = 0
+  let totalB = 0
+  let total = 0
+  for (let row = 0; row < rows; row++) {
+    const y0 = Math.round(row * cell)
+    const y1 = Math.min(h, Math.round((row + 1) * cell))
+    for (let col = 0; col < cols; col++) {
+      const x0 = Math.round(col * cell)
+      const x1 = Math.min(w, Math.round((col + 1) * cell))
+      let r = 0
+      let g = 0
+      let b = 0
+      let n = 0
+      for (let y = y0; y < y1; y++) {
+        let i = (y * w + x0) * 4
+        for (let x = x0; x < x1; x++, i += 4) {
+          r += src[i]
+          g += src[i + 1]
+          b += src[i + 2]
+          n++
+        }
+      }
+      const index = (row * cols + col) * 3
+      if (n === 0) n = 1
+      avg[index] = r / n
+      avg[index + 1] = g / n
+      avg[index + 2] = b / n
+      totalR += r
+      totalG += g
+      totalB += b
+      total += n
+    }
+  }
+  if (total === 0) total = 1
+  const bgR = Math.round(totalR / total)
+  const bgG = Math.round(totalG / total)
+  const bgB = Math.round(totalB / total)
+
+  // Curtains are runs of whole cell rows or columns anchored to an edge.
+  const axis = params.gridCurtainAxis === 'columns' ? 'columns' : 'rows'
+  const along = axis === 'columns' ? cols : rows
+  const bandCount = Math.max(0, Math.round(params.gridCurtainCount))
+  const bandWidth = Math.min(1, Math.max(0, params.gridCurtainWidth) / 100)
+  const bandJitter = Math.min(1, Math.max(0, params.gridCurtainRandomness) / 100)
+  const bands: { start: number; end: number }[] = []
+  if (bandCount > 0 && bandWidth > 0) {
+    const rand = mulberry32(seed)
+    for (let i = 0; i < bandCount; i++) {
+      const length = Math.min(1, Math.max(0.02, bandWidth + (rand() * 2 - 1) * bandJitter))
+      const span = Math.min(along, Math.max(1, Math.round(along * length)))
+      const start = rand() < 0.5 ? 0 : along - span
+      bands.push({ start, end: start + span })
+    }
+  }
+
+  const inCurtain = new Uint8Array(cells)
+  for (const band of bands) {
+    if (axis === 'columns') {
+      for (let col = band.start; col < band.end; col++) {
+        for (let row = 0; row < rows; row++) inCurtain[row * cols + col] = 1
+      }
+    } else {
+      for (let row = band.start; row < band.end; row++) {
+        inCurtain.fill(1, row * cols, row * cols + cols)
+      }
+    }
+  }
+
+  const buffer = new Uint8ClampedArray(w * h * 4)
+  fillPixelRect(buffer, w, 0, 0, w, h, bgR, bgG, bgB)
+  const curtainBuffer = bands.length > 0 ? new Uint8ClampedArray(w * h * 4) : null
+  if (curtainBuffer) {
+    for (const band of bands) {
+      if (axis === 'columns') {
+        const x0 = Math.round(band.start * cell)
+        const x1 = Math.min(w, Math.round(band.end * cell))
+        fillPixelRect(curtainBuffer, w, x0, 0, x1, h, bgR, bgG, bgB)
+      } else {
+        const y0 = Math.round(band.start * cell)
+        const y1 = Math.min(h, Math.round(band.end * cell))
+        fillPixelRect(curtainBuffer, w, 0, y0, w, y1, bgR, bgG, bgB)
+      }
+    }
+  }
+
+  const margin = Math.max(0, Math.round((cell * Math.max(0, params.gridMargin)) / 100))
+  for (let row = 0; row < rows; row++) {
+    const y0 = Math.round(row * cell)
+    const y1 = Math.min(h, Math.round((row + 1) * cell))
+    for (let col = 0; col < cols; col++) {
+      const x0 = Math.round(col * cell)
+      const x1 = Math.min(w, Math.round((col + 1) * cell))
+      const index = row * cols + col
+      const r = Math.round(avg[index * 3])
+      const g = Math.round(avg[index * 3 + 1])
+      const b = Math.round(avg[index * 3 + 2])
+      const borderR = Math.round(r * 0.3 + 178.5)
+      const borderG = Math.round(g * 0.3 + 178.5)
+      const borderB = Math.round(b * 0.3 + 178.5)
+      const sx0 = x0 + margin
+      const sy0 = y0 + margin
+      const targets = curtainBuffer && inCurtain[index] ? [buffer, curtainBuffer] : [buffer]
+      for (const target of targets) {
+        fillPixelRect(target, w, sx0, sy0, x1, y1, borderR, borderG, borderB)
+        fillPixelRect(target, w, sx0 + 1, sy0 + 1, x1 - 1, y1 - 1, r, g, b)
+      }
+    }
+  }
+
+  p.image(pixelsToImage(p, w, h, buffer), 0, 0)
+  if (curtainBuffer) {
+    const layer = pixelsToImage(p, w, h, curtainBuffer)
+    if (params.gridCurtainEffect === 'greyscale') layer.filter(p.GRAY)
+    else if (params.gridCurtainEffect === 'rasterize') layer.filter(p.POSTERIZE, 4)
+    else layer.filter(p.INVERT)
+    p.image(layer, 0, 0)
+  }
+}
+
 export const EFFECTS: Record<EffectId, EffectDefinition> = {
   'pixel-sort': {
     id: 'pixel-sort',
@@ -523,6 +705,36 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { type: 'range', key: 'sectionPosterizeRatio', label: 'Posterize', min: 0, max: 100, step: 1 },
     ],
     render: offsetSections,
+  },
+  'curtain-grid': {
+    id: 'curtain-grid',
+    label: 'Curtain grid',
+    defaults: {
+      gridSize: 90,
+      gridMargin: 8,
+      gridCurtainCount: 2,
+      gridCurtainWidth: 35,
+      gridCurtainRandomness: 40,
+      gridCurtainEffect: 'inverse',
+      gridCurtainAxis: 'rows',
+    },
+    controls: [
+      { type: 'range', key: 'gridSize', label: 'Squares', min: 2, max: MAX_GRID_SQUARES, step: 1 },
+      { type: 'range', key: 'gridMargin', label: 'Gap', min: 0, max: 40, step: 1 },
+      { type: 'range', key: 'gridCurtainCount', label: 'Curtains', min: 0, max: 8, step: 1 },
+      { type: 'range', key: 'gridCurtainWidth', label: 'Curtain width', min: 1, max: 100, step: 1 },
+      { type: 'range', key: 'gridCurtainRandomness', label: 'Length jitter', min: 0, max: 100, step: 1 },
+      { type: 'select', key: 'gridCurtainEffect', label: 'Curtain filter', options: [
+        { value: 'inverse', label: 'Invert' },
+        { value: 'rasterize', label: 'Posterize' },
+        { value: 'greyscale', label: 'Grey' },
+      ] },
+      { type: 'select', key: 'gridCurtainAxis', label: 'Curtain edge', options: [
+        { value: 'rows', label: 'Top and bottom' },
+        { value: 'columns', label: 'Left and right' },
+      ] },
+    ],
+    render: curtainGrid,
   },
   'detail-noise': {
     id: 'detail-noise',

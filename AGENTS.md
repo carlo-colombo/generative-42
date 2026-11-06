@@ -50,13 +50,20 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   `{ label, defaults, controls, render }`. Controls are range/select/toggle
   descriptors over `EffectParams`, and `LayerControls` renders them
   automatically. Effects: `pixel-sort`, `galaxy`, `voronoi`, `sections`,
-  `detail-noise`, `grey-squares`, `rect`, `circles`, `lines`, `vertical-lines`,
-  `horizontal-lines`. `normalizeEffectId` aliases the legacy `color-sorting` and
-  `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is the share of each
-  run a pixel-sort layer sorts (control, shown as 100 when a migrated layer
-  still carries null); only pixel-sort reads it, and switching a layer's effect
-  resets it to that effect's defaults. `params.voronoiPoints` is the target site
-  count for `voronoi`, the only effect that reads it.
+  `detail-noise`, `curtain-grid`, `grey-squares`, `rect`, `circles`, `lines`,
+  `vertical-lines`, `horizontal-lines`. `normalizeEffectId` aliases the legacy
+  `color-sorting` and `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is
+  the share of each run a pixel-sort layer sorts (control, shown as 100 when a
+  migrated layer still carries null); only pixel-sort reads it, and switching a
+  layer's effect resets it to that effect's defaults. `params.voronoiPoints` is
+  the target site count for `voronoi`, the only effect that reads it.
+  `curtain-grid` averages the source into a `gridSize` grid of squares with a
+  `gridMargin` gap and a white-lerped 1px border, then re-draws
+  `gridCurtainCount` edge-anchored cell bands (rows or columns, `gridSize` and
+  width from the params), giving each band a seeded random length up to
+  `gridCurtainRandomness` away from `gridCurtainWidth`, and re-draws them into a
+  second buffer and applies a single p5 filter to
+  it (`INVERT`, `POSTERIZE` for rasterize, `GRAY`) before compositing it back.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing

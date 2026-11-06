@@ -4,6 +4,8 @@ export type CropFormat = "original" | "square" | "portrait" | "landscape" | "wid
 export type ColorSortDirection = "horizontal" | "vertical";
 export type SectionDirection = "vertical" | "horizontal";
 export type DetailNoiseMode = "bw" | "color";
+export type CurtainEffect = "inverse" | "rasterize" | "greyscale";
+export type CurtainAxis = "rows" | "columns";
 
 export type Pt = { x: number; y: number };
 
@@ -27,7 +29,8 @@ export type EffectId =
   | 'galaxy'
   | 'voronoi'
   | 'sections'
-  | 'detail-noise';
+  | 'detail-noise'
+  | 'curtain-grid';
 
 // Spans are measured in source pixels along the sort axis; past this width a
 // typical run collapses into a handful of sortable units.
@@ -55,6 +58,16 @@ export interface EffectParams {
   detailNoiseMode: DetailNoiseMode;
   // Target number of Poisson-disc sites; read by voronoi only.
   voronoiPoints: number;
+  // Read by curtain-grid only.
+  gridSize: number;
+  gridMargin: number;
+  gridCurtainCount: number;
+  gridCurtainWidth: number;
+  // How far each curtain's length may randomly stray from gridCurtainWidth, as
+  // a share of the canvas side. Read by curtain-grid only.
+  gridCurtainRandomness: number;
+  gridCurtainEffect: CurtainEffect;
+  gridCurtainAxis: CurtainAxis;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -72,6 +85,13 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   sectionPosterizeRatio: 20,
   detailNoiseMode: "bw",
   voronoiPoints: 1200,
+  gridSize: 90,
+  gridMargin: 8,
+  gridCurtainCount: 2,
+  gridCurtainWidth: 35,
+  gridCurtainRandomness: 40,
+  gridCurtainEffect: "inverse",
+  gridCurtainAxis: "rows",
 };
 
 export type LayerBase = {

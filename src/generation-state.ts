@@ -386,6 +386,13 @@ function compactParams(params: EffectParams): EffectParams {
     sectionPosterizeRatio: quantize(params.sectionPosterizeRatio),
     detailNoiseMode: params.detailNoiseMode,
     voronoiPoints: Math.round(params.voronoiPoints),
+    gridSize: params.gridSize,
+    gridMargin: quantize(params.gridMargin),
+    gridCurtainCount: params.gridCurtainCount,
+    gridCurtainWidth: quantize(params.gridCurtainWidth),
+    gridCurtainRandomness: quantize(params.gridCurtainRandomness),
+    gridCurtainEffect: params.gridCurtainEffect,
+    gridCurtainAxis: params.gridCurtainAxis,
   }
 }
 
