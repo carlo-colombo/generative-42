@@ -1,4 +1,4 @@
-import p5 from 'p5'
+import { cropSurface, type Surface } from './surface'
 import type { CropFormat, Generation } from './types'
 
 export type CropRect = { x: number; y: number; width: number; height: number }
@@ -30,7 +30,6 @@ export function getCropRect(width: number, height: number, generation: Pick<Gene
   }
 }
 
-export function cropImage(img: p5.Image, generation: Generation) {
-  const rect = getCropRect(img.width, img.height, generation)
-  return img.get(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height))
+export function cropImage(source: Surface, generation: Generation): Surface {
+  return cropSurface(source, getCropRect(source.width, source.height, generation))
 }

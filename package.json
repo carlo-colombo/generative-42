@@ -14,12 +14,10 @@
   },
   "dependencies": {
     "@preact/signals": "^2.11.1",
-    "p5": "^1.11.0",
     "preact": "^10.29.8"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "@types/p5": "^1.7.7",
     "puppeteer": "^23.0.0",
     "tsx": "^4.16.0",
     "typescript": "^5.5.0",

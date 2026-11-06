@@ -4,7 +4,8 @@ Guidance for AI agents working in this repository.
 
 ## Overview
 
-Generative art tool built with p5.js and TypeScript. Given an image, a stack of
+Generative art tool built with TypeScript, Canvas 2D, and WebAssembly. Given an
+image, a stack of
 layers, and some text, it renders a single static canvas per `seed`. Each stack
 row is either an effect layer (a shape plus any effect from the registry) or a
 text layer. A browser UI edits the stack; a headless Puppeteer script renders
@@ -26,8 +27,8 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
 ## Architecture
 
 - `src/main.tsx` — entry point. Reads the generation (URL params, localStorage,
-  or `DEFAULT_GENERATION`), mounts p5 into the center `.stage`, and renders the
-  left and right panels. A `ResizeObserver` sizes the stage to the available
+  or `DEFAULT_GENERATION`), mounts the Canvas 2D renderer into the center
+  `.stage`, and renders the left and right panels. A `ResizeObserver` sizes the stage to the available
   space while preserving the canvas aspect ratio. One debounced preview pipeline
   calls the composition renderer; the render signature is
   `JSON.stringify(generation)`, so every layer field participates.
@@ -36,8 +37,8 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   mask preview toggle), plus the image manifest fetch.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
-  migration. `applyGeneration` navigates to a new URL, so the sketch re-runs from
-  scratch. `MAX_LAYERS` (20) caps the stack.
+  migration. `applyGeneration` navigates to a new URL, so the stage bootstraps
+  from scratch. `MAX_LAYERS` (20) caps the stack.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`).
@@ -60,18 +61,20 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   layer's effect resets it to that effect's defaults. `params.voronoiPoints` is
   the target site count for `voronoi`, the only effect that reads it.
   The seven sampled drawing effects batch their source quadrilaterals through
-  WASM; p5 still rasterizes the generated shapes. `sections` uses the WASM
+  WASM; Canvas 2D rasterizes the generated shapes. `sections` uses the WASM
   pixel-filter kernel. `curtain-grid` is fully fused in WASM: it averages the
   source into the configured grid, paints the curtains, and applies inverse,
-  posterize, or grayscale without a second canvas buffer or p5 filter.
+  posterize, or grayscale without a second canvas buffer or a second filter
+  pass.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
-  `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
-  it with normal alpha over the accumulated result through the chunked WASM
-  compositor. Effect `render` receives `{ p, source, mask, seed, params, edge,
-  generation, wasm }`, where `source` is a fresh `p5.Image` of the composite
-  below (so effects chain). Caches masks and per-layer buffers; cache keys chain
-  the config of every layer below, so a top-layer edit does not re-render lower
+  Canvas 2D `Surface` scratch (pixel density 1, draw state reset), then
+  compositing it with normal alpha over the accumulated result through the
+  chunked WASM compositor. Effect `render` receives `{ ctx, source, mask, seed,
+  random, params, edge, generation, wasm }`, where `source` is an `ImageData`
+  view of the composite below (so effects chain). Caches masks and per-layer
+  buffers; cache keys chain the config of every layer below, so a top-layer edit
+  does not re-render lower
   effects. Masks and buffers are cleared on crop, canvas-size, or seed change.
 - `wasm/src/sort_kernel.zig` — runtime pixel sort: bucketed luminance runs,
   mask-segmented runs, ragged block offsets, spans, legacy amount, and contained
@@ -88,13 +91,13 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   composition and the stage mask preview.
 - `wasm/src/kernels.zig` — also contains batched quad sampling, filters, fused
   curtain-grid rendering, and chunked RGBA compositing. `public/wasm/kernels.wasm`
-  is required before the sketch renders; there is no TypeScript fallback if it
+  is required before the stage renders; there is no TypeScript fallback if it
   fails. Add `?wasmProfile=1` to record named User Timing entries around kernels.
-- `src/areas.ts` — p5-free shape math: `hashString`, `mulberry32`, and
-  `shapePolygon`. `shapePolygon` returns the pixel-space mask ring the editor
+- `src/areas.ts` — shape math and the seeded PRNG: `hashString`, `mulberry32`,
+  and `shapePolygon`. `shapePolygon` returns the pixel-space mask ring the editor
   draws; pixel mask generation is handled by WASM.
-- `src/text.ts` — glyph rasterization (opaque; the engine applies layer opacity)
-  and the exported `drawSeedLabel` for the `seed=` overlay.
+- `src/text.ts` — Canvas 2D text rasterization (opaque; the engine applies layer
+  opacity) and the exported `drawSeedLabel` for the `seed=` overlay.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
   `maskPreview`, `showMasks`, `canvasSize`, `newEffect`) and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
@@ -115,8 +118,8 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   `{ kind, version, exportedAt, presets: [{ name, layers }] }`. Import also
   accepts a bare preset list, a bare layer array, or a whole generation, and
   renames name clashes instead of overwriting.
-- `src/components/StageEditor.tsx` — canvas overlay above the p5 stage. Only
-  effect layers are outlined and editable; it owns the drawing tools and canvas
+- `src/components/StageEditor.tsx` — canvas overlay above the rendered stage.
+  Only effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures. Shapes are stored normalised 0..1 against the cropped canvas. Sort
   chevrons appear only on `pixel-sort` layers, and the mask preview covers
   effect layers only.
@@ -126,17 +129,21 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge
   mode/feather/jitter, opacity, colour, and label.
-- `src/sketch.ts` — the p5 sketch. Preloads every font and the source image,
+- `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
   crops the image, creates the base canvas at the cropped pixel size, and hands
-  the render function to `main.tsx`. One `renderComposition` call replaces the
-  old draw function + separate text canvas. Sets `canvas.base-layer.dataset.composed`
+  the render function to `main.tsx`. Sets `canvas.base-layer.dataset.composed`
   to the rendered seed for headless capture. The `seed=` label stays on a
-  separate overlay canvas that is never exported. `downloadImage` exports the
-  base composition (text included).
-- `src/color.ts` — scales source images and batches quadrilateral color samples through WASM.
-- `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
-  files live in `public/fonts/`; every `FONTS` entry must exist there, because
-  the sketch preloads all of them.
+  separate overlay canvas that is never exported. `downloadImage` in
+  `src/surface.ts` exports the base composition (text included).
+- `src/color.ts` — scales source `ImageData` and batches quadrilateral color
+  samples through WASM.
+- `src/surface.ts` — Canvas 2D `Surface` creation, resize/reset, pixel access,
+  image loading/cropping, and PNG download helpers.
+- `src/random.ts` — the `Random` interface and `createRandom(seed)`, used by
+  every randomized effect for deterministic output across runs.
+- `src/fonts.ts` — `FONTS` list (`label` + `path`), `DEFAULT_FONT`, and the
+  `FontFace` loader. Font files live in `public/fonts/`; every `FONTS` entry
+  must exist there, because the stage loads them during bootstrap.
 - `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview` on
   port 4173, opens the app with `?seed=N`, waits for the composition-ready flag,
   captures `canvas.base-layer`, and writes `output/gen-N.png`.
@@ -232,8 +239,9 @@ defaults, which is null for every effect but pixel-sort.
   preview live, and `model.applyGeneration()` commits them via a reload.
 - The canvas is sized exactly to the cropped source image; do not assume a fixed
   canvas size.
-- Generation is fully deterministic given the seed (seeded randoms per layer,
-  `noLoop`).
+- Generation is deterministic across runs given the seed, using one seeded
+  `mulberry32` PRNG per effect layer. The Canvas 2D implementation is not
+  pixel-compatible with the former p5 renderer.
 - User-visible text is uppercased (see the text field handler and `drawText`).
 - Non-scaling overlays must scale with the image. Baseline convention: text
   sized relative to `min(width, height) / 926`, the mantova.jpg short side.

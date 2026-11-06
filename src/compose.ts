@@ -1,8 +1,10 @@
-import p5 from 'p5'
 import { hashString, maskKey } from './areas'
 import { EFFECTS } from './effects'
-import { drawTextLayer } from './text'
+import type { LoadedFont } from './fonts'
 import { maskWeightWasm } from './masks'
+import { createRandom } from './random'
+import { createSurface, resetSurface, resizeSurface, surfacePixels, type Surface } from './surface'
+import { drawTextLayer } from './text'
 import type { AreaShape, EffectLayer, Generation, Layer } from './types'
 import { measureWasm, type WasmKernels } from './wasm'
 
@@ -11,13 +13,17 @@ const MASK_CACHE_BYTES = 128 * 1024 * 1024
 // Full-canvas RGBA layer buffers add up quickly on large sources. Keep the most
 // recently used ones under this budget; text layers are cheap and are not cached.
 const LAYER_CACHE_BYTES = 192 * 1024 * 1024
+// The scratch buffer is read back after every layer, so keep the CPU-backed hint.
+const SCRATCH_READ_FREQUENTLY = true
 
-type LayerCacheEntry = { key: string; pixels: Uint8ClampedArray }
+type Pixels = Uint8ClampedArray<ArrayBuffer>
+
+type LayerCacheEntry = { key: string; pixels: Pixels }
 
 export type CompositionEngine = {
   // `source` is the cropped source image at canvas size; `fontFor` resolves a
-  // preloaded p5 font by path.
-  render: (generation: Generation, source: p5.Image, fontFor: (path: string) => p5.Font | undefined) => void
+  // preloaded font by path.
+  render: (generation: Generation, source: Surface, fontFor: (path: string) => LoadedFont | undefined) => void
   reset: () => void
 }
 
@@ -37,11 +43,10 @@ function layerRenderKey(layer: Layer): string {
   return JSON.stringify([layer.id, layer.effect, layer.params, layer.shape, layer.edge])
 }
 
-export function createCompositionEngine(renderer: p5, wasm: WasmKernels): CompositionEngine {
+export function createCompositionEngine(base: Surface, wasm: WasmKernels): CompositionEngine {
   let width = 0
   let height = 0
-  let scratch: p5.Graphics | null = null
-  let output: p5.Image | null = null
+  let scratch: Surface | null = null
   const maskCache = new Map<string, Float32Array | null>()
   const layerCache = new Map<string, LayerCacheEntry>()
 
@@ -51,44 +56,24 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
   }
 
   function ensureSize(nextWidth: number, nextHeight: number) {
-    if (scratch && output && nextWidth === width && nextHeight === height) return
+    if (!scratch) {
+      scratch = createSurface(nextWidth, nextHeight, { readFrequently: SCRATCH_READ_FREQUENTLY })
+    } else {
+      if (nextWidth === width && nextHeight === height) return
+      resizeSurface(scratch, nextWidth, nextHeight)
+    }
     width = nextWidth
     height = nextHeight
-    scratch?.remove()
-    scratch = renderer.createGraphics(width, height)
-    scratch.pixelDensity(1)
-    output = renderer.createImage(width, height)
     reset()
   }
 
   function resetScratch() {
-    const target = scratch
-    if (!target) return
-    target.clear()
-    target.resetMatrix()
-    target.rectMode(target.CORNER)
-    target.ellipseMode(target.CENTER)
-    target.imageMode(target.CORNER)
-    target.blendMode(target.BLEND)
-    target.noTint()
-    target.noStroke()
-    target.noFill()
-    target.strokeWeight(1)
+    if (scratch) resetSurface(scratch)
   }
 
-  function scratchPixels(): Uint8ClampedArray {
-    const target = scratch
-    if (!target) return new Uint8ClampedArray(width * height * 4)
-    target.loadPixels()
-    return new Uint8ClampedArray(target.pixels as unknown as Uint8ClampedArray)
-  }
-
-  function imageFromPixels(pixels: Uint8ClampedArray): p5.Image {
-    const image = renderer.createImage(width, height)
-    image.loadPixels()
-    ;(image.pixels as unknown as Uint8ClampedArray).set(pixels)
-    image.updatePixels()
-    return image
+  function scratchPixels(): Pixels {
+    if (!scratch) return new Uint8ClampedArray(width * height * 4)
+    return surfacePixels(scratch).data
   }
 
   function maskFor(layer: EffectLayer, generation: Generation, seed: number): Float32Array | null {
@@ -103,28 +88,28 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
 
   function renderLayer(
     layer: Layer,
-    below: Uint8ClampedArray,
+    below: Pixels,
     generation: Generation,
-    fontFor: (path: string) => p5.Font | undefined,
-  ): Uint8ClampedArray {
+    fontFor: (path: string) => LoadedFont | undefined,
+  ): Pixels {
     resetScratch()
-    const target = scratch
-    if (!target) return new Uint8ClampedArray(width * height * 4)
+    if (!scratch) return new Uint8ClampedArray(width * height * 4)
 
     if (layer.kind === 'text') {
       const font = fontFor(layer.font)
-      if (font) drawTextLayer(target, layer, font)
+      if (font) drawTextLayer(scratch.ctx, layer, font)
       return scratchPixels()
     }
 
     const seed = (generation.seed ^ hashString(layer.id)) >>> 0
-    target.randomSeed(seed)
-    target.noiseSeed(seed)
     EFFECTS[layer.effect].render({
-      p: target,
-      source: imageFromPixels(below),
+      ctx: scratch.ctx,
+      width,
+      height,
+      source: new ImageData(below, width, height),
       mask: maskFor(layer, generation, generation.seed),
       seed,
+      random: createRandom(seed),
       params: layer.params,
       edge: layer.edge,
       generation,
@@ -133,7 +118,7 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
     return scratchPixels()
   }
 
-  function compositeLayer(result: Uint8ClampedArray, buffer: Uint8ClampedArray, layer: Layer, generation: Generation) {
+  function compositeLayer(result: Pixels, buffer: Pixels, layer: Layer, generation: Generation) {
     const opacity = Math.max(0, Math.min(100, layer.opacity)) / 100
     if (opacity <= 0) return
     const masked = layer.kind === 'effect' && usesMask(layer)
@@ -165,17 +150,16 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
     }
   }
 
-  function render(generation: Generation, source: p5.Image, fontFor: (path: string) => p5.Font | undefined) {
+  function render(generation: Generation, source: Surface, fontFor: (path: string) => LoadedFont | undefined) {
     ensureSize(source.width, source.height)
-    source.loadPixels()
-    const result = new Uint8ClampedArray(source.pixels as unknown as Uint8ClampedArray)
+    const result = source.ctx.getImageData(0, 0, source.width, source.height).data
     const solo = generation.soloLayerId
     const layers = generation.layers.filter((layer) => layer.visible && (!solo || layer.id === solo))
     // The hash chain stands in for the composite below each layer: an edit to a
     // lower layer invalidates every buffer above it, and nothing else.
     let sourceChain = hashString(`${generation.image}:${width}x${height}:${generation.seed}`)
 
-    function cachedPixels(id: string, key: string): Uint8ClampedArray | null {
+    function cachedPixels(id: string, key: string): Pixels | null {
       const cached = layerCache.get(id)
       if (!cached || cached.key !== key) return null
       // Refresh insertion order so the cache evicts the least recently used buffer.
@@ -184,7 +168,7 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
       return cached.pixels
     }
 
-    function storePixels(id: string, key: string, pixels: Uint8ClampedArray) {
+    function storePixels(id: string, key: string, pixels: Pixels) {
       layerCache.delete(id)
       layerCache.set(id, { key, pixels })
       let bytes = 0
@@ -202,7 +186,7 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
     for (const layer of layers) {
       const renderKey = layerRenderKey(layer)
       const bufferKey = `${sourceChain}:${hashString(renderKey)}`
-      let pixels: Uint8ClampedArray
+      let pixels: Pixels
       if (layer.kind === 'text') {
         // Rasterizing text is cheap; caching a full transparent canvas for it is not.
         layerCache.delete(layer.id)
@@ -225,13 +209,8 @@ export function createCompositionEngine(renderer: p5, wasm: WasmKernels): Compos
     const live = new Set(layers.map((layer) => layer.id))
     for (const id of [...layerCache.keys()]) if (!live.has(id)) layerCache.delete(id)
 
-    if (!output) output = renderer.createImage(width, height)
-    output.loadPixels()
-    ;(output.pixels as unknown as Uint8ClampedArray).set(result)
-    output.updatePixels()
-
-    renderer.clear()
-    renderer.image(output, 0, 0)
+    base.ctx.clearRect(0, 0, width, height)
+    base.ctx.putImageData(new ImageData(result, width, height), 0, 0)
   }
 
   return { render, reset }

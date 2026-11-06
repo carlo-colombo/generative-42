@@ -206,7 +206,6 @@ export function sortPixels(
   }
 
   for (let line = 0; line < lineCount; line++) {
-    // (1.15 - 0.85) keeps the legacy p5.random(0.85, 1.15) float sequence recognizable
     const base = amount === null ? 100 : amount
     const wobble = wholeRun ? null : random() * (1.15 - 0.85) + 0.85
     const lineAmount = wobble === null ? 100 : Math.max(0, Math.min(100, base * wobble))

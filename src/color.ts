@@ -1,55 +1,75 @@
-import p5 from 'p5'
 import { measureWasm, type WasmKernels } from './wasm'
 
-type ScaledImage = {
-  canvas: HTMLCanvasElement
-  scale: number
-  maxDim: number
+type ScalingSurfaces = {
+  sourceCanvas: HTMLCanvasElement
+  sourceCtx: CanvasRenderingContext2D
+  scaledCanvas: HTMLCanvasElement
+  scaledCtx: CanvasRenderingContext2D
 }
 
-const scaledCache = new WeakMap<p5.Image, ScaledImage>()
+let scalingSurfaces: ScalingSurfaces | null = null
 
-function imageToCanvas(img: p5.Image): HTMLCanvasElement {
-  return (img as unknown as { canvas: HTMLCanvasElement }).canvas
-}
-
-function getScaled(img: p5.Image, maxDim: number): ScaledImage {
-  const cached = scaledCache.get(img)
-  if (cached && cached.maxDim === maxDim) return cached
-  const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
-  let entry: ScaledImage
-  if (scale === 1) {
-    entry = { canvas: imageToCanvas(img), scale: 1, maxDim }
+function getScalingSurfaces(
+  sourceWidth: number,
+  sourceHeight: number,
+  scaledWidth: number,
+  scaledHeight: number,
+): ScalingSurfaces {
+  if (!scalingSurfaces) {
+    const sourceCanvas = document.createElement('canvas')
+    sourceCanvas.width = sourceWidth
+    sourceCanvas.height = sourceHeight
+    const sourceCtx = sourceCanvas.getContext('2d')
+    if (!sourceCtx) throw new Error(`Missing 2D context for a ${sourceWidth}x${sourceHeight} scratch canvas`)
+    const scaledCanvas = document.createElement('canvas')
+    scaledCanvas.width = scaledWidth
+    scaledCanvas.height = scaledHeight
+    const scaledCtx = scaledCanvas.getContext('2d', { willReadFrequently: true })
+    if (!scaledCtx) throw new Error(`Missing 2D context for a ${scaledWidth}x${scaledHeight} scaled canvas`)
+    scalingSurfaces = { sourceCanvas, sourceCtx, scaledCanvas, scaledCtx }
   } else {
-    const width = Math.max(1, Math.round(img.width * scale))
-    const height = Math.max(1, Math.round(img.height * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    canvas.getContext('2d')!.drawImage(imageToCanvas(img), 0, 0, width, height)
-    entry = { canvas, scale, maxDim }
+    if (scalingSurfaces.sourceCanvas.width !== sourceWidth) scalingSurfaces.sourceCanvas.width = sourceWidth
+    if (scalingSurfaces.sourceCanvas.height !== sourceHeight) scalingSurfaces.sourceCanvas.height = sourceHeight
+    if (scalingSurfaces.scaledCanvas.width !== scaledWidth) scalingSurfaces.scaledCanvas.width = scaledWidth
+    if (scalingSurfaces.scaledCanvas.height !== scaledHeight) scalingSurfaces.scaledCanvas.height = scaledHeight
   }
-  scaledCache.set(img, entry)
-  return entry
+  return scalingSurfaces
+}
+
+function downscale(source: ImageData, width: number, height: number): Uint8ClampedArray {
+  const surfaces = getScalingSurfaces(source.width, source.height, width, height)
+  surfaces.sourceCtx.putImageData(source, 0, 0)
+  surfaces.scaledCtx.imageSmoothingEnabled = true
+  surfaces.scaledCtx.drawImage(surfaces.sourceCanvas, 0, 0, width, height)
+  return surfaces.scaledCtx.getImageData(0, 0, width, height).data
 }
 
 export function sampleQuads(
-  img: p5.Image,
+  source: ImageData,
   coordinates: Float32Array,
   wasm: WasmKernels,
   maxDim = 1000,
 ): Uint8Array {
   const count = coordinates.length / 8
-  const { canvas, scale } = getScaled(img, maxDim)
-  const source = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
-  const byteLength = source.length
+  const longest = Math.max(source.width, source.height)
+  let pixels: Uint8ClampedArray = source.data
+  let width = source.width
+  let height = source.height
+  let scale = 1
+  if (longest > maxDim) {
+    scale = maxDim / longest
+    width = Math.max(1, Math.round(source.width * scale))
+    height = Math.max(1, Math.round(source.height * scale))
+    pixels = downscale(source, width, height)
+  }
+  const byteLength = pixels.length
   wasm.pfree()
   const sourcePtr = wasm.palloc(byteLength) >>> 0
   const quadsPtr = wasm.palloc(coordinates.length * Float32Array.BYTES_PER_ELEMENT) >>> 0
   const colorsPtr = wasm.palloc(count * 3) >>> 0
-  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source)
+  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(pixels)
   const quads = new Float32Array(wasm.memory.buffer, quadsPtr, coordinates.length)
   for (let i = 0; i < coordinates.length; i++) quads[i] = coordinates[i] * scale
-  measureWasm('sampleQuads', () => wasm.sampleQuads(sourcePtr, canvas.width, canvas.height, quadsPtr, count, colorsPtr))
+  measureWasm('sampleQuads', () => wasm.sampleQuads(sourcePtr, width, height, quadsPtr, count, colorsPtr))
   return new Uint8Array(wasm.memory.buffer, colorsPtr, count * 3).slice()
 }

@@ -11,9 +11,6 @@ importers:
       '@preact/signals':
         specifier: ^2.11.1
         version: 2.11.1(preact@10.29.8)
-      p5:
-        specifier: ^1.11.0
-        version: 1.11.13
       preact:
         specifier: ^10.29.8
         version: 10.29.8
@@ -21,9 +18,6 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.4.0
-      '@types/p5':
-        specifier: ^1.7.7
-        version: 1.7.7
       puppeteer:
         specifier: ^23.0.0
         version: 23.11.1(typescript@5.9.3)
@@ -494,9 +488,6 @@ packages:
   '@types/node@26.4.0':
     resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
 
-  '@types/p5@1.7.7':
-    resolution: {integrity: sha512-WFuP7jqc5CkkMtCK/NphgvMnJz1Qi9CMuK7t6xLu/tuXkRdGQA4q4AD0dUYcChC0Oibe8PE8gbKSFPNF0BqVNw==}
-
   '@types/yauzl@2.10.3':
     resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
@@ -762,9 +753,6 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
-
-  p5@1.11.13:
-    resolution: {integrity: sha512-gfGo4AkyuNMs6Ko7UNFM9K2edqFRGyLrFaYUB+XXF127JVdEPu0BIaC5uDDNJpsRMOD9hJMUpsOH4HkfuNhvhA==}
 
   pac-proxy-agent@7.2.0:
     resolution: {integrity: sha512-TEB8ESquiLMc0lV8vcd5Ql/JAKAoyzHFXaStwjkzpOpC5Yv+pIzLfHvjTSdf3vpa2bMiUQrg9i6276yn8666aA==}
@@ -1244,8 +1232,6 @@ snapshots:
     dependencies:
       undici-types: 8.3.0
 
-  '@types/p5@1.7.7': {}
-
   '@types/yauzl@2.10.3':
     dependencies:
       '@types/node': 26.4.0
@@ -1522,8 +1508,6 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
-
-  p5@1.11.13: {}
 
   pac-proxy-agent@7.2.0:
     dependencies:

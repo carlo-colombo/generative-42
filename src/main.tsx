@@ -1,11 +1,10 @@
-import p5 from 'p5'
 import { render } from 'preact'
 import { signal } from '@preact/signals'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { StageToolbar } from './components/ToolButtons'
 import { createEditorModel } from './editor-state'
-import { createSketch, type SketchStatus } from './sketch'
+import { createStage, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration } from './generation-state'
 import type { Generation } from './types'
 import type { WasmKernels } from './wasm'
@@ -24,8 +23,8 @@ let drawnSignature = ''
 let previewTimer = 0
 let pendingPreview: Generation | null = null
 
-type StageStatus = SketchStatus | 'loading'
-const stageStatus = signal<StageStatus>('loading')
+type LoadingStatus = StageStatus | 'loading'
+const stageStatus = signal<LoadingStatus>('loading')
 
 function StageLoading() {
   const status = stageStatus.value
@@ -133,20 +132,22 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
   schedulePreview(nextGeneration)
 })
 const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
-const instance = new p5(createSketch(generation, (base, seed, renderLayer, wasm) => {
+const stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm) => {
   baseCanvas = base
   seedCanvas = seed
   wasmKernels = wasm
   renderComposition = renderLayer
-  stage.appendChild(seed)
   aspectRatio = base.width / base.height
   editor.canvasSize.value = { width: base.width, height: base.height }
   fitStage()
-  drawnSignature = compositionSignature(model.draft.value)
+  drawnSignature = compositionSignature(generation)
   renderEditor()
+  if (model.livePreview.value && compositionSignature(model.draft.value) !== drawnSignature) {
+    schedulePreview(model.draft.value)
+  }
 }, (status) => {
   stageStatus.value = status
-}), stage)
+})
 
 function renderEditor() {
   render(<StageEditor model={model} editor={editor} baseCanvas={baseCanvas} wasm={wasmKernels} />, editorRoot)
@@ -159,7 +160,7 @@ renderEditor()
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    instance.remove()
+    stageHandle.remove()
     unsubscribeDraft()
     unsubscribePreview()
     stageObserver.disconnect()

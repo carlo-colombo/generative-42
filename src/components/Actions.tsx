@@ -1,4 +1,4 @@
-import { downloadImage } from '../sketch'
+import { downloadImage } from '../surface'
 import type { GenerationModel } from '../generation-state'
 import { ControlField } from './ControlField'
 
