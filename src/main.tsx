@@ -30,11 +30,25 @@ function StageLoading() {
   const status = stageStatus.value
   if (status === 'rendered') return null
   const failed = status === 'image-failed' || status === 'wasm-failed'
-  const label = status === 'image-failed' ? 'IMAGE FAILED' : status === 'wasm-failed' ? 'WASM FAILED' : 'LOADING'
+  const label =
+    status === 'image-failed'
+      ? 'IMAGE UNAVAILABLE'
+      : status === 'wasm-failed'
+        ? 'WASM FAILED'
+        : status === 'no-image'
+          ? 'NO IMAGE'
+          : 'LOADING'
+  const hint =
+    status === 'no-image'
+      ? 'Upload an image to start'
+      : status === 'image-failed'
+        ? 'Upload an image or reconnect'
+        : ''
   return (
     <div className={failed ? 'stage-loading is-error' : 'stage-loading'} role="status" aria-live="polite">
-      {!failed && <span className="stage-loading-spinner" aria-hidden="true" />}
+      {!failed && status !== 'no-image' && <span className="stage-loading-spinner" aria-hidden="true" />}
       <span className="stage-loading-label">{label}</span>
+      {hint && <span className="stage-loading-hint">{hint}</span>}
     </div>
   )
 }

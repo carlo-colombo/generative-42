@@ -147,7 +147,7 @@ export const FULL_CANVAS_SHAPE: AreaShape = { kind: 'rect', x: 0, y: 0, w: 1, h:
 
 export const DEFAULT_GENERATION: Generation = {
   seed: 1,
-  image: "/assets/door.jpg",
+  image: "",
   cropFormat: "original",
   cropX: 50,
   cropY: 50,

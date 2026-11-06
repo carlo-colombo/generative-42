@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ControlField } from './ControlField'
 import type { GenerationModel } from '../generation-state'
-import { DEFAULT_GENERATION } from '../types'
 import { addUploads, deleteUpload, isUploadRef, loadUploads, MAX_UPLOADS, uploadRef, uploads, uploadsStatus } from '../uploads'
 
 const UPLOAD_ERRORS_KEY = 'upload-errors'
@@ -67,7 +66,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       return
     }
     if (!wasSelected) return
-    const fallback = uploads.value[0] ? uploadRef(uploads.value[0].id) : images[0] ? `/assets/${images[0]}` : DEFAULT_GENERATION.image
+    const fallback = uploads.value[0] ? uploadRef(uploads.value[0].id) : images[0] ? `/assets/${images[0]}` : ''
     selectImage(fallback)
   }
 
@@ -80,13 +79,14 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     <h2 className="section-title">Image</h2>
     <ControlField label="Source">
       <select id="image-select" value={generation.image} onChange={(event) => selectImage((event.currentTarget as HTMLSelectElement).value)}>
+        {generation.image === '' && <option value="">No image</option>}
         <optgroup label="Built in">
           {images.map((file) => <option value={`/assets/${file}`}>{file}</option>)}
         </optgroup>
         {uploaded.length > 0 && <optgroup label="Uploaded">
           {uploaded.map((image) => <option value={uploadRef(image.id)}>{image.name}</option>)}
         </optgroup>}
-        {!known.includes(generation.image) && <option value={generation.image}>{isUploadRef(generation.image) ? 'Missing upload (not in this browser)' : generation.image}</option>}
+        {!known.includes(generation.image) && generation.image !== '' && <option value={generation.image}>{isUploadRef(generation.image) ? 'Missing upload (not in this browser)' : generation.image}</option>}
       </select>
     </ControlField>
     <div className="upload-row">
@@ -117,7 +117,9 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     <p className="hint-text">
       {unavailable
         ? 'Uploads are disabled: this browser blocks local image storage.'
-        : `Uploads stay on this device, in this browser. ${uploaded.length}/${MAX_UPLOADS} stored.`}
+        : uploaded.length === 0 && images.length === 0
+          ? 'No images are available: upload one to start. Uploads stay on this device, in this browser.'
+          : `Uploads stay on this device, in this browser. ${uploaded.length}/${MAX_UPLOADS} stored.`}
     </p>
   </section>
 }

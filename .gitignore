@@ -2,3 +2,11 @@ node_modules
 dist
 output
 *.local
+
+# Source images are not tracked; the app ships with none and reads uploads or
+# a deployment-provided asset set under the same URLs.
+/public/assets/*.jpg
+/public/assets/*.jpeg
+/public/assets/*.png
+/public/assets/*.webp
+/public/assets/*.gif

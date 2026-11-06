@@ -530,6 +530,12 @@ body {
   letter-spacing: 0.18em;
 }
 
+.stage-loading-hint {
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
 .stage-loading-spinner {
   width: 2.2em;
   height: 2.2em;

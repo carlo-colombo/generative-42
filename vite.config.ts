@@ -1,5 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
-import { readdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -11,6 +11,9 @@ function assetManifestPlugin(): Plugin {
   const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 
   const update = () => {
+    // The directory is tracked only by .gitkeep: no source images ship with
+    // the repository, so a fresh clone has nothing to list.
+    if (!existsSync(assetsDir)) mkdirSync(assetsDir, { recursive: true });
     const files = readdirSync(assetsDir)
       .filter((f) => IMAGE_RE.test(f))
       .sort();

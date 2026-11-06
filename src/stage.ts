@@ -8,7 +8,7 @@ import { imageSource } from './uploads'
 import { loadWasmKernels, type WasmKernels } from './wasm'
 
 export type RenderResult = { imageChanged: boolean; resized: boolean }
-export type StageStatus = 'rendered' | 'image-changed' | 'image-failed' | 'wasm-failed'
+export type StageStatus = 'rendered' | 'image-changed' | 'image-failed' | 'wasm-failed' | 'no-image'
 export type StageReady = (
   baseCanvas: HTMLCanvasElement,
   seedCanvas: HTMLCanvasElement,
@@ -88,14 +88,7 @@ export function createStage(
       ...FONTS.map((font) => font.path),
       ...initial.layers.filter((layer) => layer.kind === 'text').map((layer) => layer.font),
     ]
-    const [image, loadedFonts, wasm] = await Promise.all([
-      imageSource(initial.image)
-        .then((url) => loadImageSurface(url))
-        .catch((error) => {
-          console.error('Source image failed to load', error)
-          onStatus?.('image-failed')
-          return null
-        }),
+    const [loadedFonts, wasm] = await Promise.all([
       loadFonts(fontPaths),
       loadWasmKernels().catch((error) => {
         console.error('WASM kernels failed to load', error)
@@ -103,15 +96,26 @@ export function createStage(
         return null
       }),
     ])
-    if (!image || !wasm) {
-      if (image) releaseSurface(image)
+    if (!wasm) return
+    for (const [path, font] of loadedFonts) fonts.set(path, font)
+    // No source is a normal state: the repository ships no images, so a fresh
+    // install renders nothing until the user uploads one.
+    if (!initial.image) {
+      onStatus?.('no-image')
       return
     }
+    const image = await imageSource(initial.image)
+      .then((url) => loadImageSurface(url))
+      .catch((error) => {
+        console.error('Source image failed to load', error)
+        onStatus?.('image-failed')
+        return null
+      })
+    if (!image) return
     if (removed) {
       releaseSurface(image)
       return
     }
-    for (const [path, font] of loadedFonts) fonts.set(path, font)
     sourceImage = image
     cropped = cropImage(image, current)
     base = createSurface(cropped.width, cropped.height)

@@ -16,8 +16,8 @@ seeds to PNG for offline use.
 - `pnpm dev` — start Vite dev server
 - `pnpm build` — typecheck (`tsc`) then build (`vite build`)
 - `pnpm preview` — serve the built `dist/`
-- `pnpm generate` — headless render seed 1 to `output/gen-1.png`
-- `pnpm generate:all` — headless render seeds 1–10
+- `pnpm generate --image=<path>` — headless render seed 1 to `output/gen-1.png`
+- `pnpm generate:all --image=<path>` — headless render seeds 1–10
 - `pnpm build:wasm` — compile the Zig kernels with Zig 0.17.x
 - `pnpm test:wasm` — test WASM kernels, including pixel sort, detail noise, and Voronoi
 - Typecheck only: `pnpm exec tsc --noEmit`
@@ -143,7 +143,9 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   mode/feather/jitter, opacity, colour, and label.
 - `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
   crops the image, creates the base canvas at the cropped pixel size, and hands
-  the render function to `main.tsx`. Sets `canvas.base-layer.dataset.composed`
+  the render function to `main.tsx`. Reports `no-image` when the generation has
+  no source image and `image-failed` when one cannot be loaded. Sets
+  `canvas.base-layer.dataset.composed`
   to the rendered seed for headless capture. The `seed=` label stays on a
   separate overlay canvas that is never exported. `downloadImage` in
   `src/surface.ts` exports the base composition (text included).
@@ -262,12 +264,21 @@ defaults, which is null for every effect but pixel-sort.
 - Non-scaling overlays must scale with the image. Baseline convention: text
   sized relative to `min(width, height) / 926`, the mantova.jpg short side.
 - Images and fonts are served from `public/` and must be added to
-  `public/assets/manifest.json` to appear in the Image dropdown.
+  `public/assets/manifest.json` to appear in the Image dropdown. Only fonts are
+  tracked; images are build/deploy or upload content.
+- A generation can have `image: ''`, meaning no source. The stage then reports
+  `no-image` and the UI shows the upload affordance instead of a canvas.
 
 ## Assets
 
-- `public/assets/*.jpg` — source images
-- `public/assets/manifest.json` — JSON array of image filenames shown in the UI
+- `public/assets/` — not tracked beyond `.gitkeep` and the generated
+  `manifest.json`. The repository ships no source images: they come from user
+  uploads or from a deployment that drops files into the directory.
+- `public/assets/manifest.json` — JSON array of image filenames shown in the
+  Image dropdown, regenerated from the directory on every build and dev start.
+- `public/fonts/*.ttf` — licensed fonts (see `public/fonts/OFL.txt`), tracked.
+- A deployment-provided image keeps working through `?image=` and old URLs; a
+  missing one reports `image-failed` rather than being silently swapped.
 - `public/fonts/*.ttf` — licensed fonts (see `public/fonts/OFL.txt`)
 
 ## Workflow notes

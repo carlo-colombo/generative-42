@@ -1,7 +1,7 @@
 import puppeteer, { type Browser } from "puppeteer";
 import { execSync } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { extname, resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { preview, type PreviewServer } from "vite";
 import { DEFAULT_GENERATION, type Generation } from "../src/types";
@@ -28,6 +28,29 @@ function getGenerations(): Generation[] {
   return [{ ...DEFAULT_GENERATION, seed }];
 }
 
+// The repository ships no images, so a source has to come from --image= or
+// from a deployment-provided public/assets set.
+function sourceImageFile(): string {
+  const arg = process.argv.slice(2).find((a) => a.startsWith("--image="));
+  if (arg) {
+    const file = resolve(ROOT, arg.slice("--image=".length));
+    if (!existsSync(file)) throw new Error(`Source image not found: ${file}`);
+    return file;
+  }
+  const manifestPath = resolve(ROOT, "public/assets/manifest.json");
+  if (existsSync(manifestPath)) {
+    const files = JSON.parse(readFileSync(manifestPath, "utf8")) as string[];
+    if (files.length > 0) return resolve(ROOT, "public/assets", files[0]);
+  }
+  throw new Error("No source image: pass --image=<path> (the repository ships none)");
+}
+
+function stageSourceImage(file: string): string {
+  const name = `generate-input${extname(file)}`;
+  cpSync(file, resolve(ROOT, "dist/assets", name));
+  return `/assets/${name}`;
+}
+
 function startPreviewServer(): Promise<PreviewServer> {
   return preview({
     root: ROOT,
@@ -37,11 +60,13 @@ function startPreviewServer(): Promise<PreviewServer> {
 
 async function renderGeneration(
   browser: Browser,
-  gen: Generation
+  gen: Generation,
+  imageRef: string
 ): Promise<Buffer> {
   const page = await browser.newPage();
 
-  const url = `http://localhost:${PORT}?seed=${gen.seed}`;
+  const query = new URLSearchParams({ seed: String(gen.seed), image: imageRef });
+  const url = `http://localhost:${PORT}/?${query.toString()}`;
   await page.goto(url, { waitUntil: "networkidle0" });
 
   await page.waitForFunction(
@@ -66,9 +91,12 @@ async function renderGeneration(
 
 async function main() {
   const generations = getGenerations();
+  const sourceFile = sourceImageFile();
 
   console.log("Building project...");
   execSync("pnpm run build", { cwd: ROOT, stdio: "inherit" });
+  const imageRef = stageSourceImage(sourceFile);
+  console.log(`Source image: ${sourceFile}`);
 
   if (!existsSync(OUTPUT_DIR)) {
     mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -82,7 +110,7 @@ async function main() {
     browser = await puppeteer.launch({ headless: true });
     for (const gen of generations) {
       console.log(`Rendering seed ${gen.seed}...`);
-      const buffer = await renderGeneration(browser, gen);
+      const buffer = await renderGeneration(browser, gen, imageRef);
       const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}.png`);
       writeFileSync(outPath, buffer);
       console.log(`  Saved: ${outPath}`);
