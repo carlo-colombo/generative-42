@@ -61,8 +61,9 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   `gridMargin` gap and a white-lerped 1px border, then re-draws
   `gridCurtainCount` edge-anchored cell bands (rows or columns, `gridSize` and
   width from the params), giving each band a seeded random length up to
-  `gridCurtainRandomness` away from `gridCurtainWidth`, and re-draws them into a
-  second buffer and applies a single p5 filter to
+  `gridCurtainRandomness` away from `gridCurtainWidth` and each cell row (or
+  column) its own length within `gridCurtainEdgeJitter`, then re-draws those
+  cells into a second buffer and applies a single p5 filter to
   it (`INVERT`, `POSTERIZE` for rasterize, `GRAY`) before compositing it back.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear

@@ -111,6 +111,7 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     gridCurtainCount: Math.round(clampNumber(record.gridCurtainCount, 0, 8, base.gridCurtainCount)),
     gridCurtainWidth: clampNumber(record.gridCurtainWidth, 1, 100, base.gridCurtainWidth),
     gridCurtainRandomness: clampNumber(record.gridCurtainRandomness, 0, 100, base.gridCurtainRandomness),
+    gridCurtainEdgeJitter: clampNumber(record.gridCurtainEdgeJitter, 0, 100, base.gridCurtainEdgeJitter),
     gridCurtainEffect: (record.gridCurtainEffect === 'rasterize' || record.gridCurtainEffect === 'greyscale'
       ? record.gridCurtainEffect
       : record.gridCurtainEffect === 'inverse'
@@ -569,49 +570,47 @@ function curtainGrid({ p, source, seed, params }: EffectRenderContext) {
   const bgG = Math.round(totalG / total)
   const bgB = Math.round(totalB / total)
 
-  // Curtains are runs of whole cell rows or columns anchored to an edge.
+  // Curtains are edge-anchored runs of cells. Every cell row (or column) inside
+  // one draws its own length, so the curtain border stays irregular.
   const axis = params.gridCurtainAxis === 'columns' ? 'columns' : 'rows'
   const along = axis === 'columns' ? cols : rows
+  const across = axis === 'columns' ? rows : cols
   const bandCount = Math.max(0, Math.round(params.gridCurtainCount))
   const bandWidth = Math.min(1, Math.max(0, params.gridCurtainWidth) / 100)
   const bandJitter = Math.min(1, Math.max(0, params.gridCurtainRandomness) / 100)
-  const bands: { start: number; end: number }[] = []
-  if (bandCount > 0 && bandWidth > 0) {
+  const edgeJitter = Math.min(1, Math.max(0, params.gridCurtainEdgeJitter) / 100)
+  const hasCurtain = bandCount > 0 && bandWidth > 0
+  const inCurtain = new Uint8Array(cells)
+  if (hasCurtain) {
     const rand = mulberry32(seed)
     for (let i = 0; i < bandCount; i++) {
       const length = Math.min(1, Math.max(0.02, bandWidth + (rand() * 2 - 1) * bandJitter))
-      const span = Math.min(along, Math.max(1, Math.round(along * length)))
-      const start = rand() < 0.5 ? 0 : along - span
-      bands.push({ start, end: start + span })
-    }
-  }
-
-  const inCurtain = new Uint8Array(cells)
-  for (const band of bands) {
-    if (axis === 'columns') {
-      for (let col = band.start; col < band.end; col++) {
-        for (let row = 0; row < rows; row++) inCurtain[row * cols + col] = 1
-      }
-    } else {
-      for (let row = band.start; row < band.end; row++) {
-        inCurtain.fill(1, row * cols, row * cols + cols)
+      const baseSpan = Math.min(along, Math.max(1, Math.round(along * length)))
+      const fromStart = rand() < 0.5
+      const wobbleRange = baseSpan * edgeJitter
+      for (let line = 0; line < across; line++) {
+        const wobble = Math.round((rand() * 2 - 1) * wobbleRange)
+        const span = Math.min(along, Math.max(1, baseSpan + wobble))
+        for (let k = 0; k < span; k++) {
+          const pos = fromStart ? k : along - 1 - k
+          inCurtain[axis === 'columns' ? line * cols + pos : pos * cols + line] = 1
+        }
       }
     }
   }
 
   const buffer = new Uint8ClampedArray(w * h * 4)
   fillPixelRect(buffer, w, 0, 0, w, h, bgR, bgG, bgB)
-  const curtainBuffer = bands.length > 0 ? new Uint8ClampedArray(w * h * 4) : null
+  const curtainBuffer = hasCurtain ? new Uint8ClampedArray(w * h * 4) : null
   if (curtainBuffer) {
-    for (const band of bands) {
-      if (axis === 'columns') {
-        const x0 = Math.round(band.start * cell)
-        const x1 = Math.min(w, Math.round(band.end * cell))
-        fillPixelRect(curtainBuffer, w, x0, 0, x1, h, bgR, bgG, bgB)
-      } else {
-        const y0 = Math.round(band.start * cell)
-        const y1 = Math.min(h, Math.round(band.end * cell))
-        fillPixelRect(curtainBuffer, w, 0, y0, w, y1, bgR, bgG, bgB)
+    for (let row = 0; row < rows; row++) {
+      const y0 = Math.round(row * cell)
+      const y1 = Math.min(h, Math.round((row + 1) * cell))
+      for (let col = 0; col < cols; col++) {
+        if (!inCurtain[row * cols + col]) continue
+        const x0 = Math.round(col * cell)
+        const x1 = Math.min(w, Math.round((col + 1) * cell))
+        fillPixelRect(curtainBuffer, w, x0, y0, x1, y1, bgR, bgG, bgB)
       }
     }
   }
@@ -715,6 +714,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       gridCurtainCount: 2,
       gridCurtainWidth: 35,
       gridCurtainRandomness: 40,
+      gridCurtainEdgeJitter: 35,
       gridCurtainEffect: 'inverse',
       gridCurtainAxis: 'rows',
     },
@@ -724,6 +724,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { type: 'range', key: 'gridCurtainCount', label: 'Curtains', min: 0, max: 8, step: 1 },
       { type: 'range', key: 'gridCurtainWidth', label: 'Curtain width', min: 1, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainRandomness', label: 'Length jitter', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'gridCurtainEdgeJitter', label: 'Edge jitter', min: 0, max: 100, step: 1 },
       { type: 'select', key: 'gridCurtainEffect', label: 'Curtain filter', options: [
         { value: 'inverse', label: 'Invert' },
         { value: 'rasterize', label: 'Posterize' },

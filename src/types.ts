@@ -66,6 +66,9 @@ export interface EffectParams {
   // How far each curtain's length may randomly stray from gridCurtainWidth, as
   // a share of the canvas side. Read by curtain-grid only.
   gridCurtainRandomness: number;
+  // How far each cell row (or column) inside a curtain may vary its own length,
+  // as a share of the canvas side. Read by curtain-grid only.
+  gridCurtainEdgeJitter: number;
   gridCurtainEffect: CurtainEffect;
   gridCurtainAxis: CurtainAxis;
 }
@@ -90,6 +93,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   gridCurtainCount: 2,
   gridCurtainWidth: 35,
   gridCurtainRandomness: 40,
+  gridCurtainEdgeJitter: 35,
   gridCurtainEffect: "inverse",
   gridCurtainAxis: "rows",
 };

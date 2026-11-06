@@ -391,6 +391,7 @@ function compactParams(params: EffectParams): EffectParams {
     gridCurtainCount: params.gridCurtainCount,
     gridCurtainWidth: quantize(params.gridCurtainWidth),
     gridCurtainRandomness: quantize(params.gridCurtainRandomness),
+    gridCurtainEdgeJitter: quantize(params.gridCurtainEdgeJitter),
     gridCurtainEffect: params.gridCurtainEffect,
     gridCurtainAxis: params.gridCurtainAxis,
   }
