@@ -22,15 +22,15 @@ function useImages(model: GenerationModel) {
         return response.json() as Promise<string[]>
       })
       .then((files) => {
-        const availableImages = files.length > 0 ? files : [model.draft.value.image.replace('/assets/', '')]
+        const availableImages = files.length > 0 ? files : []
         setImages(availableImages)
         setManifestState('ready')
-        if (!availableImages.includes(model.draft.value.image.replace('/assets/', ''))) {
-          model.setField('image', `/assets/${availableImages[0]}`)
-        }
+        const current = model.draft.value.image
+        const missingBuiltIn = current.startsWith('/assets/') && !availableImages.includes(current.replace('/assets/', ''))
+        if (missingBuiltIn && availableImages[0]) model.setField('image', `/assets/${availableImages[0]}`)
       })
       .catch(() => {
-        setImages([model.draft.value.image.replace('/assets/', '')])
+        setImages([])
         setManifestState('error')
       })
   }, [model])

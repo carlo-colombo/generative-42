@@ -34,14 +34,26 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   `JSON.stringify(generation)`, so every layer field participates.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
-  mask preview toggle), plus the image manifest fetch.
+  mask preview toggle), plus the image manifest fetch. The manifest fallback
+  only replaces a missing `/assets/...` image, so an `upload:` reference is
+  left alone.
+- `src/uploads.ts` — client-side image uploads. Files are decoded locally (never
+  sent anywhere), downscaled to at most 4096 px on the long side, and stored in
+  IndexedDB (`generative42`: `uploads` metadata + `upload-files` blobs). The
+  generation stores `upload:<id>` instead of a path; `imageSource` resolves that
+  to an object URL for the stage and the crop preview, and `uploads` is the
+  signals list (`UploadedImage` with a thumbnail data URL) that `SourceControls`
+  renders. Deleting an upload revokes its object URL and drops both records.
+  `MAX_UPLOADS` caps the store at 24; the UI reports quota/read failures.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
   migration. `applyGeneration` navigates to a new URL, so the stage bootstraps
   from scratch. `MAX_LAYERS` (20) caps the stack.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
-  `ControlField`, `Segmented`, `HelpPopover`).
+  `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
+  dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
+  with upload/select/remove.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
@@ -196,7 +208,11 @@ their even-odd parity. `AreaShape` `path.tension` is reserved and unused.
 
 Presets are the one browser-local store that is not part of the generation:
 `localStorage.layer-presets` holds `{ version, presets }`. Nothing in the URL
-or the rendered output depends on it.
+or the rendered output depends on it. Uploaded images are the other
+browser-local store, kept in IndexedDB and referenced as `image=upload:<id>`; a
+URL with an upload reference only renders in the browser that made the upload.
+(`sessionStorage.upload-errors` carries upload notices across the reload that
+selecting a new image triggers.)
 
 `layers` is one URL param: base64url-encoded, quantized JSON. Past 6000
 characters the URL stores `layers=<id>` instead and the payload goes to

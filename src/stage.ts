@@ -4,6 +4,7 @@ import { DEFAULT_FONT, FONTS, loadFonts, type LoadedFont } from './fonts'
 import { clearSurface, createSurface, loadImageSurface, releaseSurface, resizeSurface, type Surface } from './surface'
 import { drawSeedLabel } from './text'
 import type { Generation } from './types'
+import { imageSource } from './uploads'
 import { loadWasmKernels, type WasmKernels } from './wasm'
 
 export type RenderResult = { imageChanged: boolean; resized: boolean }
@@ -88,11 +89,13 @@ export function createStage(
       ...initial.layers.filter((layer) => layer.kind === 'text').map((layer) => layer.font),
     ]
     const [image, loadedFonts, wasm] = await Promise.all([
-      loadImageSurface(initial.image).catch((error) => {
-        console.error('Source image failed to load', error)
-        onStatus?.('image-failed')
-        return null
-      }),
+      imageSource(initial.image)
+        .then((url) => loadImageSurface(url))
+        .catch((error) => {
+          console.error('Source image failed to load', error)
+          onStatus?.('image-failed')
+          return null
+        }),
       loadFonts(fontPaths),
       loadWasmKernels().catch((error) => {
         console.error('WASM kernels failed to load', error)

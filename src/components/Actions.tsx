@@ -1,5 +1,6 @@
 import { downloadImage } from '../surface'
 import type { GenerationModel } from '../generation-state'
+import { imageLabel } from '../uploads'
 import { ControlField } from './ControlField'
 
 export function Actions({ model }: { model: GenerationModel }) {
@@ -7,7 +8,7 @@ export function Actions({ model }: { model: GenerationModel }) {
   const download = () => {
     const baseCanvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
     if (!baseCanvas) return
-    const imageName = generation.image.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'image'
+    const imageName = imageLabel(generation.image).replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-') || 'image'
     downloadImage(baseCanvas, `gen-${generation.seed}-${imageName}.png`)
   }
   return <footer className="panel-footer">

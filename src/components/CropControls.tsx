@@ -2,6 +2,7 @@ import { getCropRect } from '../crop'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { GenerationModel } from '../generation-state'
 import type { CropFormat } from '../types'
+import { useImageSource } from '../uploads'
 import { ControlField } from './ControlField'
 
 const PREVIEW_MAX_HEIGHT = 150
@@ -20,6 +21,7 @@ export function CropControls({ model }: { model: GenerationModel }) {
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 })
   const [dragging, setDragging] = useState(false)
   const previewRef = useRef<HTMLDivElement>(null)
+  const source = useImageSource(generation.image)
   const rect = getCropRect(imageSize.width, imageSize.height, generation)
   const left = (rect.x / imageSize.width) * 100
   const top = (rect.y / imageSize.height) * 100
@@ -65,7 +67,7 @@ export function CropControls({ model }: { model: GenerationModel }) {
       onPointerUp={() => setDragging(false)}
       onPointerCancel={() => setDragging(false)}
     >
-      <img key={generation.image} src={generation.image} alt="Source crop preview" onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />
+      {source && <img key={source} src={source} alt="Source crop preview" onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} />}
       {generation.cropPreview && <div className="crop-rect" style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }} />}
     </div>
     <div className="field-grid">
