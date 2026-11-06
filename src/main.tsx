@@ -8,6 +8,7 @@ import { createEditorModel } from './editor-state'
 import { createSketch, type SketchStatus } from './sketch'
 import { createGenerationModel, getGeneration } from './generation-state'
 import type { Generation } from './types'
+import type { WasmKernels } from './wasm'
 import './style.css'
 
 const generation = getGeneration()
@@ -18,6 +19,7 @@ const app = document.getElementById('app')!
 let seedCanvas: HTMLCanvasElement | undefined
 let baseCanvas: HTMLCanvasElement | undefined
 let renderComposition: ((generation: Generation) => { imageChanged: boolean; resized: boolean }) | undefined
+let wasmKernels: WasmKernels | undefined
 let drawnSignature = ''
 let previewTimer = 0
 let pendingPreview: Generation | null = null
@@ -28,11 +30,12 @@ const stageStatus = signal<StageStatus>('loading')
 function StageLoading() {
   const status = stageStatus.value
   if (status === 'rendered') return null
-  const failed = status === 'image-failed'
+  const failed = status === 'image-failed' || status === 'wasm-failed'
+  const label = status === 'image-failed' ? 'IMAGE FAILED' : status === 'wasm-failed' ? 'WASM FAILED' : 'LOADING'
   return (
     <div className={failed ? 'stage-loading is-error' : 'stage-loading'} role="status" aria-live="polite">
       {!failed && <span className="stage-loading-spinner" aria-hidden="true" />}
-      <span className="stage-loading-label">{failed ? 'IMAGE FAILED' : 'LOADING'}</span>
+      <span className="stage-loading-label">{label}</span>
     </div>
   )
 }
@@ -130,9 +133,10 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
   schedulePreview(nextGeneration)
 })
 const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
-const instance = new p5(createSketch(generation, (base, seed, renderLayer) => {
+const instance = new p5(createSketch(generation, (base, seed, renderLayer, wasm) => {
   baseCanvas = base
   seedCanvas = seed
+  wasmKernels = wasm
   renderComposition = renderLayer
   stage.appendChild(seed)
   aspectRatio = base.width / base.height
@@ -145,7 +149,7 @@ const instance = new p5(createSketch(generation, (base, seed, renderLayer) => {
 }), stage)
 
 function renderEditor() {
-  render(<StageEditor model={model} editor={editor} baseCanvas={baseCanvas} />, editorRoot)
+  render(<StageEditor model={model} editor={editor} baseCanvas={baseCanvas} wasm={wasmKernels} />, editorRoot)
 }
 
 render(<LeftPanel model={model} />, leftPanelRoot)

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { maskKey, maskWeight, shapePolygon } from '../areas'
+import { maskKey, shapePolygon } from '../areas'
+import { maskWeightWasm } from '../masks'
+import type { WasmKernels } from '../wasm'
 import type { EditorModel } from '../editor-state'
 import { addLayer, clamp01, clampShape, createEffectLayer, translateShape, updateEffectLayer } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
@@ -247,7 +249,7 @@ function withAlpha(color: string, alpha: number): string {
   return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
 }
 
-export function StageEditor({ model, editor, baseCanvas }: { model: GenerationModel; editor: EditorModel; baseCanvas?: HTMLCanvasElement }) {
+export function StageEditor({ model, editor, baseCanvas, wasm }: { model: GenerationModel; editor: EditorModel; baseCanvas?: HTMLCanvasElement; wasm?: WasmKernels }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawRef = useRef<() => void>(() => {})
   const dragRef = useRef<Drag>({ kind: 'none' })
@@ -475,6 +477,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
   }
 
   function drawMaskPreview(context: CanvasRenderingContext2D, size: Size) {
+    if (!wasm) return
     const renderable = layers.filter((layer) => layer.visible && (!draft.soloLayerId || draft.soloLayerId === layer.id))
     const pixelCount = size.width * size.height
     const versions = renderable.map((layer) => maskKey(layer.shape, layer.edge, size.width, size.height, draft.seed, layer.id))
@@ -488,7 +491,7 @@ export function StageEditor({ model, editor, baseCanvas }: { model: GenerationMo
         const cached = cache.get(layer.id)
         let mask = cached && cached.version === version ? cached.mask : null
         if (!mask) {
-          const weights = maskWeight(layer.shape, layer.edge, size.width, size.height, draft.seed, layer.id)
+          const weights = maskWeightWasm(wasm, layer.shape, layer.edge, size.width, size.height, draft.seed, layer.id)
           mask = new Uint8Array(pixelCount)
           for (let i = 0; i < pixelCount; i++) mask[i] = Math.round(weights[i] * 255)
           if (cacheable) cache.set(layer.id, { version, mask })

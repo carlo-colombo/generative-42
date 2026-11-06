@@ -4,13 +4,15 @@ import { cropImage } from './crop';
 import { DEFAULT_FONT, FONTS } from './fonts';
 import { createCompositionEngine, type CompositionEngine } from './compose';
 import { drawSeedLabel } from './text';
+import { loadWasmKernels, type WasmKernels } from './wasm';
 
 type RenderResult = { imageChanged: boolean; resized: boolean }
-export type SketchStatus = 'rendered' | 'image-changed' | 'image-failed'
+export type SketchStatus = 'rendered' | 'image-changed' | 'image-failed' | 'wasm-failed'
 type SketchReady = (
   baseCanvas: HTMLCanvasElement,
   seedCanvas: HTMLCanvasElement,
   render: (generation: Generation) => RenderResult,
+  wasm: WasmKernels,
 ) => void
 type SketchStatusListener = (status: SketchStatus) => void
 
@@ -103,10 +105,15 @@ export function createSketch(initial: Generation, onReady?: SketchReady, onStatu
       const seedCanvas = (seedLayer as unknown as { canvas: HTMLCanvasElement }).canvas;
       seedCanvas.classList.add('seed-layer');
       seedCanvas.style.display = 'block';
-      engine = createCompositionEngine(p);
-      onReady?.(baseCanvas, seedCanvas, render);
       p.noLoop();
-      render(current);
+      void loadWasmKernels().then((wasm) => {
+        engine = createCompositionEngine(p, wasm);
+        onReady?.(baseCanvas, seedCanvas, render, wasm);
+        render(current);
+      }).catch((error) => {
+        console.error('WASM kernels failed to load', error);
+        onStatus?.('wasm-failed');
+      });
     };
 
     p.draw = () => {

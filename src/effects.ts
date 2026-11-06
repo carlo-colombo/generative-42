@@ -1,9 +1,7 @@
 import p5 from "p5";
-import { averageColorInArea, type Point } from "./color";
-import { mulberry32 } from "./areas";
-import { sortPixels } from "./sort";
-import { poissonSites, voronoiCellPixels } from "./voronoi";
+import { sampleQuads } from "./color";
 import { DEFAULT_EFFECT_PARAMS, MAX_SPAN_WIDTH } from "./types";
+import { measureWasm, type WasmKernels } from './wasm';
 import type {
   ColorSortDirection,
   CurtainAxis,
@@ -25,6 +23,7 @@ export type EffectRenderContext = {
   params: EffectParams;
   edge: LayerEdge;
   generation: Generation;
+  wasm: WasmKernels;
 };
 
 export type EffectControl =
@@ -135,165 +134,236 @@ function drawPixelBuffer(p: p5.Graphics, width: number, height: number, pixels: 
   p.image(pixelsToImage(p, width, height, pixels), 0, 0)
 }
 
-function rect({ p, source }: EffectRenderContext) {
-  p.noStroke();
-
-  for (let i = 0; i < 20000; i++) {
-    const x = p.random(source.width);
-    const y = p.random(source.height);
-    const w = p.random(source.width / 20) / 2;
-    const h = p.random(source.height / 20) / 2;
-
-    const corners: [Point, Point, Point, Point] = [
-      { x: x - w, y: y - h },
-      { x: x + w, y: y - h },
-      { x: x - w, y: y + h },
-      { x: x + w, y: y + h },
-    ];
-
-    const avg = averageColorInArea(source, corners, 1000);
-
-    p.fill(avg.r, avg.g, avg.b, p.random() * 255);
-    p.stroke(avg.r, avg.g, avg.b);
-    p.rect(x - w, y - h, w * 2, h * 2);
+function putQuad(
+  coordinates: Float32Array,
+  index: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  order: 'corners' | 'clockwise' = 'corners',
+) {
+  const offset = index * 8
+  coordinates[offset] = x0
+  coordinates[offset + 1] = y0
+  if (order === 'corners') {
+    coordinates[offset + 2] = x1
+    coordinates[offset + 3] = y0
+    coordinates[offset + 4] = x0
+    coordinates[offset + 5] = y1
+    coordinates[offset + 6] = x1
+    coordinates[offset + 7] = y1
+  } else {
+    coordinates[offset + 2] = x0
+    coordinates[offset + 3] = y1
+    coordinates[offset + 4] = x1
+    coordinates[offset + 5] = y1
+    coordinates[offset + 6] = x1
+    coordinates[offset + 7] = y0
   }
 }
 
-function circles({ p, source }: EffectRenderContext) {
-  for (let i = 0; i < 20000; i++) {
-    const x = p.random(source.width);
-    const y = p.random(source.height);
-    const w = p.random(source.width / 20) / 2;
-    const h = w;
-
-    const corners: [Point, Point, Point, Point] = [
-      { x: x - w, y: y - h },
-      { x: x + w, y: y - h },
-      { x: x - w, y: y + h },
-      { x: x + w, y: y + h },
-    ];
-
-    const avg = averageColorInArea(source, corners, 1000);
-
-    p.fill(avg.r, avg.g, avg.b, p.random() * 255);
-    p.stroke(avg.r, avg.g, avg.b);
-    p.circle(x, y, w * 2);
+function batchedRect({ p, source, wasm }: EffectRenderContext) {
+  const count = 20000
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 5)
+  for (let i = 0; i < count; i++) {
+    const x = p.random(source.width)
+    const y = p.random(source.height)
+    const w = p.random(source.width / 20) / 2
+    const h = p.random(source.height / 20) / 2
+    putQuad(coords, i, x - w, y - h, x + w, y + h)
+    shapes.set([x, y, w, h, p.random() * 255], i * 5)
+  }
+  const colors = sampleQuads(source, coords, wasm!)
+  p.noStroke()
+  for (let i = 0; i < count; i++) {
+    const shape = i * 5
+    const color = i * 3
+    p.fill(colors[color], colors[color + 1], colors[color + 2], shapes[shape + 4])
+    p.stroke(colors[color], colors[color + 1], colors[color + 2])
+    p.rect(shapes[shape] - shapes[shape + 2], shapes[shape + 1] - shapes[shape + 3], shapes[shape + 2] * 2, shapes[shape + 3] * 2)
   }
 }
 
-function graySquares({ p, source, params }: EffectRenderContext) {
-  p.noStroke();
+function rect(context: EffectRenderContext) {
+  batchedRect(context)
+}
 
-  for (let i = 0; i < 20000; i++) {
-    const x = p.random(source.width);
-    const y = p.random(source.height);
-    const halfSize = p.random(Math.min(source.width, source.height) / 40) / 2;
-
-    const avg = averageColorInArea(source, [
-      { x: x - halfSize, y: y - halfSize },
-      { x: x + halfSize, y: y - halfSize },
-      { x: x - halfSize, y: y + halfSize },
-      { x: x + halfSize, y: y + halfSize },
-    ], 1000);
-
-    const luminance = 0.299 * avg.r + 0.587 * avg.g + 0.114 * avg.b;
-    const levels = Math.max(2, Math.min(16, Math.round(params.grayLevels)));
-    const step = 255 / (levels - 1);
-    const squareColor = Math.round(luminance / step) * step;
-    const borderColor = squareColor > 127.5 ? 0 : 255;
-
-    p.fill(squareColor, 127.5);
-    p.stroke(borderColor, 127.5);
-    p.rect(x - halfSize, y - halfSize, halfSize * 2, halfSize * 2);
+function batchedCircles({ p, source, wasm }: EffectRenderContext) {
+  const count = 20000
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 4)
+  for (let i = 0; i < count; i++) {
+    const x = p.random(source.width)
+    const y = p.random(source.height)
+    const w = p.random(source.width / 20) / 2
+    putQuad(coords, i, x - w, y - w, x + w, y + w)
+    shapes.set([x, y, w, p.random() * 255], i * 4)
+  }
+  const colors = sampleQuads(source, coords, wasm!)
+  for (let i = 0; i < count; i++) {
+    const shape = i * 4
+    const color = i * 3
+    p.fill(colors[color], colors[color + 1], colors[color + 2], shapes[shape + 3])
+    p.stroke(colors[color], colors[color + 1], colors[color + 2])
+    p.circle(shapes[shape], shapes[shape + 1], shapes[shape + 2] * 2)
   }
 }
 
-function lines({ p, source }: EffectRenderContext) {
-  p.strokeWeight(source.width / 700);
+function circles(context: EffectRenderContext) {
+  batchedCircles(context)
+}
 
-  for (let i = 0; i < 90000; i++) {
-    const x1 = p.random(source.width);
-    const y1 = p.random(source.height);
-    const angle = p.random(p.TWO_PI);
-    const length = p.random(Math.min(source.width, source.height) / 10);
-    const x2 = x1 + Math.cos(angle) * length;
-    const y2 = y1 + Math.sin(angle) * length;
-
-    const color = x1 === x2 || y1 === y2
-      ? { r: 255, g: 255, b: 255 }
-      : averageColorInArea(source, [
-        { x: x1, y: y1 },
-        { x: x1, y: y2 },
-        { x: x2, y: y2 },
-        { x: x2, y: y1 },
-      ], 1000);
-
-    p.stroke(color.r, color.g, color.b);
-    p.line(x1, y1, x2, y2);
+function batchedGraySquares({ p, source, params, wasm }: EffectRenderContext) {
+  const count = 20000
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    const x = p.random(source.width)
+    const y = p.random(source.height)
+    const halfSize = p.random(Math.min(source.width, source.height) / 40) / 2
+    putQuad(coords, i, x - halfSize, y - halfSize, x + halfSize, y + halfSize)
+    shapes.set([x, y, halfSize], i * 3)
+  }
+  const colors = sampleQuads(source, coords, wasm!)
+  const levels = Math.max(2, Math.min(16, Math.round(params.grayLevels)))
+  const step = 255 / (levels - 1)
+  p.noStroke()
+  for (let i = 0; i < count; i++) {
+    const color = i * 3
+    const shape = i * 3
+    const luminance = 0.299 * colors[color] + 0.587 * colors[color + 1] + 0.114 * colors[color + 2]
+    const squareColor = Math.round(luminance / step) * step
+    const borderColor = squareColor > 127.5 ? 0 : 255
+    p.fill(squareColor, 127.5)
+    p.stroke(borderColor, 127.5)
+    p.rect(shapes[shape] - shapes[shape + 2], shapes[shape + 1] - shapes[shape + 2], shapes[shape + 2] * 2, shapes[shape + 2] * 2)
   }
 }
 
-function verticalLines({ p, source }: EffectRenderContext) {
-  const strokeWidth = source.width / 700;
-  p.strokeWeight(strokeWidth);
+function graySquares(context: EffectRenderContext) {
+  batchedGraySquares(context)
+}
 
-  for (let i = 0; i < 90000; i++) {
-    const x = p.random(source.width);
-    const y1 = p.random(source.height);
-    const y2 = y1 + p.random(Math.min(source.width, source.height) / 10);
-    const halfWidth = strokeWidth / 2;
-    const color = averageColorInArea(source, [
-      { x: x - halfWidth, y: y1 },
-      { x: x + halfWidth, y: y1 },
-      { x: x - halfWidth, y: y2 },
-      { x: x + halfWidth, y: y2 },
-    ], 1000);
-
-    p.stroke(color.r, color.g, color.b);
-    p.line(x, y1, x, y2);
+function batchedLines({ p, source, wasm }: EffectRenderContext) {
+  const count = 90000
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 4)
+  const sampleIndices = new Int32Array(count).fill(-1)
+  let sampleCount = 0
+  for (let i = 0; i < count; i++) {
+    const x1 = p.random(source.width)
+    const y1 = p.random(source.height)
+    const angle = p.random(p.TWO_PI)
+    const length = p.random(Math.min(source.width, source.height) / 10)
+    const x2 = x1 + Math.cos(angle) * length
+    const y2 = y1 + Math.sin(angle) * length
+    shapes.set([x1, y1, x2, y2], i * 4)
+    if (x1 === x2 || y1 === y2) continue
+    putQuad(coords, sampleCount++, x1, y1, x2, y2, 'clockwise')
+    sampleIndices[i] = sampleCount - 1
+  }
+  const samples = sampleCount ? sampleQuads(source, coords.subarray(0, sampleCount * 8), wasm!) : new Uint8Array()
+  p.strokeWeight(source.width / 700)
+  for (let i = 0; i < count; i++) {
+    const colorIndex = sampleIndices[i]
+    if (colorIndex < 0) p.stroke(255, 255, 255)
+    else p.stroke(samples[colorIndex * 3], samples[colorIndex * 3 + 1], samples[colorIndex * 3 + 2])
+    const shape = i * 4
+    p.line(shapes[shape], shapes[shape + 1], shapes[shape + 2], shapes[shape + 3])
   }
 }
 
-function horizontalLines({ p, source }: EffectRenderContext) {
-  const strokeWidth = source.width / 700;
-  p.strokeWeight(strokeWidth);
+function lines(context: EffectRenderContext) {
+  batchedLines(context)
+}
 
-  for (let i = 0; i < 90000; i++) {
-    const x1 = p.random(source.width);
-    const y = p.random(source.height);
-    const x2 = x1 + p.random(Math.min(source.width, source.height) / 10);
-    const halfWidth = strokeWidth / 2;
-    const color = averageColorInArea(source, [
-      { x: x1, y: y - halfWidth },
-      { x: x2, y: y - halfWidth },
-      { x: x1, y: y + halfWidth },
-      { x: x2, y: y + halfWidth },
-    ], 1000);
-
-    p.stroke(color.r, color.g, color.b);
-    p.line(x1, y, x2, y);
+function batchedVerticalLines({ p, source, wasm }: EffectRenderContext) {
+  const count = 90000
+  const strokeWidth = source.width / 700
+  const halfWidth = strokeWidth / 2
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    const x = p.random(source.width)
+    const y1 = p.random(source.height)
+    const y2 = y1 + p.random(Math.min(source.width, source.height) / 10)
+    putQuad(coords, i, x - halfWidth, y1, x + halfWidth, y2)
+    shapes.set([x, y1, y2], i * 3)
+  }
+  const colors = sampleQuads(source, coords, wasm!)
+  p.strokeWeight(strokeWidth)
+  for (let i = 0; i < count; i++) {
+    const color = i * 3
+    const shape = i * 3
+    p.stroke(colors[color], colors[color + 1], colors[color + 2])
+    p.line(shapes[shape], shapes[shape + 1], shapes[shape], shapes[shape + 2])
   }
 }
 
-function pixelSort({ p, source, mask, seed, params, edge }: EffectRenderContext) {
+function verticalLines(context: EffectRenderContext) {
+  batchedVerticalLines(context)
+}
+
+function batchedHorizontalLines({ p, source, wasm }: EffectRenderContext) {
+  const count = 90000
+  const strokeWidth = source.width / 700
+  const halfWidth = strokeWidth / 2
+  const coords = new Float32Array(count * 8)
+  const shapes = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    const x1 = p.random(source.width)
+    const y = p.random(source.height)
+    const x2 = x1 + p.random(Math.min(source.width, source.height) / 10)
+    putQuad(coords, i, x1, y - halfWidth, x2, y + halfWidth)
+    shapes.set([x1, y, x2], i * 3)
+  }
+  const colors = sampleQuads(source, coords, wasm!)
+  p.strokeWeight(strokeWidth)
+  for (let i = 0; i < count; i++) {
+    const color = i * 3
+    const shape = i * 3
+    p.stroke(colors[color], colors[color + 1], colors[color + 2])
+    p.line(shapes[shape], shapes[shape + 1], shapes[shape + 2], shapes[shape + 1])
+  }
+}
+
+function horizontalLines(context: EffectRenderContext) {
+  batchedHorizontalLines(context)
+}
+
+function pixelSort({ p, source, mask, seed, params, edge, wasm }: EffectRenderContext) {
   source.loadPixels();
-  const sorted = sortPixels(
-    source.pixels as unknown as Uint8ClampedArray,
+  const byteLength = source.width * source.height * 4;
+  wasm.pfree();
+  const sourcePtr = wasm.palloc(byteLength) >>> 0;
+  const targetPtr = wasm.palloc(byteLength) >>> 0;
+  const maskPtr = mask ? wasm.palloc(mask.length) >>> 0 : 0;
+  const memory = wasm.memory.buffer;
+  new Uint8Array(memory, sourcePtr, byteLength).set(source.pixels as unknown as Uint8ClampedArray);
+  if (mask) {
+    const weights = new Uint8Array(memory, maskPtr, mask.length);
+    for (let i = 0; i < mask.length; i++) weights[i] = mask[i] > 0 ? 1 : 0;
+  }
+  measureWasm('pixelSort', () => wasm.pixelSort(
+    sourcePtr,
+    targetPtr,
+    maskPtr,
     source.width,
     source.height,
-    mask,
-    {
-      direction: params.direction,
-      reverse: params.reverse,
-      randomness: params.randomness,
-      spanWidth: params.spanWidth,
-      containedBlocks: params.containedBlocks,
-      jitter: edge.mode === 'ragged' ? edge.jitter : 0,
-      amount: params.amount,
-    },
-    mulberry32(seed),
-  );
-  drawPixelBuffer(p, source.width, source.height, sorted);
+    mask ? 1 : 0,
+    params.direction === 'horizontal' ? 0 : 1,
+    params.reverse ? 1 : 0,
+    params.randomness,
+    params.spanWidth,
+    params.containedBlocks ? 1 : 0,
+    edge.mode === 'ragged' ? edge.jitter : 0,
+    params.amount === null ? 0 : 1,
+    params.amount ?? 100,
+    seed >>> 0,
+  ));
+  drawPixelBuffer(p, source.width, source.height, new Uint8ClampedArray(wasm.memory.buffer, targetPtr, byteLength));
 }
 
 function drawStar(p: p5.Graphics, x: number, y: number, outer: number, inner: number, points: number) {
@@ -306,49 +376,55 @@ function drawStar(p: p5.Graphics, x: number, y: number, outer: number, inner: nu
   p.endShape(p.CLOSE);
 }
 
-function galaxy({ p, source }: EffectRenderContext) {
-  p.noStroke();
-
-  for (let i = 0; i < 20000; i++) {
-    const x = p.random(source.width);
-    const y = p.random(source.height);
-    const radius = p.random(source.width / 30);
-
-    const corners: [Point, Point, Point, Point] = [
-      { x: x - radius, y: y - radius },
-      { x: x + radius, y: y - radius },
-      { x: x - radius, y: y + radius },
-      { x: x + radius, y: y + radius },
-    ];
-
-    const avg = averageColorInArea(source, corners, 1000);
-
-    p.fill(avg.r, avg.g, avg.b, p.random() * 255);
-    drawStar(p, x, y, radius, radius * p.random(0.6, 0.7), Math.floor(p.random(7, 12)));
+function batchedGalaxy({ p, source, wasm }: EffectRenderContext) {
+  const count = 20000
+  const coords = new Float32Array(count * 8)
+  const stars = new Float32Array(count * 6)
+  for (let i = 0; i < count; i++) {
+    const x = p.random(source.width)
+    const y = p.random(source.height)
+    const radius = p.random(source.width / 30)
+    putQuad(coords, i, x - radius, y - radius, x + radius, y + radius)
+    stars.set([x, y, radius, p.random() * 255, radius * p.random(0.6, 0.7), Math.floor(p.random(7, 12))], i * 6)
   }
-
-  p.fill(255, 255, 255, 140);
-
+  const colors = sampleQuads(source, coords, wasm!)
+  p.noStroke()
+  for (let i = 0; i < count; i++) {
+    const star = i * 6
+    const color = i * 3
+    p.fill(colors[color], colors[color + 1], colors[color + 2], stars[star + 3])
+    drawStar(p, stars[star], stars[star + 1], stars[star + 2], stars[star + 4], stars[star + 5])
+  }
+  p.fill(255, 255, 255, 140)
   for (let i = 0; i < 300; i++) {
-    const x = p.random(source.width);
-    const y = p.random(source.height);
-    const radius = p.random(source.width / 250);
-
-    drawStar(p, x, y, radius, radius * p.random(0.3, 0.7), Math.floor(p.random(14, 22)));
+    const x = p.random(source.width)
+    const y = p.random(source.height)
+    const radius = p.random(source.width / 250)
+    drawStar(p, x, y, radius, radius * p.random(0.3, 0.7), Math.floor(p.random(14, 22)))
   }
 }
 
-function voronoi({ p, source, seed, params }: EffectRenderContext) {
+function galaxy(context: EffectRenderContext) {
+  batchedGalaxy(context)
+}
+
+function voronoi({ p, source, seed, params, wasm }: EffectRenderContext) {
   source.loadPixels();
-  const sites = poissonSites(source.width, source.height, params.voronoiPoints, seed);
-  const pixels = voronoiCellPixels(
-    source.pixels as unknown as Uint8ClampedArray,
-    source.width,
-    source.height,
-    sites.points,
-    sites.minDistance,
-  );
-  drawPixelBuffer(p, source.width, source.height, pixels);
+  const byteLength = source.width * source.height * 4;
+  const maxSites = params.voronoiPoints;
+  wasm.pfree();
+  const sourcePtr = wasm.palloc(byteLength) >>> 0;
+  const outputPtr = wasm.palloc(byteLength) >>> 0;
+  const xsPtr = wasm.palloc(maxSites * Float32Array.BYTES_PER_ELEMENT) >>> 0;
+  const ysPtr = wasm.palloc(maxSites * Float32Array.BYTES_PER_ELEMENT) >>> 0;
+  const distancePtr = wasm.palloc(Float32Array.BYTES_PER_ELEMENT) >>> 0;
+  const countPtr = wasm.palloc(Uint32Array.BYTES_PER_ELEMENT) >>> 0;
+  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source.pixels as unknown as Uint8ClampedArray);
+  measureWasm('poissonSites', () => wasm.poissonSites(source.width, source.height, maxSites, seed >>> 0, xsPtr, ysPtr, distancePtr, countPtr));
+  const count = new Uint32Array(wasm.memory.buffer, countPtr, 1)[0];
+  const minDistance = new Float32Array(wasm.memory.buffer, distancePtr, 1)[0];
+  measureWasm('voronoiCells', () => wasm.voronoiCells(sourcePtr, outputPtr, source.width, source.height, xsPtr, ysPtr, count, minDistance));
+  drawPixelBuffer(p, source.width, source.height, new Uint8ClampedArray(wasm.memory.buffer, outputPtr, byteLength));
 }
 
 function arrayRotate<T>(arr: T[], reverse: boolean, count: number): T[] {
@@ -360,7 +436,21 @@ function arrayRotate<T>(arr: T[], reverse: boolean, count: number): T[] {
   return arr;
 }
 
-function offsetSections({ p, source, params }: EffectRenderContext) {
+function filterSectionBlock(block: p5.Image, wasm: WasmKernels, invert: boolean, posterize: boolean) {
+  if (!invert && !posterize) return
+  block.loadPixels()
+  const pixels = block.pixels as unknown as Uint8ClampedArray
+  const byteLength = pixels.length
+  wasm.pfree()
+  const pointer = wasm.palloc(byteLength) >>> 0
+  new Uint8Array(wasm.memory.buffer, pointer, byteLength).set(pixels)
+  if (invert) measureWasm('pixelFilter:invert', () => wasm.pixelFilter(pointer, byteLength / 4, 1, 0))
+  if (posterize) measureWasm('pixelFilter:posterize', () => wasm.pixelFilter(pointer, byteLength / 4, 2, 2))
+  pixels.set(new Uint8Array(wasm.memory.buffer, pointer, byteLength))
+  block.updatePixels()
+}
+
+function offsetSections({ p, source, params, wasm }: EffectRenderContext) {
   const sectionCount = Math.max(1, Math.round(params.sectionCount));
   const slices = 105;
   const maxShift = slices * Math.max(0, Math.min(100, params.sectionOffset)) / 100;
@@ -393,8 +483,9 @@ function offsetSections({ p, source, params }: EffectRenderContext) {
     const strip = arrayRotate(strips[s], p.random() < 0.4, p.random(maxShift));
     for (let k = 0; k < sliceCount; k++) {
       const block = strip[k];
-      if (p.random() < invertRatio) block.filter(p.INVERT);
-      if (p.random() < posterizeRatio) block.filter(p.POSTERIZE, 2);
+      const invert = p.random() < invertRatio;
+      const posterize = p.random() < posterizeRatio;
+      filterSectionBlock(block, wasm, invert, posterize);
       const x = vertical ? s * blockWidth : k * blockWidth;
       const y = vertical ? k * blockHeight : s * blockHeight;
       p.push();
@@ -406,247 +497,52 @@ function offsetSections({ p, source, params }: EffectRenderContext) {
   }
 }
 
-function poissonSample(p: p5.Graphics, lambda: number): number {
-  const L = Math.exp(-lambda);
-  let k = 0;
-  let prod = 1;
-  do {
-    k++;
-    prod *= p.random();
-  } while (prod > L);
-  return k - 1;
-}
-
-function regionSum(integral: Float64Array, iw: number, x0: number, y0: number, x1: number, y1: number): number {
-  return integral[y1 * iw + x1] - integral[y0 * iw + x1] - integral[y1 * iw + x0] + integral[y0 * iw + x0];
-}
-
-function detailNoise({ p, source, params }: EffectRenderContext) {
-  source.loadPixels();
-  const w = source.width;
-  const h = source.height;
-  const lum = new Float32Array(w * h);
-  for (let i = 0, pi = 0; i < lum.length; i++, pi += 4) {
-    lum[i] = 0.299 * source.pixels[pi] + 0.587 * source.pixels[pi + 1] + 0.114 * source.pixels[pi + 2];
-  }
-
-  const iw = w + 1;
-  const integral = new Float64Array(iw * (h + 1));
-  const integralSq = new Float64Array(iw * (h + 1));
-  for (let y = 0; y < h; y++) {
-    let row = 0;
-    let rowSq = 0;
-    for (let x = 0; x < w; x++) {
-      const v = lum[y * w + x];
-      row += v;
-      rowSq += v * v;
-      const idx = (y + 1) * iw + (x + 1);
-      integral[idx] = integral[y * iw + (x + 1)] + row;
-      integralSq[idx] = integralSq[y * iw + (x + 1)] + rowSq;
-    }
-  }
-
-  const radius = Math.max(1, Math.round(Math.min(w, h) / 80));
-  const details = new Float32Array(w * h);
-  let maxDetail = 1e-6;
-  for (let y = 0; y < h; y++) {
-    const y0 = Math.max(0, y - radius);
-    const y1 = Math.min(h, y + radius + 1);
-    for (let x = 0; x < w; x++) {
-      const x0 = Math.max(0, x - radius);
-      const x1 = Math.min(w, x + radius + 1);
-      const n = (x1 - x0) * (y1 - y0);
-      const sum = regionSum(integral, iw, x0, y0, x1, y1);
-      const sumSq = regionSum(integralSq, iw, x0, y0, x1, y1);
-      const mean = sum / n;
-      const detail = Math.sqrt(Math.max(0, sumSq / n - mean * mean));
-      details[y * w + x] = detail;
-      if (detail > maxDetail) maxDetail = detail;
-    }
-  }
-
-  const lambda = 8;
-  const out = p.createImage(w, h);
-  out.loadPixels();
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const detail = details[y * w + x] / maxDetail;
-      const noise = poissonSample(p, lambda) / lambda;
-      const value = noise * detail;
-      const v = Math.max(0, Math.min(255, Math.round(value * 255)));
-      const i = (y * w + x) * 4;
-      if (params.detailNoiseMode === 'color') {
-        out.pixels[i] = Math.round(source.pixels[i] * value);
-        out.pixels[i + 1] = Math.round(source.pixels[i + 1] * value);
-        out.pixels[i + 2] = Math.round(source.pixels[i + 2] * value);
-      } else {
-        out.pixels[i] = v;
-        out.pixels[i + 1] = v;
-        out.pixels[i + 2] = v;
-      }
-      out.pixels[i + 3] = 255;
-    }
-  }
-  out.updatePixels();
-  p.image(out, 0, 0);
-}
-
-function fillPixelRect(
-  pixels: Uint8ClampedArray,
-  width: number,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  r: number,
-  g: number,
-  b: number,
-) {
-  const left = Math.max(0, x0)
-  const right = Math.min(width, x1)
-  if (right <= left) return
-  for (let y = Math.max(0, y0); y < y1; y++) {
-    let i = (y * width + left) * 4
-    for (let x = left; x < right; x++) {
-      pixels[i] = r
-      pixels[i + 1] = g
-      pixels[i + 2] = b
-      pixels[i + 3] = 255
-      i += 4
-    }
-  }
-}
-
-function curtainGrid({ p, source, seed, params }: EffectRenderContext) {
-  const w = source.width
-  const h = source.height
+function detailNoise({ p, source, seed, params, wasm }: EffectRenderContext) {
   source.loadPixels()
-  const src = source.pixels as unknown as Uint8ClampedArray
+  const width = source.width
+  const height = source.height
+  const byteLength = width * height * 4
+  wasm.pfree()
+  const sourcePtr = wasm.palloc(byteLength) >>> 0
+  const outputPtr = wasm.palloc(byteLength) >>> 0
+  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source.pixels as unknown as Uint8ClampedArray)
+  measureWasm('detailNoise', () => wasm.detailNoise(
+    sourcePtr,
+    outputPtr,
+    width,
+    height,
+    params.detailNoiseMode === 'color' ? 1 : 0,
+    seed >>> 0,
+  ))
+  drawPixelBuffer(p, width, height, new Uint8ClampedArray(wasm.memory.buffer, outputPtr, byteLength))
+}
 
-  const squares = Math.max(2, Math.round(params.gridSize))
-  const cell = Math.min(w, h) / squares
-  const cols = Math.max(1, Math.ceil(w / cell - 1e-6))
-  const rows = Math.max(1, Math.ceil(h / cell - 1e-6))
-  const cells = cols * rows
-
-  // One pass over the source collects every cell average and the frame colour.
-  const avg = new Float32Array(cells * 3)
-  let totalR = 0
-  let totalG = 0
-  let totalB = 0
-  let total = 0
-  for (let row = 0; row < rows; row++) {
-    const y0 = Math.round(row * cell)
-    const y1 = Math.min(h, Math.round((row + 1) * cell))
-    for (let col = 0; col < cols; col++) {
-      const x0 = Math.round(col * cell)
-      const x1 = Math.min(w, Math.round((col + 1) * cell))
-      let r = 0
-      let g = 0
-      let b = 0
-      let n = 0
-      for (let y = y0; y < y1; y++) {
-        let i = (y * w + x0) * 4
-        for (let x = x0; x < x1; x++, i += 4) {
-          r += src[i]
-          g += src[i + 1]
-          b += src[i + 2]
-          n++
-        }
-      }
-      const index = (row * cols + col) * 3
-      if (n === 0) n = 1
-      avg[index] = r / n
-      avg[index + 1] = g / n
-      avg[index + 2] = b / n
-      totalR += r
-      totalG += g
-      totalB += b
-      total += n
-    }
-  }
-  if (total === 0) total = 1
-  const bgR = Math.round(totalR / total)
-  const bgG = Math.round(totalG / total)
-  const bgB = Math.round(totalB / total)
-
-  // Curtains are edge-anchored runs of cells. Every cell row (or column) inside
-  // one draws its own length, so the curtain border stays irregular.
-  const axis = params.gridCurtainAxis === 'columns' ? 'columns' : 'rows'
-  const along = axis === 'columns' ? cols : rows
-  const across = axis === 'columns' ? rows : cols
-  const bandCount = Math.max(0, Math.round(params.gridCurtainCount))
-  const bandWidth = Math.min(1, Math.max(0, params.gridCurtainWidth) / 100)
-  const bandJitter = Math.min(1, Math.max(0, params.gridCurtainRandomness) / 100)
-  const edgeJitter = Math.min(1, Math.max(0, params.gridCurtainEdgeJitter) / 100)
-  const hasCurtain = bandCount > 0 && bandWidth > 0
-  const inCurtain = new Uint8Array(cells)
-  if (hasCurtain) {
-    const rand = mulberry32(seed)
-    for (let i = 0; i < bandCount; i++) {
-      const length = Math.min(1, Math.max(0.02, bandWidth + (rand() * 2 - 1) * bandJitter))
-      const baseSpan = Math.min(along, Math.max(1, Math.round(along * length)))
-      const fromStart = rand() < 0.5
-      const wobbleRange = baseSpan * edgeJitter
-      for (let line = 0; line < across; line++) {
-        const wobble = Math.round((rand() * 2 - 1) * wobbleRange)
-        const span = Math.min(along, Math.max(1, baseSpan + wobble))
-        for (let k = 0; k < span; k++) {
-          const pos = fromStart ? k : along - 1 - k
-          inCurtain[axis === 'columns' ? line * cols + pos : pos * cols + line] = 1
-        }
-      }
-    }
-  }
-
-  const buffer = new Uint8ClampedArray(w * h * 4)
-  fillPixelRect(buffer, w, 0, 0, w, h, bgR, bgG, bgB)
-  const curtainBuffer = hasCurtain ? new Uint8ClampedArray(w * h * 4) : null
-  if (curtainBuffer) {
-    for (let row = 0; row < rows; row++) {
-      const y0 = Math.round(row * cell)
-      const y1 = Math.min(h, Math.round((row + 1) * cell))
-      for (let col = 0; col < cols; col++) {
-        if (!inCurtain[row * cols + col]) continue
-        const x0 = Math.round(col * cell)
-        const x1 = Math.min(w, Math.round((col + 1) * cell))
-        fillPixelRect(curtainBuffer, w, x0, y0, x1, y1, bgR, bgG, bgB)
-      }
-    }
-  }
-
-  const margin = Math.max(0, Math.round((cell * Math.max(0, params.gridMargin)) / 100))
-  for (let row = 0; row < rows; row++) {
-    const y0 = Math.round(row * cell)
-    const y1 = Math.min(h, Math.round((row + 1) * cell))
-    for (let col = 0; col < cols; col++) {
-      const x0 = Math.round(col * cell)
-      const x1 = Math.min(w, Math.round((col + 1) * cell))
-      const index = row * cols + col
-      const r = Math.round(avg[index * 3])
-      const g = Math.round(avg[index * 3 + 1])
-      const b = Math.round(avg[index * 3 + 2])
-      const borderR = Math.round(r * 0.3 + 178.5)
-      const borderG = Math.round(g * 0.3 + 178.5)
-      const borderB = Math.round(b * 0.3 + 178.5)
-      const sx0 = x0 + margin
-      const sy0 = y0 + margin
-      const targets = curtainBuffer && inCurtain[index] ? [buffer, curtainBuffer] : [buffer]
-      for (const target of targets) {
-        fillPixelRect(target, w, sx0, sy0, x1, y1, borderR, borderG, borderB)
-        fillPixelRect(target, w, sx0 + 1, sy0 + 1, x1 - 1, y1 - 1, r, g, b)
-      }
-    }
-  }
-
-  p.image(pixelsToImage(p, w, h, buffer), 0, 0)
-  if (curtainBuffer) {
-    const layer = pixelsToImage(p, w, h, curtainBuffer)
-    if (params.gridCurtainEffect === 'greyscale') layer.filter(p.GRAY)
-    else if (params.gridCurtainEffect === 'rasterize') layer.filter(p.POSTERIZE, 4)
-    else layer.filter(p.INVERT)
-    p.image(layer, 0, 0)
-  }
+function curtainGrid({ p, source, seed, params, wasm }: EffectRenderContext) {
+  const width = source.width
+  const height = source.height
+  source.loadPixels()
+  const byteLength = width * height * 4
+  wasm.pfree()
+  const sourcePtr = wasm.palloc(byteLength) >>> 0
+  const outputPtr = wasm.palloc(byteLength) >>> 0
+  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source.pixels as unknown as Uint8ClampedArray)
+  const effect = params.gridCurtainEffect === 'inverse' ? 1 : params.gridCurtainEffect === 'rasterize' ? 2 : 3
+  measureWasm('curtainGrid', () => wasm.curtainGrid(
+    sourcePtr,
+    outputPtr,
+    width,
+    height,
+    params.gridSize,
+    params.gridMargin,
+    params.gridCurtainCount,
+    params.gridCurtainWidth,
+    params.gridCurtainRandomness,
+    params.gridCurtainEdgeJitter,
+    params.gridCurtainAxis === 'columns' ? 1 : 0,
+    effect,
+    seed >>> 0,
+  ))
+  drawPixelBuffer(p, width, height, new Uint8ClampedArray(wasm.memory.buffer, outputPtr, byteLength))
 }
 
 export const EFFECTS: Record<EffectId, EffectDefinition> = {

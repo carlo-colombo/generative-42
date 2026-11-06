@@ -1,11 +1,13 @@
 import p5 from 'p5'
-import { hashString, maskKey, maskWeight } from './areas'
+import { hashString, maskKey } from './areas'
 import { EFFECTS } from './effects'
 import { drawTextLayer } from './text'
+import { maskWeightWasm } from './masks'
 import type { AreaShape, EffectLayer, Generation, Layer } from './types'
+import { measureWasm, type WasmKernels } from './wasm'
 
 // Per-mask cache budget; past it the cache is dropped rather than grown.
-const MASK_CACHE_BYTES = 64 * 1024 * 1024
+const MASK_CACHE_BYTES = 128 * 1024 * 1024
 // Full-canvas RGBA layer buffers add up quickly on large sources. Keep the most
 // recently used ones under this budget; text layers are cheap and are not cached.
 const LAYER_CACHE_BYTES = 192 * 1024 * 1024
@@ -35,7 +37,7 @@ function layerRenderKey(layer: Layer): string {
   return JSON.stringify([layer.id, layer.effect, layer.params, layer.shape, layer.edge])
 }
 
-export function createCompositionEngine(renderer: p5): CompositionEngine {
+export function createCompositionEngine(renderer: p5, wasm: WasmKernels): CompositionEngine {
   let width = 0
   let height = 0
   let scratch: p5.Graphics | null = null
@@ -93,8 +95,7 @@ export function createCompositionEngine(renderer: p5): CompositionEngine {
     if (!usesMask(layer)) return null
     const key = maskKey(layer.shape, layer.edge, width, height, seed, layer.id)
     if (maskCache.has(key)) return maskCache.get(key) ?? null
-    // maskWeight reuses one scratch buffer, so keep a copy before anything else runs.
-    const weights = new Float32Array(maskWeight(layer.shape, layer.edge, width, height, generation.seed, layer.id))
+    const weights = maskWeightWasm(wasm, layer.shape, layer.edge, width, height, generation.seed, layer.id)
     maskCache.set(key, weights)
     if (maskCache.size * width * height * 4 > MASK_CACHE_BYTES) maskCache.clear()
     return weights
@@ -127,6 +128,7 @@ export function createCompositionEngine(renderer: p5): CompositionEngine {
       params: layer.params,
       edge: layer.edge,
       generation,
+      wasm,
     })
     return scratchPixels()
   }
@@ -137,33 +139,29 @@ export function createCompositionEngine(renderer: p5): CompositionEngine {
     const masked = layer.kind === 'effect' && usesMask(layer)
     const mask = masked && layer.kind === 'effect' ? maskFor(layer, generation, generation.seed) : null
     const ragged = masked && layer.kind === 'effect' && layer.edge.mode === 'ragged'
-    for (let pixel = 0, index = 0; pixel < width * height; pixel++, index += 4) {
-      // Effect sprites and glyphs are transparent outside what they paint, so the
-      // buffer always composites by alpha; the mask and opacity gate that alpha.
-      const weight = mask ? mask[pixel] : 1
-      if (weight <= 0) continue
-      const layerAlpha = (buffer[index + 3] / 255) * opacity * (ragged ? 1 : weight)
-      if (layerAlpha <= 0) continue
-      const baseAlpha = result[index + 3] / 255
-      if (layerAlpha >= 1) {
-        result[index] = buffer[index]
-        result[index + 1] = buffer[index + 1]
-        result[index + 2] = buffer[index + 2]
-        result[index + 3] = buffer[index + 3]
-        continue
-      }
-      const outAlpha = layerAlpha + baseAlpha * (1 - layerAlpha)
-      if (outAlpha <= 0) {
-        result[index] = 0
-        result[index + 1] = 0
-        result[index + 2] = 0
-        result[index + 3] = 0
-        continue
-      }
-      result[index] = (buffer[index] * layerAlpha + result[index] * baseAlpha * (1 - layerAlpha)) / outAlpha
-      result[index + 1] = (buffer[index + 1] * layerAlpha + result[index + 1] * baseAlpha * (1 - layerAlpha)) / outAlpha
-      result[index + 2] = (buffer[index + 2] * layerAlpha + result[index + 2] * baseAlpha * (1 - layerAlpha)) / outAlpha
-      result[index + 3] = outAlpha * 255
+    const chunkPixels = Math.min(width * height, 1 << 20)
+    const rgbaBytes = chunkPixels * 4
+    wasm.pfree()
+    const resultPtr = wasm.palloc(rgbaBytes) >>> 0
+    const bufferPtr = wasm.palloc(rgbaBytes) >>> 0
+    const maskPtr = mask ? wasm.palloc(chunkPixels * Float32Array.BYTES_PER_ELEMENT) >>> 0 : 0
+    for (let start = 0; start < width * height; start += chunkPixels) {
+      const count = Math.min(chunkPixels, width * height - start)
+      const index = start * 4
+      const byteLength = count * 4
+      new Uint8Array(wasm.memory.buffer, resultPtr, byteLength).set(result.subarray(index, index + byteLength))
+      new Uint8Array(wasm.memory.buffer, bufferPtr, byteLength).set(buffer.subarray(index, index + byteLength))
+      if (mask) new Float32Array(wasm.memory.buffer, maskPtr, count).set(mask.subarray(start, start + count))
+      measureWasm('compositeLayer', () => wasm.compositeLayer(
+        resultPtr,
+        bufferPtr,
+        maskPtr,
+        count,
+        mask ? 1 : 0,
+        ragged ? 1 : 0,
+        opacity,
+      ))
+      result.set(new Uint8Array(wasm.memory.buffer, resultPtr, byteLength), index)
     }
   }
 

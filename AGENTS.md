@@ -17,9 +17,11 @@ seeds to PNG for offline use.
 - `pnpm preview` — serve the built `dist/`
 - `pnpm generate` — headless render seed 1 to `output/gen-1.png`
 - `pnpm generate:all` — headless render seeds 1–10
+- `pnpm build:wasm` — compile the Zig kernels with Zig 0.17.x
+- `pnpm test:wasm` — test WASM kernels, including pixel sort, detail noise, and Voronoi
 - Typecheck only: `pnpm exec tsc --noEmit`
 
-After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
+After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After Zig changes, run `pnpm build:wasm` and `pnpm test:wasm`.
 
 ## Architecture
 
@@ -57,54 +59,40 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   migrated layer still carries null); only pixel-sort reads it, and switching a
   layer's effect resets it to that effect's defaults. `params.voronoiPoints` is
   the target site count for `voronoi`, the only effect that reads it.
-  `curtain-grid` averages the source into a `gridSize` grid of squares with a
-  `gridMargin` gap and a white-lerped 1px border, then re-draws
-  `gridCurtainCount` edge-anchored cell bands (rows or columns, `gridSize` and
-  width from the params), giving each band a seeded random length up to
-  `gridCurtainRandomness` away from `gridCurtainWidth` and each cell row (or
-  column) its own length within `gridCurtainEdgeJitter`, then re-draws those
-  cells into a second buffer and applies a single p5 filter to
-  it (`INVERT`, `POSTERIZE` for rasterize, `GRAY`) before compositing it back.
+  The seven sampled drawing effects batch their source quadrilaterals through
+  WASM; p5 still rasterizes the generated shapes. `sections` uses the WASM
+  pixel-filter kernel. `curtain-grid` is fully fused in WASM: it averages the
+  source into the configured grid, paints the curtains, and applies inverse,
+  posterize, or grayscale without a second canvas buffer or p5 filter.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   `p5.Graphics` scratch (`pixelDensity(1)`, draw state reset), then compositing
-  it with normal alpha over the accumulated result. Effect `render` receives
-  `{ p, source, mask, seed, params, edge, generation }`, where `source` is a
-  fresh `p5.Image` of the composite below (so effects chain). Caches masks and
-  per-layer buffers; cache keys chain the config of every layer below, so a
-  top-layer edit does not re-render lower effects. Masks and buffers are cleared
-  on crop, canvas-size, or seed change.
-- `src/sort.ts` — raw pixel sort (`sortPixels`): bucketed luminance runs,
-  mask-segmented runs, ragged block offsets. `params.spanWidth` (1..64, default
-  1) groups each sorted block into spans of that many consecutive pixels along
-  the sort axis, aligned from the edge the block is read from so `reverse`
-  mirrors the grouping and a trailing partial span stays partial; a span's
-  per-channel average (alpha included, rounded) is both its luminance sort key
-  and the colour flooded back over its pixels; at 1 the span is the pixel, so
-  the output is unchanged. `params.amount` (0..100, 100 on a new layer) shrinks
-  each line's sorted block to that share of the run with the legacy 0.85..1.15
-  wobble, so the rest of the run keeps the source: the lower it is, the more the
-  sorted gradient and the photograph sit side by side inside one run.
-  `params.containedBlocks` (default off) switches the
-  ragged block geometry between the two historical behaviours: off slides the
-  whole-run block along the line under jitter (blocks may leave the mask run, and
-  the compositor clips what lands outside), on shortens the block by the per-line
-  0.85..1.15 wobble and clamps jitter to `[start, end - sortedLength]` so blocks
-  only move inside the run. It writes raw sorted pixels; the generic mask
-  compositor applies feather/ragged alpha exactly once.
-- `src/voronoi.ts` — p5-free Voronoi helper for the `voronoi` effect.
-  `poissonSites` runs Bridson's Poisson-disc sampler with a minimum distance
-  guessed from the target point count (density ≈ 0.7 / r²) and corrected over a
-  few deterministic attempts, returning the points plus the radius they used.
-  `voronoiCellPixels` finds each pixel's nearest site through a grid widened by
-  radius / √2 (at most one site per cell), then paints each cell with the
-  average colour of the source pixels it covers.
-- `src/areas.ts` — p5-free shape math: `maskWeight` builds the 0..1 mask for a
-  rect, ellipse, or path shape (feather ramp, ragged noise); also `hashString`,
-  `mulberry32`, and `shapePolygon`. `maskWeight` reuses one scratch buffer, so a
-  caller that keeps a mask must copy it. `shapePolygon` returns the pixel-space
-  mask ring the editor draws, and the ring distance pass is skipped entirely
-  when feather and jitter are both 0.
+  it with normal alpha over the accumulated result through the chunked WASM
+  compositor. Effect `render` receives `{ p, source, mask, seed, params, edge,
+  generation, wasm }`, where `source` is a fresh `p5.Image` of the composite
+  below (so effects chain). Caches masks and per-layer buffers; cache keys chain
+  the config of every layer below, so a top-layer edit does not re-render lower
+  effects. Masks and buffers are cleared on crop, canvas-size, or seed change.
+- `wasm/src/sort_kernel.zig` — runtime pixel sort: bucketed luminance runs,
+  mask-segmented runs, ragged block offsets, spans, legacy amount, and contained
+  blocks. `src/sort.ts` remains only as a reference used by `wasm/test-sort.ts`.
+- `wasm/src/voronoi_sites.zig` and `wasm/src/kernels.zig` — deterministic
+  Bridson Poisson-disc sites and Voronoi cell pixel averaging run in WASM;
+  `wasm/test-voronoi.ts` checks site spacing, determinism, and cell colors.
+- `wasm/src/detail_kernel.zig` — rolling-window local luminance deviation and
+  seeded noise for `detail-noise`; scratch memory is proportional to the rolling
+  window plus one `f32` detail map, not full-frame summed-area tables.
+- `wasm/src/mask_kernel.zig` — rect/ellipse distance masks and path scanline fill;
+  path distance work is restricted to the feather/jitter band. `src/masks.ts`
+  constructs pixel-space rings with `shapePolygon` and calls this kernel for both
+  composition and the stage mask preview.
+- `wasm/src/kernels.zig` — also contains batched quad sampling, filters, fused
+  curtain-grid rendering, and chunked RGBA compositing. `public/wasm/kernels.wasm`
+  is required before the sketch renders; there is no TypeScript fallback if it
+  fails. Add `?wasmProfile=1` to record named User Timing entries around kernels.
+- `src/areas.ts` — p5-free shape math: `hashString`, `mulberry32`, and
+  `shapePolygon`. `shapePolygon` returns the pixel-space mask ring the editor
+  draws; pixel mask generation is handled by WASM.
 - `src/text.ts` — glyph rasterization (opaque; the engine applies layer opacity)
   and the exported `drawSeedLabel` for the `seed=` overlay.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
@@ -145,7 +133,7 @@ After any code change, run `pnpm exec tsc --noEmit` (or `pnpm build`) to verify.
   to the rendered seed for headless capture. The `seed=` label stays on a
   separate overlay canvas that is never exported. `downloadImage` exports the
   base composition (text included).
-- `src/color.ts` — color helpers (e.g. `averageColorInArea`).
+- `src/color.ts` — scales source images and batches quadrilateral color samples through WASM.
 - `src/fonts.ts` — `FONTS` list (`label` + `path`) and `DEFAULT_FONT`. Font
   files live in `public/fonts/`; every `FONTS` entry must exist there, because
   the sketch preloads all of them.
