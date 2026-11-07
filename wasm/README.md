@@ -7,6 +7,12 @@ pnpm build:wasm
 pnpm test:wasm
 ```
 
+`build.zig` at the repository root compiles `wasm/src/kernels.zig` for
+`wasm32-freestanding` and installs it to `public/wasm/kernels.wasm`, so a plain
+`zig build` from anywhere in the repository does the same thing. Pass
+`-Doptimize=debug` (or `safe`, `small`) to change the release mode; the default
+is `fast`.
+
 `wasm/src/kernels.zig` currently provides:
 
 - `maskWeight`: rect/ellipse distance masks and path scanline fill with edge-distance work restricted to a feather/jitter band.

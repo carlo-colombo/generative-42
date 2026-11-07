@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:wasm": "bash wasm/build.sh",
+    "build:wasm": "zig build && chmod 644 public/wasm/kernels.wasm",
     "test:wasm": "node wasm/test.mjs && tsx wasm/test-sort.ts && tsx wasm/test-detail.ts && tsx wasm/test-voronoi.ts && tsx wasm/test-mask.ts",
     "preview": "vite preview",
     "generate": "tsx generate/headless.ts",
