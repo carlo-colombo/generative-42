@@ -377,6 +377,15 @@ rollback safety net never gets a chance to run. `vite-plugin-pwa-shell` sets
 both headers for dev and preview; a real deployment (especially behind a CDN)
 must do the same.
 
+Testing over the network without a domain: service workers require HTTPS or
+`localhost`. `pnpm preview` allows `.trycloudflare.com` hosts, so a quick tunnel
+(`cloudflared tunnel --url http://localhost:4173`) gives a secure origin on any
+device; add other tunnel domains with
+`VITE_ALLOWED_HOSTS=host1,host2 pnpm preview` (the same list applies to
+`pnpm dev`). `?sw=1` enables the worker under `pnpm dev`; `pnpm preview` serves a
+production build where registration is automatic. Accessing a raw LAN IP works
+for the UI but never registers a worker, because that origin is not secure.
+
 ## Workflow notes
 
 - Commits are explicit — only commit when asked.
