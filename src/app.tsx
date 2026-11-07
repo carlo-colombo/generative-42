@@ -14,11 +14,13 @@ import { StageToolbar } from './components/ToolButtons'
 import { UpdatePanel } from './components/UpdatePanel'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
+import { appUrl } from './paths'
+
 function useImages(model: GenerationModel) {
   const [images, setImages] = useState<string[]>([])
   const [manifestState, setManifestState] = useState<'loading' | 'ready' | 'error'>('loading')
   useEffect(() => {
-    fetch('/assets/manifest.json')
+    fetch(appUrl('/assets/manifest.json'))
       .then((response) => {
         if (!response.ok) throw new Error('Unable to load image manifest')
         return response.json() as Promise<string[]>

@@ -1,3 +1,5 @@
+import { appUrl } from './paths'
+
 export type WasmKernels = {
   memory: WebAssembly.Memory
   palloc: (bytes: number) => number
@@ -96,7 +98,7 @@ export type WasmKernels = {
 }
 
 export async function loadWasmKernels(): Promise<WasmKernels> {
-  const response = await fetch('/wasm/kernels.wasm')
+  const response = await fetch(appUrl('/wasm/kernels.wasm'))
   if (!response.ok) throw new Error(`Could not load WASM kernels: ${response.status}`)
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), {})
   return instance.exports as unknown as WasmKernels

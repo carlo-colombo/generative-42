@@ -1,6 +1,8 @@
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 
+import { appUrl } from './paths'
+
 export const UPLOAD_PREFIX = 'upload:'
 export const MAX_UPLOADS = 24
 export const MAX_UPLOAD_DIMENSION = 4096
@@ -260,7 +262,7 @@ export async function clearUploads(): Promise<void> {
 
 export async function imageSource(ref: string): Promise<string> {
   const id = uploadId(ref)
-  if (id === null) return ref
+  if (id === null) return appUrl(ref)
   const cached = objectUrls.get(id)
   if (cached) return cached
   const db = await openDb()
@@ -281,7 +283,7 @@ export function useImageSource(ref: string): string | null {
   const [source, setSource] = useState<string | null>(isUploadRef(ref) ? null : ref)
   useEffect(() => {
     if (!isUploadRef(ref)) {
-      setSource(ref)
+      setSource(appUrl(ref))
       return
     }
     setSource(null)

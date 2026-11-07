@@ -7,13 +7,14 @@ const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 const FONT_RE = /\.ttf$/i;
 const APP_ASSET_RE = /^app\/.*\.(js|css)$/;
 
-const ICON_URLS = ["/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png"];
+const ICON_URLS = ["icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 
-function renderServiceWorker(template: string, buildId: string, precache: string[]): string {
+function renderServiceWorker(template: string, buildId: string, base: string, precache: string[]): string {
   const source = template
     .replace('"__BUILD_ID__"', JSON.stringify(buildId))
+    .replace('"__BASE__"', JSON.stringify(base))
     .replace("__PRECACHE_URLS__", JSON.stringify(precache, null, 2));
-  if (source.includes("__PRECACHE_URLS__") || source.includes("__BUILD_ID__")) {
+  if (source.includes("__PRECACHE_URLS__") || source.includes("__BUILD_ID__") || source.includes("__BASE__")) {
     throw new Error("public/sw.js template placeholders were not substituted");
   }
   return source;
@@ -22,8 +23,13 @@ function renderServiceWorker(template: string, buildId: string, precache: string
 export function pwaShellPlugin(): Plugin {
   // Computed once per config load so sw.js and the app agree on one shell name.
   const buildId = Date.now().toString(36);
+  let base = "/";
   let publicDir = "";
   let assets: string[] = [];
+
+  function appUrl(path: string): string {
+    return `${base}${path.replace(/^\/+/, "")}`;
+  }
 
   function readAssetManifest(): string[] {
     // public/assets is tracked only by .gitkeep: no source images ship with the
@@ -41,7 +47,7 @@ export function pwaShellPlugin(): Plugin {
     return readdirSync(dir)
       .filter((file) => FONT_RE.test(file))
       .sort()
-      .map((file) => `/fonts/${file}`);
+      .map((file) => appUrl(`fonts/${file}`));
   }
 
   function sendServiceWorker(res: ServerResponse, precache: string[]) {
@@ -49,7 +55,7 @@ export function pwaShellPlugin(): Plugin {
     res.setHeader("Content-Type", "text/javascript");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Service-Worker-Allowed", "/");
-    res.end(renderServiceWorker(template, buildId, precache));
+    res.end(renderServiceWorker(template, buildId, base, precache));
   }
 
   return {
@@ -58,6 +64,7 @@ export function pwaShellPlugin(): Plugin {
       return { define: { __BUILD_ID__: JSON.stringify(buildId) } };
     },
     configResolved(config) {
+      base = config.base;
       publicDir = config.publicDir;
       assets = readAssetManifest();
     },
@@ -69,13 +76,13 @@ export function pwaShellPlugin(): Plugin {
       server.watcher.on("unlink", refresh);
       server.middlewares.use((req, res, next) => {
         const pathname = (req.url ?? "").split("?")[0];
-        if (pathname === "/assets/manifest.json") {
+        if (pathname === appUrl("assets/manifest.json")) {
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Cache-Control", "no-cache");
           res.end(JSON.stringify(assets, null, 2));
           return;
         }
-        if (pathname === "/sw.js") {
+        if (pathname === appUrl("sw.js")) {
           // A dev worker precaches nothing, so it can never poison a production
           // shell cache.
           sendServiceWorker(res, []);
@@ -86,7 +93,7 @@ export function pwaShellPlugin(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
-        if ((req.url ?? "").split("?")[0] === "/sw.js") {
+        if ((req.url ?? "").split("?")[0] === appUrl("sw.js")) {
           // Without no-cache an update check is answered by the HTTP cache and
           // never sees a new build.
           res.setHeader("Cache-Control", "no-cache");
@@ -105,22 +112,22 @@ export function pwaShellPlugin(): Plugin {
         source: JSON.stringify(readAssetManifest(), null, 2),
       });
       const precache = [
-        "/",
+        base,
         ...Object.keys(bundle)
           .filter((file) => APP_ASSET_RE.test(file))
           .sort()
-          .map((file) => `/${file}`),
+          .map((file) => appUrl(file)),
         ...fontUrls(),
-        "/wasm/kernels.wasm",
-        "/manifest.webmanifest",
-        ...ICON_URLS,
-        "/assets/manifest.json",
+        appUrl("wasm/kernels.wasm"),
+        appUrl("manifest.webmanifest"),
+        ...ICON_URLS.map((url) => appUrl(url)),
+        appUrl("assets/manifest.json"),
       ];
       const template = readFileSync(resolve(publicDir, "sw.js"), "utf8");
       this.emitFile({
         type: "asset",
         fileName: "sw.js",
-        source: renderServiceWorker(template, buildId, precache),
+        source: renderServiceWorker(template, buildId, base, precache),
       });
     },
   };

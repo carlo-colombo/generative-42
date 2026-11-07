@@ -9,6 +9,7 @@ import {
   waitingBuildId,
   type ServiceWorkerState,
 } from './update-state'
+import { appUrl, BASE } from '../paths'
 
 // A healthy build can take a long time to decode its image, fonts, and WASM, so
 // the rollback offer waits for a terminal stage failure or for a render that is
@@ -217,7 +218,7 @@ export async function registerServiceWorker(): Promise<void> {
     if (accepting || rollingBack) reloadOnce()
   })
   try {
-    const next = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+    const next = await navigator.serviceWorker.register(appUrl('/sw.js'), { scope: BASE })
     registration = next
     watchRegistration(next)
     await refreshState()

@@ -11,7 +11,17 @@ const allowedHosts = [
     .filter(Boolean),
 ];
 
+// GitHub Pages serves a project site from /<repo>/, so the deployment base is
+// configurable. Every app URL is built from import.meta.env.BASE_URL (see
+// src/paths.ts) and the service worker gets the same base injected.
+function normalizeBase(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  const path = trimmed.replace(/^\/+|\/+$/g, "");
+  return path ? `/${path}/` : "/";
+}
+
 export default defineConfig({
+  base: normalizeBase(process.env.VITE_BASE),
   plugins: [pwaShellPlugin()],
   server: {
     host: "0.0.0.0",

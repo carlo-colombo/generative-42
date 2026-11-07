@@ -1,14 +1,17 @@
 // Shell service worker. vite-plugin-pwa-shell injects the build id and the
 // precache list at build time; the copy in public/ is only a template.
 const BUILD_ID = "__BUILD_ID__";
+const BASE = "__BASE__";
 const PRECACHE_URLS = __PRECACHE_URLS__;
 
 const SHELL_CACHE = `shell-${BUILD_ID}`;
 const PREVIOUS_CACHE = "shell-previous";
 const IMAGE_CACHE = "images";
-const SHELL_URL = "/";
-const MANIFEST_URL = "/assets/manifest.json";
-const CACHE_FIRST_PREFIXES = ["/app/", "/fonts/", "/wasm/", "/icons/"];
+const SHELL_URL = BASE;
+const MANIFEST_URL = `${BASE}assets/manifest.json`;
+// The worker is scoped to the deployment base (GitHub Pages serves a project
+// site from /<repo>/), so every routed path is relative to it.
+const CACHE_FIRST_PREFIXES = ["app/", "fonts/", "wasm/", "icons/"].map((prefix) => `${BASE}${prefix}`);
 
 // Durable build pointers, shared with src/pwa/image-cache.ts (gen42-pwa). The
 // meta store uses out-of-line keys, so both sides have to create it the same way.
@@ -224,7 +227,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(serveShell(request));
     return;
   }
-  if (path === "/sw.js" || path.endsWith(".webmanifest")) {
+  if (path === `${BASE}sw.js` || path.endsWith(".webmanifest")) {
     event.respondWith(fetch(request, { cache: "no-store" }));
     return;
   }
@@ -232,7 +235,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(serveManifest(request, event));
     return;
   }
-  if (path.startsWith("/assets/")) {
+  if (path.startsWith(`${BASE}assets/`)) {
     // Built-in images are network resources, not part of the shell: cache each
     // one the first time it loads and serve it from there afterwards.
     event.respondWith(serveImage(request));

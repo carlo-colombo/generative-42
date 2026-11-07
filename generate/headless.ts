@@ -62,13 +62,16 @@ function startPreviewServer(): Promise<PreviewServer> {
 async function renderGeneration(
   browser: Browser,
   gen: Generation,
-  imageRef: string
+  imageRef: string,
+  base: string
 ): Promise<Buffer> {
   const page = await browser.newPage();
 
   // A fresh Puppeteer profile would otherwise install a worker mid-capture.
   const query = new URLSearchParams({ seed: String(gen.seed), image: imageRef, sw: "0" });
-  const url = `http://localhost:${PORT}/?${query.toString()}`;
+  // The preview server honours the deployment base from VITE_BASE, so the page
+  // lives under it too.
+  const url = `http://localhost:${PORT}${base}?${query.toString()}`;
   await page.goto(url, { waitUntil: "networkidle0" });
 
   await page.waitForFunction(
@@ -108,11 +111,12 @@ async function main() {
   const server = await startPreviewServer();
 
   let browser: Browser | undefined;
+  const base = server.config.base;
   try {
     browser = await puppeteer.launch({ headless: true });
     for (const gen of generations) {
       console.log(`Rendering seed ${gen.seed}...`);
-      const buffer = await renderGeneration(browser, gen, imageRef);
+      const buffer = await renderGeneration(browser, gen, imageRef, base);
       const outPath = resolve(OUTPUT_DIR, `gen-${gen.seed}.png`);
       writeFileSync(outPath, buffer);
       console.log(`  Saved: ${outPath}`);

@@ -1,3 +1,5 @@
+import { appUrl } from './paths'
+
 export interface FontOption {
   label: string;
   path: string;
@@ -35,7 +37,7 @@ export async function loadFonts(paths: string[]): Promise<Map<string, LoadedFont
   const loaded = new Map<string, LoadedFont>()
   for (const path of new Set(paths)) {
     const family = fontFamily(path)
-    const face = new FontFace(family, `url("${path}")`)
+    const face = new FontFace(family, `url("${appUrl(path)}")`)
     try {
       await face.load()
     } catch (error) {

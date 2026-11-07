@@ -20,6 +20,7 @@ seeds to PNG for offline use.
 - `pnpm generate:all --image=<path>` — headless render seeds 1–10
 - `pnpm build:wasm` — compile the Zig kernels with Zig 0.17.x
 - `pnpm test:wasm` — test WASM kernels, including pixel sort, detail noise, and Voronoi
+- `VITE_BASE=/generative-42/ pnpm build` — build for a subdirectory deployment
 - Typecheck only: `pnpm exec tsc --noEmit`
 
 After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After Zig changes, run `pnpm build:wasm` and `pnpm test:wasm`.
@@ -34,6 +35,12 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
 
 ## Architecture
 
+- `src/paths.ts` — the deployment base. `BASE` is `import.meta.env.BASE_URL`
+  (from `vite.config.ts` `base`, set by `VITE_BASE`), `appUrl` prefixes a
+  logical app path, `logicalPath` strips the base from a URL pathname. Deployed
+  paths (`/wasm/kernels.wasm`, `/assets/manifest.json`, `/app/*`, `/sw.js`) go
+  through it; generation values (image references, font paths) stay logical
+  root-relative, so a URL made under one base still renders under another.
 - `src/main.tsx` — entry point. Reads the generation (URL params, localStorage,
   or `DEFAULT_GENERATION`), mounts the Canvas 2D renderer into the center
   `.stage`, and renders the left and right panels. A `ResizeObserver` sizes the stage to the available
@@ -376,6 +383,29 @@ check is answered by the HTTP cache, no new build is ever found, and the
 rollback safety net never gets a chance to run. `vite-plugin-pwa-shell` sets
 both headers for dev and preview; a real deployment (especially behind a CDN)
 must do the same.
+
+## Deployment
+
+GitHub Pages serves the app at `https://carlo-colombo.github.io/generative-42/`
+from the `dist/` artifact of the last push to `main`
+(`.github/workflows/deploy.yml`: install, `pnpm build`, upload, deploy with the
+Pages actions). The workflow runs `actions/configure-pages`, which reports the
+project base path (`/generative-42/`) and is passed as `VITE_BASE`; nothing is
+committed to a `gh-pages` branch. `dist/.nojekyll` is added so Jekyll never
+filters a file.
+
+Because the site lives under a subdirectory, `base` is not `/` in production:
+`src/paths.ts` and the `__BASE__` placeholder in `public/sw.js` carry the base
+into registration scope, service-worker routing, the precache list, fonts,
+WASM, and the image manifest. Building without `VITE_BASE` still targets the
+domain root, so local `pnpm dev`, `pnpm preview`, and `pnpm generate` behave as
+before.
+
+The kernels are committed as `public/wasm/kernels.wasm`, so CI needs no Zig
+toolchain; Puppeteer is installed with `PUPPETEER_SKIP_DOWNLOAD=1` because only
+the local `pnpm generate` script uses it. The deployed site ships no built-in
+images (the repository has none), so thumbnails come from the user's own
+uploads, which stay in that browser's IndexedDB.
 
 Testing over the network without a domain: service workers require HTTPS or
 `localhost`. `pnpm preview` allows `.trycloudflare.com` hosts, so a quick tunnel

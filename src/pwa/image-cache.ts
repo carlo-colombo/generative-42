@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals'
+import { appUrl, logicalPath } from '../paths'
 import { uploadBytes } from '../uploads'
 import { imageCacheStats, online, storageEstimate, type ImageCacheStats, type StorageEstimate } from './update-state'
 
@@ -12,6 +13,12 @@ const DB_VERSION = 2
 const IMAGE_STORE = 'images'
 const META_STORE = 'meta'
 const MANIFEST_URL = '/assets/manifest.json'
+
+// Records and signals key images by their logical /assets path; the Cache API
+// needs the real URL, which carries the deployment base.
+function cacheUrl(path: string): string {
+  return appUrl(path)
+}
 
 const MEGABYTE = 1024 * 1024
 const BUDGET_CAP = 512 * MEGABYTE
@@ -138,7 +145,7 @@ export async function isImageCached(path: string): Promise<boolean> {
   const cache = await openImageCache()
   if (!cache) return false
   // Cache.match resolves undefined (not null) on a miss.
-  return Boolean(await cache.match(path).catch(() => null))
+  return Boolean(await cache.match(cacheUrl(path)).catch(() => null))
 }
 
 export function isBuiltInImagePath(ref: string): boolean {
@@ -152,7 +159,7 @@ function saveDataEnabled(): boolean {
 
 async function headSize(path: string): Promise<number | null> {
   try {
-    const response = await fetch(path, { method: 'HEAD' })
+    const response = await fetch(cacheUrl(path), { method: 'HEAD' })
     if (!response.ok) return null
     const length = Number(response.headers.get('content-length'))
     return Number.isFinite(length) && length > 0 ? length : null
@@ -163,7 +170,7 @@ async function headSize(path: string): Promise<number | null> {
 
 async function cachedImageBytes(cache: Cache, path: string): Promise<{ bytes: number; sha: string }> {
   try {
-    const response = await cache.match(path)
+    const response = await cache.match(cacheUrl(path))
     if (!response) return { bytes: 0, sha: '' }
     const blob = await response.blob()
     return { bytes: blob.size, sha: response.headers.get('etag') ?? '' }
@@ -185,7 +192,7 @@ async function evictToBudget(records: CachedImage[], budget: number, reserve = 0
   const cache = await openImageCache()
   for (const record of [...records].sort((a, b) => a.lastUsed - b.lastUsed)) {
     if (used + reserve <= budget) break
-    if (cache) await cache.delete(record.path).catch(() => false)
+    if (cache) await cache.delete(cacheUrl(record.path)).catch(() => false)
     await deleteImageRecord(record.path)
     known.delete(record.path)
     used -= record.bytes
@@ -207,7 +214,7 @@ export async function refreshImageStates(): Promise<ImageCacheStats | null> {
   const cache = await openImageCache()
   if (cache) {
     const paths = new Set(
-      (await cache.keys().catch(() => [])).map((request) => new URL(request.url).pathname),
+      (await cache.keys().catch(() => [])).map((request) => logicalPath(new URL(request.url).pathname)),
     )
     // The service worker caches images the page only displayed, so adopt those
     // entries before reporting what is available offline.
@@ -262,7 +269,7 @@ async function cacheImage(path: string): Promise<boolean> {
   if (size !== null && stats.bytes + size > stats.budget) return false
   let response: Response
   try {
-    response = await fetch(path)
+    response = await fetch(cacheUrl(path))
   } catch {
     return false
   }
@@ -272,7 +279,7 @@ async function cacheImage(path: string): Promise<boolean> {
   const cache = await openImageCache()
   if (!cache) return false
   await evictToBudget((await readImageRecords()) ?? [], stats.budget, bytes)
-  await cache.put(path, response)
+  await cache.put(cacheUrl(path), response)
   await writeImageRecord({ path, bytes, lastUsed: Date.now(), sha: response.headers.get('etag') ?? '' })
   await refreshImageStates()
   return true
@@ -280,7 +287,7 @@ async function cacheImage(path: string): Promise<boolean> {
 
 async function manifestPaths(): Promise<string[]> {
   try {
-    const response = await fetch(MANIFEST_URL)
+    const response = await fetch(appUrl(MANIFEST_URL))
     if (!response.ok) return []
     const files: unknown = await response.json()
     if (!Array.isArray(files)) return []
