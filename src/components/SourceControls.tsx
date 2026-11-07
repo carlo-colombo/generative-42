@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ControlField } from './ControlField'
 import type { GenerationModel } from '../generation-state'
+import { cachedImagePaths } from '../pwa/image-cache'
+import { online } from '../pwa/update-state'
 import { addUploads, deleteUpload, isUploadRef, loadUploads, MAX_UPLOADS, uploadRef, uploads, uploadsStatus } from '../uploads'
 
 const UPLOAD_ERRORS_KEY = 'upload-errors'
@@ -23,6 +25,13 @@ function keepUploadErrors(message: string): void {
   }
 }
 
+function availabilityHint(total: number, cached: number, isOnline: boolean): string {
+  if (total === 0) return ''
+  if (cached === total) return `All ${total} built-in images are available offline.`
+  if (isOnline) return `${cached}/${total} built-in images are available offline. ☁ marks images that need a connection the first time.`
+  return `${cached}/${total} built-in images are available offline. Reconnect to use the rest.`
+}
+
 export function SourceControls({ model, images }: { model: GenerationModel; images: string[] }) {
   const generation = model.draft.value
   const [busy, setBusy] = useState(false)
@@ -30,6 +39,9 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const fileInput = useRef<HTMLInputElement>(null)
   const uploaded = uploads.value
   const unavailable = uploadsStatus.value === 'unavailable'
+  const cached = cachedImagePaths.value
+  const isOnline = online.value
+  const cachedCount = images.filter((file) => cached.has(`/assets/${file}`)).length
 
   useEffect(() => {
     void loadUploads()
@@ -81,19 +93,32 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       <select id="image-select" value={generation.image} onChange={(event) => selectImage((event.currentTarget as HTMLSelectElement).value)}>
         {generation.image === '' && <option value="">No image</option>}
         <optgroup label="Built in">
-          {images.map((file) => <option value={`/assets/${file}`}>{file}</option>)}
+          {images.map((file) => {
+            const path = `/assets/${file}`
+            const isCached = cached.has(path)
+            const disabled = !isCached && !isOnline
+            return <option
+              value={path}
+              disabled={disabled}
+              title={disabled
+                ? 'Not saved on this device yet. Reconnect to use it.'
+                : isCached ? 'Available offline' : 'Online only until it has loaded once'}
+            >{disabled ? `${file} — not available offline` : isCached ? file : `${file} ☁`}</option>
+          })}
         </optgroup>
-        {uploaded.length > 0 && <optgroup label="Uploaded">
+        {uploaded.length > 0 && <optgroup label="Uploaded · local">
           {uploaded.map((image) => <option value={uploadRef(image.id)}>{image.name}</option>)}
         </optgroup>}
         {!known.includes(generation.image) && generation.image !== '' && <option value={generation.image}>{isUploadRef(generation.image) ? 'Missing upload (not in this browser)' : generation.image}</option>}
       </select>
     </ControlField>
+    {images.length > 0 && <p className="hint-text">{availabilityHint(images.length, cachedCount, isOnline)}</p>}
     <div className="upload-row">
       <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || unavailable}>
         {busy ? 'Reading images…' : 'Upload images'}
       </button>
       <input
+        id="upload-input"
         ref={fileInput}
         className="upload-input"
         type="file"

@@ -18,6 +18,7 @@ export type UploadedImage = {
   height: number
   thumb: string
   createdAt: number
+  bytes: number
 }
 
 export type UploadStatus = 'idle' | 'ready' | 'unavailable'
@@ -26,6 +27,7 @@ export const uploads = signal<UploadedImage[]>([])
 export const uploadsStatus = signal<UploadStatus>('idle')
 
 const objectUrls = new Map<string, string>()
+let persistRequested = false
 
 export function uploadId(ref: string): string | null {
   return ref.startsWith(UPLOAD_PREFIX) ? ref.slice(UPLOAD_PREFIX.length) : null
@@ -81,6 +83,16 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
 function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+
+async function persistStorage(): Promise<void> {
+  if (persistRequested) return
+  persistRequested = true
+  try {
+    await navigator.storage?.persist?.()
+  } catch {
+    // A refused persist grant only weakens eviction protection.
+  }
 }
 
 function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
@@ -148,7 +160,9 @@ export async function loadUploads(): Promise<void> {
     } finally {
       db.close()
     }
-    uploads.value = records.sort((a, b) => b.createdAt - a.createdAt)
+    uploads.value = records
+      .map((record) => ({ ...record, bytes: typeof record.bytes === 'number' && record.bytes > 0 ? record.bytes : 0 }))
+      .sort((a, b) => b.createdAt - a.createdAt)
     uploadsStatus.value = 'ready'
   } catch {
     uploadsStatus.value = 'unavailable'
@@ -160,6 +174,7 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
   const added: UploadedImage[] = []
   const room = Math.max(0, MAX_UPLOADS - uploads.value.length)
   if (room === 0) return { added, errors: [`Limit of ${MAX_UPLOADS} uploaded images`] }
+  await persistStorage()
   for (const file of files.slice(0, room)) {
     if (!file.type.startsWith('image/')) {
       errors.push(`${file.name} is not an image`)
@@ -174,6 +189,7 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
         height: prepared.height,
         thumb: prepared.thumb,
         createdAt: Date.now(),
+        bytes: prepared.blob.size,
       }
       await storeUpload(image, prepared.blob)
       added.push(image)
@@ -205,6 +221,41 @@ export async function deleteUpload(id: string): Promise<void> {
     db.close()
   }
   uploads.value = uploads.value.filter((image) => image.id !== id)
+}
+
+export async function uploadBytes(): Promise<number> {
+  const db = await openDb()
+  try {
+    const records = await requestResult(db.transaction(META_STORE).objectStore(META_STORE).getAll()) as UploadedImage[]
+    let total = 0
+    for (const record of records) {
+      if (typeof record.bytes === 'number' && record.bytes > 0) {
+        total += record.bytes
+        continue
+      }
+      // Rows written before sizes were recorded still count against the budget.
+      const stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).get(record.id)) as { blob?: Blob } | undefined
+      total += stored?.blob?.size ?? 0
+    }
+    return total
+  } finally {
+    db.close()
+  }
+}
+
+export async function clearUploads(): Promise<void> {
+  for (const url of objectUrls.values()) URL.revokeObjectURL(url)
+  objectUrls.clear()
+  const db = await openDb()
+  try {
+    const tx = db.transaction([META_STORE, FILE_STORE], 'readwrite')
+    tx.objectStore(META_STORE).clear()
+    tx.objectStore(FILE_STORE).clear()
+    await transactionDone(tx)
+  } finally {
+    db.close()
+  }
+  uploads.value = []
 }
 
 export async function imageSource(ref: string): Promise<string> {

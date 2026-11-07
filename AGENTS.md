@@ -24,6 +24,14 @@ seeds to PNG for offline use.
 
 After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After Zig changes, run `pnpm build:wasm` and `pnpm test:wasm`.
 
+The app adds `?sw=1` to force the service worker on (its only use is testing it
+under `pnpm dev`/`preview`) and `?sw=0` to skip registering one; without the flag
+registration runs only in a production build. `?sw=0` does not uninstall or
+disable an installed worker: that worker still serves navigations, `/app/*`,
+fonts, WASM, and icons from its cached shell, so the flag is not an escape hatch
+on a device that already has the app. `pnpm generate` opens `?sw=0` and uses a
+fresh Puppeteer profile, so no worker exists to intercept the capture.
+
 ## Architecture
 
 - `src/main.tsx` — entry point. Reads the generation (URL params, localStorage,
@@ -31,12 +39,15 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   `.stage`, and renders the left and right panels. A `ResizeObserver` sizes the stage to the available
   space while preserving the canvas aspect ratio. One debounced preview pipeline
   calls the composition renderer; the render signature is
-  `JSON.stringify(generation)`, so every layer field participates.
+  `JSON.stringify(generation)`, so every layer field participates. It registers
+  the service worker at startup, posts `stage-ready` after the first successful
+  render of the load, and reloads once on `online` when the stage is stuck at
+  `image-offline`/`image-failed`.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
-  mask preview toggle), plus the image manifest fetch. The manifest fallback
-  only replaces a missing `/assets/...` image, so an `upload:` reference is
-  left alone.
+  mask preview toggle, and the Offline panel), plus the image manifest fetch.
+  The manifest fallback only replaces a missing `/assets/...` image, so an
+  `upload:` reference is left alone.
 - `src/uploads.ts` — client-side image uploads. Files are decoded locally (never
   sent anywhere), downscaled to at most 4096 px on the long side, and stored in
   IndexedDB (`generative42`: `uploads` metadata + `upload-files` blobs). The
@@ -144,7 +155,10 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
 - `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
   crops the image, creates the base canvas at the cropped pixel size, and hands
   the render function to `main.tsx`. Reports `no-image` when the generation has
-  no source image and `image-failed` when one cannot be loaded. Sets
+  no source image, `image-offline` when a built-in image that is not in the
+  `images` cache fails to load (the browser keeps `navigator.onLine` true for a
+  stopped server, so the cache decides), and `image-failed` otherwise — an
+  upload or a corrupt cached image. Sets
   `canvas.base-layer.dataset.composed`
   to the rendered seed for headless capture. The `seed=` label stays on a
   separate overlay canvas that is never exported. `downloadImage` in
@@ -159,8 +173,29 @@ After TypeScript changes, run `pnpm exec tsc --noEmit` (or `pnpm build`). After 
   `FontFace` loader. Font files live in `public/fonts/`; every `FONTS` entry
   must exist there, because the stage loads them during bootstrap.
 - `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview` on
-  port 4173, opens the app with `?seed=N`, waits for the composition-ready flag,
-  captures `canvas.base-layer`, and writes `output/gen-N.png`.
+  port 4173, opens the app with `?seed=N&sw=0`, waits for the composition-ready
+  flag, captures `canvas.base-layer`, and writes `output/gen-N.png`.
+- `vite-plugin-pwa-shell.ts` — stamps one build id per config load, exposes it
+  as `__BUILD_ID__`, substitutes it plus the precache list into `public/sw.js`
+  as a build artifact, and emits `dist/assets/manifest.json`. In dev it serves
+  both from middleware (an empty precache, so a dev worker can never poison a
+  production shell cache).
+- `public/sw.js` — the shell worker: precache, routing, and the update /
+  rollback lifecycle described under `## Offline and updates`.
+- `src/pwa/register.ts` — registration, waiting-worker detection,
+  `acceptUpdate`, `rollbackToPrevious`, `checkForUpdates`, and `notifyStageReady`.
+- `src/pwa/update-state.ts` — the PWA signals (`updateStatus`, `waitingBuildId`,
+  `canRollback`, `serviceWorkerState`, `stageRendered`, `online`,
+  `installPrompt`, `storageEstimate`, `imageCacheStats`) and `buildId`.
+- `src/pwa/image-cache.ts` — the `images` runtime cache, warm on demand, LRU
+  bookkeeping, the quota-derived image budget, the bulk download, and the
+  cached/online/offline state of each built-in image. It also owns the
+  `gen42-pwa` IndexedDB (stores `images` and `meta`).
+- `src/components/UpdatePanel.tsx` — the right-panel Offline section: build and
+  connection state, update check/prompt/rollback, install hint, storage bars,
+  image cache size, bulk download, and the two clear actions.
+- `public/manifest.webmanifest`, `public/icons/*` — installability metadata; the
+  webmanifest is precached, the icons are too.
 
 ## Layers
 
@@ -263,23 +298,84 @@ defaults, which is null for every effect but pixel-sort.
 - User-visible text is uppercased (see the text field handler and `drawText`).
 - Non-scaling overlays must scale with the image. Baseline convention: text
   sized relative to `min(width, height) / 926`, the mantova.jpg short side.
-- Images and fonts are served from `public/` and must be added to
-  `public/assets/manifest.json` to appear in the Image dropdown. Only fonts are
-  tracked; images are build/deploy or upload content.
+- Images and fonts are served from `public/` and must be added to the asset
+  directory to appear in the Image dropdown (`dist/assets/manifest.json` lists
+  them; dev serves the same list from middleware). Only fonts are tracked;
+  images are build/deploy or upload content.
 - A generation can have `image: ''`, meaning no source. The stage then reports
   `no-image` and the UI shows the upload affordance instead of a canvas.
 
 ## Assets
 
-- `public/assets/` — not tracked beyond `.gitkeep` and the generated
-  `manifest.json`. The repository ships no source images: they come from user
-  uploads or from a deployment that drops files into the directory.
-- `public/assets/manifest.json` — JSON array of image filenames shown in the
-  Image dropdown, regenerated from the directory on every build and dev start.
+- `public/assets/` — not tracked beyond `.gitkeep`. The repository ships no
+  source images: they come from user uploads or from a deployment that drops
+  files into the directory.
+- `dist/assets/manifest.json` — JSON array of image filenames shown in the Image
+  dropdown. A build artifact, generated from `public/assets` on every build and
+  served from middleware in dev; nothing writes it back into `public/`.
 - `public/fonts/*.ttf` — licensed fonts (see `public/fonts/OFL.txt`), tracked.
 - A deployment-provided image keeps working through `?image=` and old URLs; a
-  missing one reports `image-failed` rather than being silently swapped.
-- `public/fonts/*.ttf` — licensed fonts (see `public/fonts/OFL.txt`)
+  missing one reports `image-offline` (offline) or `image-failed` rather than
+  being silently swapped.
+
+## Offline and updates
+
+Two caches, both written by the worker, plus two browser-local stores:
+
+- `shell-<buildId>` — the app itself: `/`, the hashed `/app/*` chunks, icons,
+  fonts, `/wasm/kernels.wasm`, `manifest.webmanifest`, and
+  `/assets/manifest.json`. ~2 MB, precached on install. `vite-plugin-pwa-shell`
+  injects the build id (`__BUILD_ID__`, also read by the page) and the precache
+  list into `sw.js`; nothing precached is fetched lazily.
+- `shell-previous` — the shell of the build being replaced, renamed there on
+  activation and deleted once the new build reports `stage-ready`.
+- `images` — one runtime cache for `/assets/*`. Cache-first, filled on demand;
+  the page (not the worker) evicts, so LRU order means something. `gen42-pwa`
+  IndexedDB stores `images` records (`path`, `bytes`, `lastUsed`, `sha`) and the
+  shell pointers in `meta`. Budget is `min(512 MB, 50% of quota - upload bytes -
+  20 MB slack)`, so it holds the whole built-in set unless the device is nearly
+  full. `navigator.storage.persist()` is requested on first install and before
+  the first upload write; uploads (IndexedDB) are the real local data.
+
+Routing: navigations, `/app/*`, fonts, wasm, and icons resolve against the
+selected shell cache (see below), `/assets/*` against `images`, `/sw.js` and
+`*.webmanifest` go to the network with `no-store`/`no-cache`, everything else
+passes through. `dist/assets/manifest.json` is cache-first with a background
+`no-store` revalidation.
+
+Update lifecycle: a new build precaches its own shell and waits — no
+`skipWaiting` on install and no `clients.claim()`, so the first visit stays
+network-served and `pnpm dev` is never shadowed. The page detects the waiting
+worker at startup and on `updatefound`/`installed` (`updateStatus`:
+`idle | checking | installing | ready | error`), reads its build id over a
+`MessageChannel` `get-state`, and offers "New version available — Reload".
+Accepting posts `skipWaiting` to the waiting worker; the activation renames the
+outgoing shell to `shell-previous`, records `activeBuild`, and claims clients,
+and the page reloads on `controllerchange` (idempotent: one flag, one reload).
+
+Rollback: `meta` holds four pointers — `activeBuild` (what the worker
+activated), `selectedBuild` (what navigations and `/app/*` resolve against;
+rollback is a flip of this pointer plus a reload), `previousBuild`, and
+`lastReadyBuild`. A page whose stage never renders posts no `stage-ready`, so
+the active build has no `lastReadyBuild`. The Offline panel only then offers
+"Go back to the previous version", and only after a terminal stage status
+(`image-failed`/`wasm-failed`) or 15 s without a render — a healthy build can
+spend longer than that decoding a 23 MB image, fonts, and WASM, and an offer
+during that window would strand the user on the old build. `previousBuild`
+always names the build actually stored in `shell-previous`, including after a
+rollback that is followed by an update. The rollback message flips
+`selectedBuild` to the previous build and acknowledges over a `MessageChannel`
+before the page reloads, so the reload is served by `shell-previous` and its
+hashed `/app/*` chunks resolve there even if `dist/app` changed underneath.
+`stage-ready` from the active build deletes `shell-previous`; one from the
+rolled-back build does not.
+
+Hosting: `/sw.js` must be served with `Cache-Control: no-cache` (and
+`Service-Worker-Allowed: /` if it ever moves off the root), otherwise an update
+check is answered by the HTTP cache, no new build is ever found, and the
+rollback safety net never gets a chance to run. `vite-plugin-pwa-shell` sets
+both headers for dev and preview; a real deployment (especially behind a CDN)
+must do the same.
 
 ## Workflow notes
 

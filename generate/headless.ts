@@ -29,7 +29,7 @@ function getGenerations(): Generation[] {
 }
 
 // The repository ships no images, so a source has to come from --image= or
-// from a deployment-provided public/assets set.
+// from a deployment-provided set listed by the build artifact.
 function sourceImageFile(): string {
   const arg = process.argv.slice(2).find((a) => a.startsWith("--image="));
   if (arg) {
@@ -37,10 +37,11 @@ function sourceImageFile(): string {
     if (!existsSync(file)) throw new Error(`Source image not found: ${file}`);
     return file;
   }
-  const manifestPath = resolve(ROOT, "public/assets/manifest.json");
+  const assetsDir = resolve(ROOT, "dist/assets");
+  const manifestPath = resolve(assetsDir, "manifest.json");
   if (existsSync(manifestPath)) {
     const files = JSON.parse(readFileSync(manifestPath, "utf8")) as string[];
-    if (files.length > 0) return resolve(ROOT, "public/assets", files[0]);
+    if (files.length > 0) return resolve(assetsDir, files[0]);
   }
   throw new Error("No source image: pass --image=<path> (the repository ships none)");
 }
@@ -65,7 +66,8 @@ async function renderGeneration(
 ): Promise<Buffer> {
   const page = await browser.newPage();
 
-  const query = new URLSearchParams({ seed: String(gen.seed), image: imageRef });
+  // A fresh Puppeteer profile would otherwise install a worker mid-capture.
+  const query = new URLSearchParams({ seed: String(gen.seed), image: imageRef, sw: "0" });
   const url = `http://localhost:${PORT}/?${query.toString()}`;
   await page.goto(url, { waitUntil: "networkidle0" });
 
@@ -91,10 +93,10 @@ async function renderGeneration(
 
 async function main() {
   const generations = getGenerations();
-  const sourceFile = sourceImageFile();
 
   console.log("Building project...");
   execSync("pnpm run build", { cwd: ROOT, stdio: "inherit" });
+  const sourceFile = sourceImageFile();
   const imageRef = stageSourceImage(sourceFile);
   console.log(`Source image: ${sourceFile}`);
 

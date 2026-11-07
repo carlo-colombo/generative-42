@@ -6,6 +6,8 @@ import { StageToolbar } from './components/ToolButtons'
 import { createEditorModel } from './editor-state'
 import { createStage, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration } from './generation-state'
+import { refreshImageStates, warmImage } from './pwa/image-cache'
+import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
 import type { Generation } from './types'
 import type { WasmKernels } from './wasm'
 import './style.css'
@@ -22,6 +24,8 @@ let wasmKernels: WasmKernels | undefined
 let drawnSignature = ''
 let previewTimer = 0
 let pendingPreview: Generation | null = null
+let stageReadySent = false
+let retriedImage = false
 
 type LoadingStatus = StageStatus | 'loading'
 const stageStatus = signal<LoadingStatus>('loading')
@@ -30,25 +34,33 @@ function StageLoading() {
   const status = stageStatus.value
   if (status === 'rendered') return null
   const failed = status === 'image-failed' || status === 'wasm-failed'
+  const offline = status === 'image-offline'
   const label =
     status === 'image-failed'
       ? 'IMAGE UNAVAILABLE'
-      : status === 'wasm-failed'
-        ? 'WASM FAILED'
-        : status === 'no-image'
-          ? 'NO IMAGE'
-          : 'LOADING'
+      : offline
+        ? 'NO IMAGE OFFLINE'
+        : status === 'wasm-failed'
+          ? 'WASM FAILED'
+          : status === 'no-image'
+            ? 'NO IMAGE'
+            : 'LOADING'
   const hint =
-    status === 'no-image'
-      ? 'Upload an image to start'
-      : status === 'image-failed'
-        ? 'Upload an image or reconnect'
+    offline || status === 'image-failed'
+      ? 'Upload an image or reconnect'
+      : status === 'no-image'
+        ? 'Upload an image to start'
         : ''
   return (
     <div className={failed ? 'stage-loading is-error' : 'stage-loading'} role="status" aria-live="polite">
-      {!failed && status !== 'no-image' && <span className="stage-loading-spinner" aria-hidden="true" />}
+      {!failed && !offline && status !== 'no-image' && <span className="stage-loading-spinner" aria-hidden="true" />}
       <span className="stage-loading-label">{label}</span>
       {hint && <span className="stage-loading-hint">{hint}</span>}
+      {offline && (
+        <button type="button" className="stage-loading-action" onClick={() => document.getElementById('upload-input')?.click()}>
+          Upload image
+        </button>
+      )}
     </div>
   )
 }
@@ -146,6 +158,52 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
   schedulePreview(nextGeneration)
 })
 const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
+
+function lastStoredImage(): string {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem('generation') ?? 'null')
+    if (typeof stored !== 'object' || stored === null) return ''
+    const image = (stored as { image?: unknown }).image
+    return typeof image === 'string' ? image : ''
+  } catch {
+    return ''
+  }
+}
+
+let warmedImage = generation.image
+const unsubscribeWarm = model.subscribeDraft((next) => {
+  if (next.image === warmedImage) return
+  warmedImage = next.image
+  // The dropdown badges follow the selection, so refresh once the warm attempt
+  // has settled instead of on every render.
+  void warmImage(next.image).then(() => refreshImageStates())
+})
+
+void refreshImageStates().then(() => {
+  void warmImage(generation.image)
+  // The last stored generation is the image the user will come back to.
+  const stored = lastStoredImage()
+  if (stored !== generation.image) void warmImage(stored)
+})
+
+function handleStageStatus(status: StageStatus) {
+  stageStatus.value = status
+  if (status === 'wasm-failed' || status === 'image-failed') notifyStageFailed()
+  if (status !== 'rendered') return
+  if (stageReadySent) return
+  stageReadySent = true
+  notifyStageReady()
+}
+
+// A built-in image that was never cached cannot load offline; retry the load
+// once the browser is back online instead of leaving a dead stage.
+window.addEventListener('online', () => {
+  if (retriedImage) return
+  if (stageStatus.value !== 'image-offline' && stageStatus.value !== 'image-failed') return
+  retriedImage = true
+  location.reload()
+})
+
 const stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm) => {
   baseCanvas = base
   seedCanvas = seed
@@ -159,9 +217,7 @@ const stageHandle = createStage(stage, generation, (base, seed, renderLayer, was
   if (model.livePreview.value && compositionSignature(model.draft.value) !== drawnSignature) {
     schedulePreview(model.draft.value)
   }
-}, (status) => {
-  stageStatus.value = status
-})
+}, handleStageStatus)
 
 function renderEditor() {
   render(<StageEditor model={model} editor={editor} baseCanvas={baseCanvas} wasm={wasmKernels} />, editorRoot)
@@ -172,11 +228,16 @@ render(<RightPanel model={model} editor={editor} />, rightPanelRoot)
 render(<StageToolbar editor={editor} model={model} />, toolbarRoot)
 renderEditor()
 
+// Registered before the stage renders: a build that cannot render still has to
+// offer the update prompt and the rollback of the build before it.
+void registerServiceWorker()
+
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     stageHandle.remove()
     unsubscribeDraft()
     unsubscribePreview()
+    unsubscribeWarm()
     stageObserver.disconnect()
     toolbarObserver.disconnect()
     seedCanvas?.remove()

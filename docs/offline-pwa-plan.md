@@ -1,6 +1,6 @@
 # Plan: offline-first, installable app
 
-Status: proposal, not implemented. Measurements taken from the current tree.
+Status: implemented (M0–M4). Measurements taken from the current tree.
 
 ## 1. Scope
 

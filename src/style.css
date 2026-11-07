@@ -536,6 +536,24 @@ body {
   color: var(--muted);
 }
 
+.stage-loading-action {
+  pointer-events: auto;
+  padding: 6px 12px;
+  border: 1px solid rgb(238 238 238 / 28%);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.stage-loading-action:hover {
+  border-color: var(--text);
+}
+
 .stage-loading-spinner {
   width: 2.2em;
   height: 2.2em;
@@ -859,6 +877,95 @@ body {
   line-height: 1.45;
 }
 
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.update-build {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.update-build span {
+  color: #ddd;
+}
+
+.connection-chip {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+.connection-chip.is-online {
+  color: #9ad19a;
+  border-color: #2f4a2f;
+}
+
+.connection-chip.is-offline {
+  color: #d1a09a;
+  border-color: #4a2f2f;
+}
+
+.update-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--control-bg);
+}
+
+.storage-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.storage-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.storage-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.storage-label span:last-child {
+  color: #ddd;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+
+.storage-bar-fill {
+  height: 100%;
+  background: #d8d8d8;
+}
 .layer-list {
   display: flex;
   flex-direction: column;

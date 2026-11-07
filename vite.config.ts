@@ -1,43 +1,8 @@
-import { defineConfig, type Plugin } from "vite";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "fs";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function assetManifestPlugin(): Plugin {
-  const assetsDir = resolve(__dirname, "public/assets");
-  const manifestPath = resolve(assetsDir, "manifest.json");
-  const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
-
-  const update = () => {
-    // The directory is tracked only by .gitkeep: no source images ship with
-    // the repository, so a fresh clone has nothing to list.
-    if (!existsSync(assetsDir)) mkdirSync(assetsDir, { recursive: true });
-    const files = readdirSync(assetsDir)
-      .filter((f) => IMAGE_RE.test(f))
-      .sort();
-    writeFileSync(manifestPath, JSON.stringify(files, null, 2));
-  };
-
-  return {
-    name: "asset-manifest",
-    configResolved() {
-      update();
-    },
-    configureServer(server) {
-      server.watcher.on("add", (file) => {
-        if (file.startsWith(assetsDir)) update();
-      });
-      server.watcher.on("unlink", (file) => {
-        if (file.startsWith(assetsDir)) update();
-      });
-    },
-  };
-}
+import { defineConfig } from "vite";
+import { pwaShellPlugin } from "./vite-plugin-pwa-shell";
 
 export default defineConfig({
-  plugins: [assetManifestPlugin()],
+  plugins: [pwaShellPlugin()],
   server: {
     host: "0.0.0.0",
     open: true,
@@ -48,6 +13,7 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    assetsDir: "app",
     assetsInlineLimit: 0,
   },
 });

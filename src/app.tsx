@@ -10,6 +10,7 @@ import { LayerControls } from './components/LayerControls'
 import { LayerList } from './components/LayerList'
 import { Presets } from './components/Presets'
 import { SourceControls } from './components/SourceControls'
+import { UpdatePanel } from './components/UpdatePanel'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
 function useImages(model: GenerationModel) {
@@ -102,6 +103,7 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
       </section>
       <LayerControls model={model} editor={editor} />
       <Presets model={model} editor={editor} />
+      <UpdatePanel />
       <section className="panel-section">
         <label className="checkbox-field">
           <input type="checkbox" checked={editor.maskPreview.value} disabled={!editor.showMasks.value} onChange={(event) => { editor.maskPreview.value = event.currentTarget.checked }} />

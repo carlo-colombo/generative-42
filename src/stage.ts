@@ -1,14 +1,15 @@
 import { createCompositionEngine, type CompositionEngine } from './compose'
 import { cropImage } from './crop'
 import { DEFAULT_FONT, FONTS, loadFonts, type LoadedFont } from './fonts'
+import { isImageCached } from './pwa/image-cache'
 import { clearSurface, createSurface, loadImageSurface, releaseSurface, resizeSurface, type Surface } from './surface'
 import { drawSeedLabel } from './text'
 import type { Generation } from './types'
-import { imageSource } from './uploads'
+import { imageSource, isUploadRef } from './uploads'
 import { loadWasmKernels, type WasmKernels } from './wasm'
 
 export type RenderResult = { imageChanged: boolean; resized: boolean }
-export type StageStatus = 'rendered' | 'image-changed' | 'image-failed' | 'wasm-failed' | 'no-image'
+export type StageStatus = 'rendered' | 'image-changed' | 'image-failed' | 'image-offline' | 'wasm-failed' | 'no-image'
 export type StageReady = (
   baseCanvas: HTMLCanvasElement,
   seedCanvas: HTMLCanvasElement,
@@ -106,9 +107,15 @@ export function createStage(
     }
     const image = await imageSource(initial.image)
       .then((url) => loadImageSurface(url))
-      .catch((error) => {
+      .catch(async (error) => {
         console.error('Source image failed to load', error)
-        onStatus?.('image-failed')
+        // A built-in image that was never cached cannot be loaded with no
+        // network, which is the expected offline case, not a broken image. The
+        // browser reports navigator.onLine true for a stopped server or a dead
+        // route, so the cache is the authority.
+        const offline = !isUploadRef(initial.image)
+          && (!navigator.onLine || !(await isImageCached(initial.image)))
+        onStatus?.(offline ? 'image-offline' : 'image-failed')
         return null
       })
     if (!image) return
