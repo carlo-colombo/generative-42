@@ -145,6 +145,25 @@ export interface Generation {
 
 export const FULL_CANVAS_SHAPE: AreaShape = { kind: 'rect', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
 
+// Every text layer field a stored or migrated layer may omit falls back to this
+// placeholder, so no sample text is baked into a fresh generation.
+export const DEFAULT_TEXT_LAYER: TextLayer = {
+  kind: 'text',
+  id: 't1',
+  label: 'Text 1',
+  visible: true,
+  opacity: 100,
+  text: '',
+  align: 'left',
+  vAlign: 'bottom',
+  x: 5,
+  y: 95,
+  size: 100,
+  font: '/fonts/SpaceMono-Regular.ttf',
+};
+
+// A fresh generation starts with the source image and an empty stack: no
+// default effect and no sample text.
 export const DEFAULT_GENERATION: Generation = {
   seed: 1,
   image: "",
@@ -154,46 +173,5 @@ export const DEFAULT_GENERATION: Generation = {
   cropSize: 100,
   cropPreview: true,
   soloLayerId: '',
-  layers: [
-    {
-      kind: 'effect',
-      id: 'e1',
-      label: 'Grey squares',
-      visible: true,
-      opacity: 100,
-      color: LAYER_COLORS[1],
-      shape: FULL_CANVAS_SHAPE,
-      edge: { feather: 0, jitter: 0, mode: 'blend' },
-      effect: 'grey-squares',
-      params: { ...DEFAULT_EFFECT_PARAMS },
-    },
-    {
-      kind: 'text',
-      id: 't1',
-      label: 'Text 1',
-      visible: true,
-      opacity: 100,
-      text: 'ATTENZIONE\nAL\nLEOPARDO',
-      align: 'right',
-      vAlign: 'center',
-      x: 95,
-      y: 50,
-      size: 375,
-      font: '/fonts/SpaceMono-Regular.ttf',
-    },
-    {
-      kind: 'text',
-      id: 't2',
-      label: 'Text 2',
-      visible: true,
-      opacity: 100,
-      text: '',
-      align: 'left',
-      vAlign: 'bottom',
-      x: 5,
-      y: 95,
-      size: 100,
-      font: '/fonts/SpaceMono-Regular.ttf',
-    },
-  ],
+  layers: [],
 };

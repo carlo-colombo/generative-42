@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 import { clampShape, hashString } from './areas'
-import { DEFAULT_GENERATION, DEFAULT_EFFECT_PARAMS, LAYER_COLORS } from './types'
+import { DEFAULT_GENERATION, DEFAULT_EFFECT_PARAMS, DEFAULT_TEXT_LAYER, LAYER_COLORS } from './types'
 import { DEFAULT_FONT, FONTS } from './fonts'
 import { effectLabel, normalizeEffectId, sanitizeParams } from './effects'
 import type {
@@ -115,9 +115,8 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.max(min, Math.min(max, sanitizeNumber(value, fallback)))
 }
 
-function defaultTextLayer(index: number): TextLayer {
-  const layers = DEFAULT_GENERATION.layers.filter((layer): layer is TextLayer => layer.kind === 'text')
-  return layers[Math.min(Math.max(index, 0), layers.length - 1)]
+function defaultTextLayer(_index: number): TextLayer {
+  return DEFAULT_TEXT_LAYER
 }
 
 function defaultLegacyText(index: number): LegacyText {
@@ -134,19 +133,10 @@ function defaultLegacyText(index: number): LegacyText {
   }
 }
 
+// A legacy payload without text data carries no default text layers; the stack
+// starts from the effect layers alone.
 function defaultLegacyTexts(): LegacyText[] {
-  return DEFAULT_GENERATION.layers
-    .filter((layer): layer is TextLayer => layer.kind === 'text')
-    .map((layer) => ({
-      text: layer.text,
-      align: layer.align,
-      vAlign: layer.vAlign,
-      x: layer.x,
-      y: layer.y,
-      size: layer.size,
-      font: layer.font,
-      opacity: layer.opacity,
-    }))
+  return []
 }
 
 function sanitizeLegacyText(value: unknown, index: number): LegacyText {
@@ -643,8 +633,8 @@ function migrateLayers(input: LegacyInput): { layers: Layer[]; soloLayerId: stri
         randomness: 0,
       },
     })
-  } else {
-    const effect = normalizeEffectId(input.draw, 'grey-squares')
+  } else if (typeof input.draw === 'string') {
+    const effect = normalizeEffectId(input.draw)
     layers.push({
       kind: 'effect',
       id: 'e1',
@@ -760,19 +750,35 @@ export function getGeneration(): Generation {
   return DEFAULT_GENERATION
 }
 
-export function applyGeneration(gen: Generation) {
-  try {
-    localStorage.setItem('generation', JSON.stringify(gen))
-  } catch {
-    // A full quota must not block the render; the URL still carries the state.
-  }
+export function generationURL(gen: Generation): URL {
   const url = new URL(window.location.href)
   for (const key of generationKeys) {
     url.searchParams.set(key, String(gen[key]))
   }
   url.searchParams.set('layers', persistLayers(gen.layers))
   for (const key of LEGACY_PARAM_KEYS) url.searchParams.delete(key)
-  window.location.href = url.toString()
+  return url
+}
+
+let lastSyncedURL = ''
+
+// Keep the address bar on the current draft so a reload restores what the stage
+// is showing. Cheap enough to call on every preview change, and it never adds a
+// history entry.
+export function syncGenerationURL(gen: Generation) {
+  const url = generationURL(gen).toString()
+  if (url === lastSyncedURL) return
+  lastSyncedURL = url
+  window.history.replaceState(window.history.state, '', url)
+}
+
+export function applyGeneration(gen: Generation) {
+  try {
+    localStorage.setItem('generation', JSON.stringify(gen))
+  } catch {
+    // A full quota must not block the render; the URL still carries the state.
+  }
+  window.location.href = generationURL(gen).toString()
 }
 
 export function createGenerationModel(initial: Generation) {

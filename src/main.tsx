@@ -2,10 +2,9 @@ import { render } from 'preact'
 import { signal } from '@preact/signals'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
-import { StageToolbar } from './components/ToolButtons'
 import { createEditorModel } from './editor-state'
 import { createStage, type StageStatus } from './stage'
-import { createGenerationModel, getGeneration } from './generation-state'
+import { createGenerationModel, getGeneration, syncGenerationURL } from './generation-state'
 import { refreshImageStates, warmImage } from './pwa/image-cache'
 import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
 import type { Generation } from './types'
@@ -77,10 +76,6 @@ const stageColumn = document.createElement('div')
 stageColumn.className = 'stage-column'
 app.appendChild(stageColumn)
 
-const toolbarRoot = document.createElement('div')
-toolbarRoot.className = 'stage-toolbar-root'
-stageColumn.appendChild(toolbarRoot)
-
 const stage = document.createElement('div')
 stage.className = 'stage'
 stageColumn.appendChild(stage)
@@ -99,11 +94,9 @@ function fitStage() {
   const style = getComputedStyle(app)
   const bounds = app.getBoundingClientRect()
   const availableWidth = Math.max(0, bounds.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
-  const toolbarHeight = toolbarRoot.getBoundingClientRect().height
-  const gutter = parseFloat(getComputedStyle(stageColumn).rowGap) || 0
   const availableHeight = Math.max(
     0,
-    bounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - toolbarHeight - gutter,
+    bounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
   )
   const width = Math.min(availableWidth, availableHeight * aspectRatio)
   stage.style.width = `${Math.floor(width)}px`
@@ -112,9 +105,18 @@ function fitStage() {
 
 const stageObserver = new ResizeObserver(fitStage)
 stageObserver.observe(app)
-const toolbarObserver = new ResizeObserver(fitStage)
-toolbarObserver.observe(toolbarRoot)
 fitStage()
+
+// Below the three-column breakpoint the stage docks to the top of the page so it
+// stays visible while the panels scroll. The docked height is smaller, and the
+// app box is observed above, so the stage refits without a resize event.
+const mobileQuery = window.matchMedia('(max-width: 940px)')
+function updateStageDock() {
+  app.classList.toggle('is-docked', mobileQuery.matches && window.scrollY > 24)
+}
+window.addEventListener('scroll', updateStageDock, { passive: true })
+mobileQuery.addEventListener('change', updateStageDock)
+updateStageDock()
 
 function compositionSignature(generation: Generation) {
   return JSON.stringify(generation)
@@ -158,6 +160,17 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
   schedulePreview(nextGeneration)
 })
 const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
+
+// The address bar trails the draft so reloading restores the last rendered
+// image without pressing Generate first.
+let urlTimer = 0
+const unsubscribeURL = model.subscribeDraft(() => {
+  if (urlTimer) clearTimeout(urlTimer)
+  urlTimer = window.setTimeout(() => {
+    urlTimer = 0
+    syncGenerationURL(model.draft.value)
+  }, 200)
+})
 
 function lastStoredImage(): string {
   try {
@@ -225,7 +238,6 @@ function renderEditor() {
 
 render(<LeftPanel model={model} />, leftPanelRoot)
 render(<RightPanel model={model} editor={editor} />, rightPanelRoot)
-render(<StageToolbar editor={editor} model={model} />, toolbarRoot)
 renderEditor()
 
 // Registered before the stage renders: a build that cannot render still has to
@@ -238,8 +250,11 @@ if (import.meta.hot) {
     unsubscribeDraft()
     unsubscribePreview()
     unsubscribeWarm()
+    unsubscribeURL()
+    if (urlTimer) clearTimeout(urlTimer)
+    window.removeEventListener('scroll', updateStageDock)
+    mobileQuery.removeEventListener('change', updateStageDock)
     stageObserver.disconnect()
-    toolbarObserver.disconnect()
     seedCanvas?.remove()
   })
 }

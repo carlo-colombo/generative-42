@@ -438,11 +438,6 @@ body {
   min-height: 0;
 }
 
-.stage-toolbar-root {
-  align-self: stretch;
-  display: flex;
-}
-
 .stage-toolbar {
   display: flex;
   align-items: center;
@@ -475,7 +470,8 @@ body {
   border-color: #3d3d3d;
 }
 
-.panel .tool-buttons .tool-button {
+.panel .tool-buttons .tool-button,
+.panel .stage-toolbar > .tool-button {
   width: auto;
   padding: 5px 9px;
   font-size: 11px;
@@ -1170,11 +1166,25 @@ body {
 
   #app {
     order: -1;
+    position: sticky;
+    top: 0;
+    z-index: 5;
     flex: 0 0 auto;
     width: 100%;
-    height: 56vh;
-    min-height: 300px;
-    padding: 16px;
+    height: 52vh;
+    min-height: 240px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* Docked once the page scrolls: a shallower bar keeps more of the controls
+     on screen. The ResizeObserver in main.tsx refits the stage. */
+  #app.is-docked {
+    height: 34vh;
+    min-height: 170px;
+    padding: 8px 16px 10px;
+    box-shadow: 0 12px 28px rgb(0 0 0 / 55%);
   }
 
   .panel-root {

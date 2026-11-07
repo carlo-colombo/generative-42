@@ -10,6 +10,7 @@ import { LayerControls } from './components/LayerControls'
 import { LayerList } from './components/LayerList'
 import { Presets } from './components/Presets'
 import { SourceControls } from './components/SourceControls'
+import { StageToolbar } from './components/ToolButtons'
 import { UpdatePanel } from './components/UpdatePanel'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
@@ -87,6 +88,11 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
     </header>
     <div className="panel-scroll">
       <LayerList model={model} editor={editor} />
+      <LayerControls model={model} editor={editor} />
+      <section className="panel-section">
+        <h2 className="section-title">Draw layers</h2>
+        <StageToolbar editor={editor} model={model} />
+      </section>
       <section className="panel-section">
         <h2 className="section-title">Add layer</h2>
         <ControlField label="Effect">
@@ -101,7 +107,6 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
         {atCapacity && <p className="text-hint">Limit of {MAX_LAYERS} layers</p>}
         <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole frame.</p>
       </section>
-      <LayerControls model={model} editor={editor} />
       <Presets model={model} editor={editor} />
       <UpdatePanel />
       <section className="panel-section">
