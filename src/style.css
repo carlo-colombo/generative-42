@@ -180,6 +180,28 @@ body {
   flex-shrink: 0;
 }
 
+.panel .section-heading .tool-button {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 26px;
+  padding: 4px 9px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  background: var(--control-bg);
+}
+
+.panel .section-heading .tool-button.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
+.panel .section-heading .tool-button.active:hover:not(:disabled) {
+  background: #fff;
+  border-color: #fff;
+}
+
 .panel button.help-toggle {
   display: flex;
   align-items: center;

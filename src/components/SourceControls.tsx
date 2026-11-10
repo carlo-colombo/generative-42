@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { ControlField } from './ControlField'
+import type { EditorModel } from '../editor-state'
 import type { GenerationModel } from '../generation-state'
 import { cachedImagePaths } from '../pwa/image-cache'
 import { online } from '../pwa/update-state'
@@ -26,7 +27,7 @@ function availabilityHint(total: number, cached: number, isOnline: boolean): str
   return `${cached}/${total} built-in images are available offline. Reconnect to use the rest.`
 }
 
-export function SourceControls({ model, images }: { model: GenerationModel; images: string[] }) {
+export function SourceControls({ model, editor, images }: { model: GenerationModel; editor: EditorModel; images: string[] }) {
   const generation = model.draft.value
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(takeUploadErrors)
@@ -107,7 +108,20 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   ]
 
   return <section className="panel-section">
-    <h2 className="section-title">Image</h2>
+    <div className="section-heading">
+      <h2 className="section-title">Image</h2>
+      <button
+        type="button"
+        className={editor.showMasks.value ? 'tool-button active' : 'tool-button'}
+        aria-pressed={editor.showMasks.value}
+        title={editor.showMasks.value
+          ? 'Hide the layer outlines and stop editing the stage'
+          : 'Show the layer outlines and edit on the stage'}
+        onClick={() => { editor.showMasks.value = !editor.showMasks.value }}
+      >
+        {editor.showMasks.value ? 'Outlines on' : 'Outlines off'}
+      </button>
+    </div>
     <ControlField label="Source">
       <select id="image-select" value={generation.image} onChange={(event) => selectImage((event.currentTarget as HTMLSelectElement).value)}>
         {generation.image === '' && <option value="">No image</option>}

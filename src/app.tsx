@@ -50,7 +50,7 @@ function generateOnEnter(model: GenerationModel) {
   }
 }
 
-export function LeftPanel({ model }: { model: GenerationModel }) {
+export function LeftPanel({ model, editor }: { model: GenerationModel; editor: EditorModel }) {
   const { images, manifestState } = useImages(model)
   return <aside className="panel panel-left" onKeyDown={generateOnEnter(model)}>
     <header className="panel-header">
@@ -59,7 +59,7 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
       {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
     </header>
     <div className="panel-scroll">
-      <SourceControls model={model} images={images} />
+      <SourceControls model={model} editor={editor} images={images} />
       <CropControls model={model} />
     </div>
     <Actions model={model} />

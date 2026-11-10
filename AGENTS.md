@@ -51,9 +51,10 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   registers the service worker at startup, posts `stage-ready` after the first
   successful render of the load, and reloads once on `online` when the stage is
   stuck at `image-offline`/`image-failed`.
-- `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
-  the add-layer controls, the selected layer inspector, the layer presets, the
-  mask preview toggle, and the Offline panel), plus the image manifest fetch.
+- `src/app.tsx` — `LeftPanel` (image, the stage outlines toggle in the Image
+  section header, and crop) and `RightPanel` (the layer list, the add-layer
+  controls, the selected layer inspector, the layer presets, the mask preview
+  toggle, and the Offline panel), plus the image manifest fetch.
   The manifest fallback only replaces a missing `/assets/...` image, so an
   `upload:` reference is left alone.
 - `src/uploads.ts` — client-side image uploads. Files are decoded locally (never
