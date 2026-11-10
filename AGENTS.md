@@ -470,11 +470,10 @@ for the UI but never registers a worker, because that origin is not secure.
 
 ## Workflow notes
 
-- Commits are explicit — only commit when asked.
 - Unless asked otherwise, work is trunk-based with continuous deployment: commit
-  to `main` and push, which deploys the site through
-  `.github/workflows/deploy.yml`. No feature branches, pull requests, or release
-  tagging unless requested.
+  and push to `main` once each feature is complete, which deploys the site
+  through `.github/workflows/deploy.yml`. No feature branches, pull requests, or
+  release tagging unless requested.
 - `dist/` is a build output; regenerate via `pnpm build`.
 - `/generate/headless.ts` captures `canvas.base-layer`, which now includes text;
   the stage overlay and the `seed=` canvas are never part of an export.
