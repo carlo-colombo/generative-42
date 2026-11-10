@@ -6,6 +6,7 @@ import { appUrl } from './paths'
 export const UPLOAD_PREFIX = 'upload:'
 export const MAX_UPLOADS = 24
 export const MAX_UPLOAD_DIMENSION = 4096
+const MAX_UPLOAD_NAME = 80
 
 const DB_NAME = 'generative42'
 const DB_VERSION = 1
@@ -64,6 +65,11 @@ export function uploadRef(id: string): string {
 
 export function isUploadRef(ref: string): boolean {
   return ref.startsWith(UPLOAD_PREFIX)
+}
+
+export function uploadDisplayName(name: string, fallback: string): string {
+  const cleaned = name.replace(/\s+/g, ' ').trim().slice(0, MAX_UPLOAD_NAME).trim()
+  return cleaned || fallback
 }
 
 export function imageLabel(ref: string): string {
@@ -212,7 +218,7 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
       const prepared = await prepareUpload(file)
       const image: UploadedImage = {
         id: newId(),
-        name: file.name || 'upload',
+        name: uploadDisplayName(file.name, 'upload'),
         width: prepared.width,
         height: prepared.height,
         thumb: prepared.thumb,
@@ -249,6 +255,24 @@ export async function deleteUpload(id: string): Promise<void> {
     db.close()
   }
   uploads.value = uploads.value.filter((image) => image.id !== id)
+}
+
+export async function renameUpload(id: string, name: string): Promise<string | null> {
+  const current = uploads.value.find((image) => image.id === id)
+  if (!current) return null
+  const next = uploadDisplayName(name, current.name)
+  if (next === current.name) return next
+  const updated: UploadedImage = { ...current, name: next }
+  const db = await openDb()
+  try {
+    const tx = db.transaction(META_STORE, 'readwrite')
+    tx.objectStore(META_STORE).put(updated)
+    await transactionDone(tx)
+  } finally {
+    db.close()
+  }
+  uploads.value = uploads.value.map((image) => (image.id === id ? updated : image))
+  return next
 }
 
 export async function uploadBytes(): Promise<number> {

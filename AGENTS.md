@@ -62,7 +62,9 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   generation stores `upload:<id>` instead of a path; `imageSource` resolves that
   to an object URL for the stage and the crop preview, and `uploads` is the
   signals list (`UploadedImage` with a thumbnail data URL) that `SourceControls`
-  renders. Deleting an upload revokes its object URL and drops both records.
+  renders. Renaming an upload rewrites only its metadata record (trimmed, one
+  line, 80 chars), so the stored blob is untouched. Deleting an upload revokes
+  its object URL and drops both records.
   `MAX_UPLOADS` caps the store at 24; the UI reports quota/read failures.
   `addUploads` loads the store first when it has not been read yet, so an import
   that runs before the panel mounts still counts against the cap.
@@ -78,7 +80,7 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
-  with upload/select/remove.
+  with upload/select/rename/remove; rename edits the name inline in the tile.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
@@ -469,6 +471,10 @@ for the UI but never registers a worker, because that origin is not secure.
 ## Workflow notes
 
 - Commits are explicit — only commit when asked.
+- Unless asked otherwise, work is trunk-based with continuous deployment: commit
+  to `main` and push, which deploys the site through
+  `.github/workflows/deploy.yml`. No feature branches, pull requests, or release
+  tagging unless requested.
 - `dist/` is a build output; regenerate via `pnpm build`.
 - `/generate/headless.ts` captures `canvas.base-layer`, which now includes text;
   the stage overlay and the `seed=` canvas are never part of an export.

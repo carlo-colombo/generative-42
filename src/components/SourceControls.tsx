@@ -11,10 +11,12 @@ import {
   keepUploadErrors,
   loadUploads,
   MAX_UPLOADS,
+  renameUpload,
   takeUploadErrors,
   uploadRef,
   uploads,
   uploadsStatus,
+  type UploadedImage,
 } from '../uploads'
 
 function availabilityHint(total: number, cached: number, isOnline: boolean): string {
@@ -28,6 +30,8 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const generation = model.draft.value
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(takeUploadErrors)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
   const uploaded = uploads.value
   const unavailable = uploadsStatus.value === 'unavailable'
@@ -72,9 +76,29 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       setError('Could not remove the uploaded image')
       return
     }
+    if (renamingId === id) cancelRename()
     if (!wasSelected) return
     const fallback = uploads.value[0] ? uploadRef(uploads.value[0].id) : images[0] ? `/assets/${images[0]}` : ''
     selectImage(fallback)
+  }
+
+  const startRename = (image: UploadedImage) => {
+    setError('')
+    setRenamingId(image.id)
+    setRenameValue(image.name)
+  }
+
+  const cancelRename = () => {
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  const commitRename = () => {
+    const id = renamingId
+    const value = renameValue
+    cancelRename()
+    if (!id) return
+    renameUpload(id, value).catch(() => setError('Could not rename the uploaded image'))
   }
 
   const known = [
@@ -127,11 +151,35 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     {uploaded.length > 0 && <div className="upload-grid">
       {uploaded.map((image) => {
         const ref = uploadRef(image.id)
-        return <div className={generation.image === ref ? 'upload-tile selected' : 'upload-tile'} title={`${image.name} · ${image.width}×${image.height}`}>
-          <button type="button" className="upload-select" aria-label={`Use ${image.name}`} onClick={() => selectImage(ref)}>
-            <img src={image.thumb} alt="" loading="lazy" />
-          </button>
-          <button type="button" className="upload-remove" aria-label={`Remove ${image.name}`} onClick={() => { void removeUpload(image.id) }}>×</button>
+        const renaming = renamingId === image.id
+        const className = [
+          'upload-tile',
+          generation.image === ref ? 'selected' : '',
+          renaming ? 'renaming' : '',
+        ].filter(Boolean).join(' ')
+        return <div className={className} title={`${image.name} · ${image.width}×${image.height}`}>
+          {renaming
+            ? <input
+              aria-label={`Rename ${image.name}`}
+              className="upload-rename-input"
+              type="text"
+              value={renameValue}
+              autoFocus
+              onFocus={(event) => event.currentTarget.select()}
+              onInput={(event) => setRenameValue(event.currentTarget.value)}
+              onBlur={commitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') commitRename()
+                if (event.key === 'Escape') cancelRename()
+              }}
+            />
+            : <>
+              <button type="button" className="upload-select" aria-label={`Use ${image.name}`} onClick={() => selectImage(ref)}>
+                <img src={image.thumb} alt="" loading="lazy" />
+              </button>
+              <button type="button" className="upload-rename" aria-label={`Rename ${image.name}`} title="Rename" onClick={() => startRename(image)}>✎</button>
+              <button type="button" className="upload-remove" aria-label={`Remove ${image.name}`} title="Remove" onClick={() => { void removeUpload(image.id) }}>×</button>
+            </>}
         </div>
       })}
     </div>}
