@@ -7,6 +7,14 @@ const PRECACHE_URLS = __PRECACHE_URLS__;
 const SHELL_CACHE = `shell-${BUILD_ID}`;
 const PREVIOUS_CACHE = "shell-previous";
 const IMAGE_CACHE = "images";
+// Shared files wait here between the share_target POST and the page that turns
+// them into uploads. Entries are deleted as the page reads them, and pruned
+// when they are old enough that no page is coming for them.
+const SHARE_CACHE = "shares";
+const SHARE_TARGET = `${BASE}share-target`;
+const SHARE_KEY = `${BASE}share/`;
+const SHARE_PARAM = "share";
+const SHARE_MAX_AGE = 24 * 60 * 60 * 1000;
 const SHELL_URL = BASE;
 const MANIFEST_URL = `${BASE}assets/manifest.json`;
 // The worker is scoped to the deployment base (GitHub Pages serves a project
@@ -137,6 +145,11 @@ async function activate() {
     // A failed copy must not fail activation: the shell is still cached under
     // its build name, and only rollback is lost.
   }
+  try {
+    await pruneShares(await caches.open(SHARE_CACHE));
+  } catch {
+    // A share that was never consumed only wastes space until the next one.
+  }
   await metaSet(ACTIVE_BUILD, BUILD_ID);
   await metaSet(SELECTED_BUILD, BUILD_ID);
   // A waiting worker takes over only because the page asked for it.
@@ -216,11 +229,105 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// Android hands a shared image to the app as a multipart POST to the manifest's
+// share_target action. The worker parks every shared file in the shares cache
+// and redirects to the page with ?share=<ids>, which moves them into uploads.
+const IMAGE_TYPES = new Map([
+  ["jpg", "image/jpeg"],
+  ["jpeg", "image/jpeg"],
+  ["png", "image/png"],
+  ["gif", "image/gif"],
+  ["webp", "image/webp"],
+  ["avif", "image/avif"],
+  ["bmp", "image/bmp"],
+  ["svg", "image/svg+xml"],
+]);
+
+function shareKey(id) {
+  return `${SHARE_KEY}${id}`;
+}
+
+function newShareId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+// A share can arrive without a usable MIME type; the extension is the fallback.
+function shareType(name, type) {
+  if (type && type.startsWith("image/")) return type;
+  const extension = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  return IMAGE_TYPES.get(extension) ?? type ?? "";
+}
+
+async function pruneShares(cache) {
+  const now = Date.now();
+  for (const request of await cache.keys()) {
+    const response = await cache.match(request);
+    const at = Number(response?.headers.get("x-shared-at") ?? 0);
+    if (!response || !at || now - at > SHARE_MAX_AGE) await cache.delete(request);
+  }
+}
+
+// Prefer the page the user already had open: its URL carries the generation
+// being edited, so a share changes the source image and nothing else.
+async function shareTargetUrl() {
+  try {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    let open = null;
+    for (const client of windows) {
+      const url = new URL(client.url);
+      if (url.origin !== self.location.origin) continue;
+      if (!url.pathname.startsWith(BASE) || url.pathname === SHARE_TARGET) continue;
+      url.searchParams.delete(SHARE_PARAM);
+      if (client.focused) return url;
+      open = url;
+    }
+    if (open) return open;
+  } catch {
+    // Without a client list the page loads from its stored generation.
+  }
+  return new URL(BASE, self.location.origin);
+}
+
+async function handleShare(request) {
+  const ids = [];
+  try {
+    const form = await request.formData();
+    const cache = await caches.open(SHARE_CACHE);
+    await pruneShares(cache);
+    for (const [, value] of form.entries()) {
+      if (!(value instanceof File) || value.size === 0) continue;
+      const name = value.name || "shared image";
+      const id = newShareId();
+      await cache.put(shareKey(id), new Response(value, {
+        headers: {
+          "content-type": shareType(name, value.type),
+          "x-shared-name": encodeURIComponent(name),
+          "x-shared-at": String(Date.now()),
+        },
+      }));
+      ids.push(id);
+    }
+  } catch {
+    // An unreadable form is reported as a share without an image.
+    ids.length = 0;
+  }
+  const url = await shareTargetUrl();
+  url.searchParams.set(SHARE_PARAM, ids.length > 0 ? ids.join(",") : "none");
+  // A POST navigation has to answer with a redirect: the page is a GET.
+  return Response.redirect(url.toString(), 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-  if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (request.method === "POST" && url.pathname === SHARE_TARGET) {
+    event.respondWith(handleShare(request));
+    return;
+  }
+  if (request.method !== "GET") return;
   const path = url.pathname;
 
   if (request.mode === "navigate") {

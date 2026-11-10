@@ -13,6 +13,29 @@ const META_STORE = 'uploads'
 const FILE_STORE = 'upload-files'
 const THUMB_SIZE = 168
 
+// Upload notices are reported in the Image section, but the flow that produces
+// them (selecting a new image, importing a shared file) reloads the page, so
+// they cross that reload in sessionStorage.
+const UPLOAD_ERRORS_KEY = 'upload-errors'
+
+export function takeUploadErrors(): string {
+  try {
+    const stored = sessionStorage.getItem(UPLOAD_ERRORS_KEY) ?? ''
+    if (stored) sessionStorage.removeItem(UPLOAD_ERRORS_KEY)
+    return stored
+  } catch {
+    return ''
+  }
+}
+
+export function keepUploadErrors(message: string): void {
+  try {
+    if (message) sessionStorage.setItem(UPLOAD_ERRORS_KEY, message)
+  } catch {
+    // A storage failure only loses the notice.
+  }
+}
+
 export type UploadedImage = {
   id: string
   name: string
@@ -174,6 +197,9 @@ export async function loadUploads(): Promise<void> {
 export async function addUploads(files: File[]): Promise<{ added: UploadedImage[]; errors: string[] }> {
   const errors: string[] = []
   const added: UploadedImage[] = []
+  // The share import runs before the panel has loaded the store, so the count
+  // that fills MAX_UPLOADS has to come from the store, not from the signal.
+  if (uploadsStatus.value === 'idle') await loadUploads()
   const room = Math.max(0, MAX_UPLOADS - uploads.value.length)
   if (room === 0) return { added, errors: [`Limit of ${MAX_UPLOADS} uploaded images`] }
   await persistStorage()

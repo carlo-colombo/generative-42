@@ -46,10 +46,11 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   `.stage`, and renders the left and right panels. A `ResizeObserver` sizes the stage to the available
   space while preserving the canvas aspect ratio. One debounced preview pipeline
   calls the composition renderer; the render signature is
-  `JSON.stringify(generation)`, so every layer field participates. It registers
-  the service worker at startup, posts `stage-ready` after the first successful
-  render of the load, and reloads once on `online` when the stage is stuck at
-  `image-offline`/`image-failed`.
+  `JSON.stringify(generation)`, so every layer field participates. It takes a
+  pending `?share=` request before reading the generation (see `## Sharing`),
+  registers the service worker at startup, posts `stage-ready` after the first
+  successful render of the load, and reloads once on `online` when the stage is
+  stuck at `image-offline`/`image-failed`.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -63,6 +64,12 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   signals list (`UploadedImage` with a thumbnail data URL) that `SourceControls`
   renders. Deleting an upload revokes its object URL and drops both records.
   `MAX_UPLOADS` caps the store at 24; the UI reports quota/read failures.
+  `addUploads` loads the store first when it has not been read yet, so an import
+  that runs before the panel mounts still counts against the cap.
+- `src/share.ts` — Android sharing. `takeShareRequest` consumes the `share` URL
+  param before the generation is read, `importShare` turns the files parked by
+  the worker into uploads, and `shareNotice` feeds the Image section. See
+  `## Sharing`.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
   migration. `applyGeneration` navigates to a new URL, so the stage bootstraps
@@ -187,8 +194,8 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   as a build artifact, and emits `dist/assets/manifest.json`. In dev it serves
   both from middleware (an empty precache, so a dev worker can never poison a
   production shell cache).
-- `public/sw.js` — the shell worker: precache, routing, and the update /
-  rollback lifecycle described under `## Offline and updates`.
+- `public/sw.js` — the shell worker: precache, routing, the share target POST,
+  and the update / rollback lifecycle described under `## Offline and updates`.
 - `src/pwa/register.ts` — registration, waiting-worker detection,
   `acceptUpdate`, `rollbackToPrevious`, `checkForUpdates`, and `notifyStageReady`.
 - `src/pwa/update-state.ts` — the PWA signals (`updateStatus`, `waitingBuildId`,
@@ -202,7 +209,8 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   connection state, update check/prompt/rollback, install hint, storage bars,
   image cache size, bulk download, and the two clear actions.
 - `public/manifest.webmanifest`, `public/icons/*` — installability metadata; the
-  webmanifest is precached, the icons are too.
+  webmanifest is precached, the icons are too. It also declares the
+  `share_target` (`./share-target`, POST multipart, images only).
 
 ## Layers
 
@@ -383,6 +391,48 @@ check is answered by the HTTP cache, no new build is ever found, and the
 rollback safety net never gets a chance to run. `vite-plugin-pwa-shell` sets
 both headers for dev and preview; a real deployment (especially behind a CDN)
 must do the same.
+
+## Sharing
+
+Android's share sheet is the only ingest path outside the Image panel, and it is
+image-only: sharing a link or a block of text lands on the app with a notice in
+the Image section instead of doing something. iOS has no share target, so
+nothing here is written for it.
+
+The manifest declares `share_target` (`action: ./share-target`, `method: POST`,
+`enctype: multipart/form-data`, one `files` entry with `image/*`), which
+resolves against the manifest URL and therefore lands under the deployment base
+without templating. Chrome only offers the app once it is installed and its
+worker is active; both are required for the POST to be intercepted at all.
+
+The worker handles the POST before its GET-only routing. Every `File` in the
+form (whatever the field name) is written to the `shares` cache under
+`<base>share/<id>` with its MIME type (sniffed from the extension when Android
+sends none), its percent-encoded name in `x-shared-name`, and a timestamp in
+`x-shared-at`. The worker then answers with a `303` to a GET that carries
+`?share=<ids>` (comma-separated), or `?share=none` when the share held no file.
+
+That redirect reuses the URL of the open window (`clients.matchAll`, focused
+first) when there is one, so the generation being edited — seed, crop, the
+whole layer stack — survives the share and only `image` changes. When the app
+is launched cold from the home screen, the target is the bare base and the
+stored generation is what survives.
+
+`src/share.ts` runs before `getGeneration()`: it removes `share` from the URL
+with `replaceState`, so the rest of the URL still describes the generation the
+app had open, reads the cached files, deletes those cache entries, stores the
+files as uploads (all of them, up to `MAX_UPLOADS`), and commits the first one
+as the source with `applyGeneration` — the same reload the upload button uses.
+A share therefore works offline end to end: the POST is answered by the worker,
+the shell comes from its cache, and the file never leaves the device.
+Unconsumed shares are pruned after 24 h, on activation and on the next share.
+
+Testing: `pnpm preview` (a dev worker with `?sw=1` works too) — the share
+endpoint only exists while a worker controls the page, and `?sw=0` sends the
+POST to the server, which 404s. A multipart `fetch('/share-target', { method:
+'POST', body: form })` from a controlled page exercises the whole path; the
+redirect target is in `response.url`, then navigating to it performs the
+import. On a device, install the app first, then share an image from Gallery.
 
 ## Deployment
 

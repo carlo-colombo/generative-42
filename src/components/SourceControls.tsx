@@ -3,27 +3,19 @@ import { ControlField } from './ControlField'
 import type { GenerationModel } from '../generation-state'
 import { cachedImagePaths } from '../pwa/image-cache'
 import { online } from '../pwa/update-state'
-import { addUploads, deleteUpload, isUploadRef, loadUploads, MAX_UPLOADS, uploadRef, uploads, uploadsStatus } from '../uploads'
-
-const UPLOAD_ERRORS_KEY = 'upload-errors'
-
-function takeUploadErrors(): string {
-  try {
-    const stored = sessionStorage.getItem(UPLOAD_ERRORS_KEY) ?? ''
-    if (stored) sessionStorage.removeItem(UPLOAD_ERRORS_KEY)
-    return stored
-  } catch {
-    return ''
-  }
-}
-
-function keepUploadErrors(message: string): void {
-  try {
-    if (message) sessionStorage.setItem(UPLOAD_ERRORS_KEY, message)
-  } catch {
-    // A storage failure only loses the notice.
-  }
-}
+import { shareHintVisible, shareNotice } from '../share'
+import {
+  addUploads,
+  deleteUpload,
+  isUploadRef,
+  keepUploadErrors,
+  loadUploads,
+  MAX_UPLOADS,
+  takeUploadErrors,
+  uploadRef,
+  uploads,
+  uploadsStatus,
+} from '../uploads'
 
 function availabilityHint(total: number, cached: number, isOnline: boolean): string {
   if (total === 0) return ''
@@ -39,6 +31,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const fileInput = useRef<HTMLInputElement>(null)
   const uploaded = uploads.value
   const unavailable = uploadsStatus.value === 'unavailable'
+  const notice = shareNotice.value
   const cached = cachedImagePaths.value
   const isOnline = online.value
   const cachedCount = images.filter((file) => cached.has(`/assets/${file}`)).length
@@ -48,6 +41,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   }, [])
 
   const selectImage = (ref: string) => {
+    shareNotice.value = ''
     model.setField('image', ref)
     model.applyGeneration()
   }
@@ -57,6 +51,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     const files = Array.from(input.files ?? [])
     input.value = ''
     if (files.length === 0) return
+    shareNotice.value = ''
     setBusy(true)
     setError('')
     const result = await addUploads(files)
@@ -128,6 +123,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       />
     </div>
     {error && <p className="text-hint">{error}</p>}
+    {notice && <p className="text-hint">{notice}</p>}
     {uploaded.length > 0 && <div className="upload-grid">
       {uploaded.map((image) => {
         const ref = uploadRef(image.id)
@@ -146,5 +142,6 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
           ? 'No images are available: upload one to start. Uploads stay on this device, in this browser.'
           : `Uploads stay on this device, in this browser. ${uploaded.length}/${MAX_UPLOADS} stored.`}
     </p>
+    {shareHintVisible && <p className="hint-text">Installed on Android, the app takes an image from the share sheet of any app.</p>}
   </section>
 }

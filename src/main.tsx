@@ -7,10 +7,15 @@ import { createStage, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration, syncGenerationURL } from './generation-state'
 import { refreshImageStates, warmImage } from './pwa/image-cache'
 import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
+import { importShare, takeShareRequest } from './share'
 import type { Generation } from './types'
 import type { WasmKernels } from './wasm'
 import './style.css'
 
+// A shared image arrives as ?share=... (public/sw.js). Consume the param first:
+// what is left of the URL still describes the generation the app had open, so
+// the share replaces the source image and keeps the stack.
+const shareRequest = takeShareRequest()
 const generation = getGeneration()
 const model = createGenerationModel(generation)
 const editor = createEditorModel()
@@ -243,6 +248,8 @@ renderEditor()
 // Registered before the stage renders: a build that cannot render still has to
 // offer the update prompt and the rollback of the build before it.
 void registerServiceWorker()
+
+if (shareRequest) void importShare(shareRequest, generation)
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
