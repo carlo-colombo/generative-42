@@ -1,6 +1,6 @@
 # WebAssembly kernels
 
-The browser loads `public/wasm/kernels.wasm`. The checked-in artifact lets the normal Vite build work without Zig installed; rebuild it after editing the sources with Zig 0.17.x:
+The browser loads the generated `public/wasm/kernels.wasm`, which is ignored by Git. `pnpm dev`, `pnpm build`, and `pnpm test:wasm` rebuild it with Zig 0.17.x before using it. Install Zig before running those commands locally.
 
 ```sh
 pnpm build:wasm

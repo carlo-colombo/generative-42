@@ -4,10 +4,10 @@
   "type": "module",
   "packageManager": "pnpm@10.15.1",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "pnpm build:wasm && vite",
+    "build": "pnpm build:wasm && tsc && vite build",
     "build:wasm": "zig build && chmod 644 public/wasm/kernels.wasm",
-    "test:wasm": "node wasm/test.mjs && tsx wasm/test-sort.ts && tsx wasm/test-detail.ts && tsx wasm/test-voronoi.ts && tsx wasm/test-mask.ts",
+    "test:wasm": "pnpm build:wasm && node wasm/test.mjs && tsx wasm/test-sort.ts && tsx wasm/test-detail.ts && tsx wasm/test-voronoi.ts && tsx wasm/test-mask.ts",
     "preview": "vite preview",
     "generate": "tsx generate/headless.ts",
     "generate:all": "tsx generate/headless.ts --all"

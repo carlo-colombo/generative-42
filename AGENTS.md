@@ -13,13 +13,13 @@ seeds to PNG for offline use.
 
 ## Commands
 
-- `pnpm dev` — start Vite dev server
-- `pnpm build` — typecheck (`tsc`) then build (`vite build`)
+- `pnpm dev` — rebuild the WASM kernels, then start Vite
+- `pnpm build` — rebuild WASM, typecheck (`tsc`), then build (`vite build`)
 - `pnpm preview` — serve the built `dist/`
 - `pnpm generate --image=<path>` — headless render seed 1 to `output/gen-1.png`
 - `pnpm generate:all --image=<path>` — headless render seeds 1–10
 - `pnpm build:wasm` — compile the Zig kernels with Zig 0.17.x
-- `pnpm test:wasm` — test WASM kernels, including pixel sort, detail noise, and Voronoi
+- `pnpm test:wasm` — rebuild and test WASM kernels, including pixel sort, detail noise, and Voronoi
 - `VITE_BASE=/generative-42/ pnpm build` — build for a subdirectory deployment
 - Typecheck only: `pnpm exec tsc --noEmit`
 
@@ -454,11 +454,13 @@ WASM, and the image manifest. Building without `VITE_BASE` still targets the
 domain root, so local `pnpm dev`, `pnpm preview`, and `pnpm generate` behave as
 before.
 
-The kernels are committed as `public/wasm/kernels.wasm`, so CI needs no Zig
-toolchain; Puppeteer is installed with `PUPPETEER_SKIP_DOWNLOAD=1` because only
-the local `pnpm generate` script uses it. The deployed site ships no built-in
-images (the repository has none), so thumbnails come from the user's own
-uploads, which stay in that browser's IndexedDB.
+`public/wasm/kernels.wasm` is generated and ignored by Git. The deploy workflow
+installs Zig 0.17.1, rebuilds and tests the kernels before building the app;
+`pnpm dev`, `pnpm build`, and `pnpm test:wasm` also rebuild them locally.
+Puppeteer is installed with `PUPPETEER_SKIP_DOWNLOAD=1` because only the local
+`pnpm generate` script uses it. The deployed site ships no built-in images (the
+repository has none), so thumbnails come from the user's own uploads, which
+stay in that browser's IndexedDB.
 
 Testing over the network without a domain: service workers require HTTPS or
 `localhost`. `pnpm preview` allows `.trycloudflare.com` hosts, so a quick tunnel

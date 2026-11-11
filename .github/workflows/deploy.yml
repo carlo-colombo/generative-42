@@ -45,9 +45,7 @@ jobs:
           version: 0.17.1
 
       - name: Build and test WASM kernels
-        run: |
-          pnpm build:wasm
-          pnpm test:wasm
+        run: pnpm test:wasm
 
       # A project site is served from /<repo>/, which is the base
       # actions/configure-pages reports; vite.config.ts normalises it.
