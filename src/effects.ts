@@ -46,6 +46,7 @@ const MAX_GRID_SQUARES = 200
 
 const EFFECT_IDS: EffectId[] = [
   'pixel-sort',
+  'rotate',
   'galaxy',
   'voronoi',
   'sections',
@@ -377,6 +378,49 @@ function horizontalLines(context: EffectRenderContext) {
   batchedHorizontalLines(context)
 }
 
+function rotateArea({ ctx, width, height, source, mask, params }: EffectRenderContext) {
+  let left = 0
+  let top = 0
+  let right = width - 1
+  let bottom = height - 1
+
+  if (mask) {
+    left = width
+    top = height
+    right = -1
+    bottom = -1
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (mask[y * width + x] <= 0) continue
+        left = Math.min(left, x)
+        top = Math.min(top, y)
+        right = Math.max(right, x)
+        bottom = Math.max(bottom, y)
+      }
+    }
+    if (right < left || bottom < top) return
+  }
+
+  const horizontal = params.direction === 'horizontal'
+  const span = horizontal ? right - left + 1 : bottom - top + 1
+  const distance = Math.floor((span * (params.amount ?? 100)) / 200)
+  const offset = params.reverse ? -distance : distance
+  const output = new Uint8ClampedArray(source.data)
+  for (let y = top; y <= bottom; y++) {
+    for (let x = left; x <= right; x++) {
+      const sourceX = horizontal ? left + ((x - left - offset + span) % span) : x
+      const sourceY = horizontal ? y : top + ((y - top - offset + span) % span)
+      const from = (sourceY * width + sourceX) * 4
+      const to = (y * width + x) * 4
+      output[to] = source.data[from]
+      output[to + 1] = source.data[from + 1]
+      output[to + 2] = source.data[from + 2]
+      output[to + 3] = source.data[from + 3]
+    }
+  }
+  ctx.putImageData(new ImageData(output, width, height), 0, 0)
+}
+
 function pixelSort({ ctx, width, height, source, mask, seed, params, edge, wasm }: EffectRenderContext) {
   const byteLength = width * height * 4;
   wasm.pfree();
@@ -606,6 +650,20 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
 }
 
 export const EFFECTS: Record<EffectId, EffectDefinition> = {
+  'rotate': {
+    id: 'rotate',
+    label: 'Rotate',
+    defaults: { amount: 100 },
+    controls: [
+      { type: 'select', key: 'direction', label: 'Direction', options: [
+        { value: 'horizontal', label: 'Horizontal' },
+        { value: 'vertical', label: 'Vertical' },
+      ] },
+      { type: 'toggle', key: 'reverse', label: '⇄ Reverse' },
+      { type: 'range', key: 'amount', label: 'Amount', min: 0, max: 100, step: 1, fallback: 100 },
+    ],
+    render: rotateArea,
+  },
   'pixel-sort': {
     id: 'pixel-sort',
     label: 'Pixel sort',

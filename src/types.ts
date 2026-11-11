@@ -20,6 +20,7 @@ export type LayerEdge = { feather: number; jitter: number; mode: EdgeMode };
 
 export type EffectId =
   | 'pixel-sort'
+  | 'rotate'
   | 'rect'
   | 'circles'
   | 'grey-squares'
@@ -47,8 +48,8 @@ export interface EffectParams {
   // Legacy ragged geometry: the per-line block is shortened and stays inside the
   // mask run instead of sliding along the whole line. Read by pixel-sort only.
   containedBlocks: boolean;
-  // Read by pixel-sort only. A legacy colorSortAmount can survive on any
-  // migrated layer; switching the effect resets it to null.
+  // Read by pixel-sort and rotate. A legacy colorSortAmount can survive on any
+  // migrated layer; switching the effect resets it to the selected effect's default.
   amount: number | null;
   sectionCount: number;
   sectionOffset: number;
