@@ -115,7 +115,7 @@ export function UpdatePanel() {
     <h2 className="section-title" id="offline-title">Offline</h2>
     <div className="update-row">
       <span className="update-build">
-        BUILD <span data-build-id={buildId}>{buildId}</span>{servingPrevious ? ' · PREVIOUS' : ''}
+        VERSION <span data-build-id={buildId}>v{buildId}</span>{servingPrevious ? ' · PREVIOUS' : ''}
       </span>
       <span
         className={isOnline ? 'connection-chip is-online' : 'connection-chip is-offline'}
@@ -128,7 +128,7 @@ export function UpdatePanel() {
       {status === 'checking' ? 'CHECKING FOR UPDATES…' : 'CHECK FOR UPDATES'}
     </button>
     {status === 'ready' && <div className="update-block">
-      <p className="hint-text" role="status">NEW VERSION AVAILABLE{waiting ? ` · BUILD ${waiting}` : ''}</p>
+      <p className="hint-text" role="status">NEW VERSION AVAILABLE{waiting ? ` · v${waiting}` : ''}</p>
       <button type="button" onClick={() => { void acceptUpdate() }}>RELOAD</button>
     </div>}
     {status === 'installing' && <p className="hint-text" role="status">UPDATING…</p>}

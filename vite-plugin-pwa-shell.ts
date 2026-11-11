@@ -1,4 +1,5 @@
 import type { Plugin } from "vite";
+import { execFileSync } from "child_process";
 import type { ServerResponse } from "http";
 import { existsSync, readdirSync, readFileSync } from "fs";
 import { resolve } from "path";
@@ -6,6 +7,16 @@ import { resolve } from "path";
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|svg|bmp)$/i;
 const FONT_RE = /\.ttf$/i;
 const APP_ASSET_RE = /^app\/.*\.(js|css)$/;
+
+function getBuildNumber(): string {
+  const runNumber = process.env.GITHUB_RUN_NUMBER;
+  if (runNumber && /^\d+$/.test(runNumber)) return runNumber;
+  try {
+    return execFileSync("git", ["rev-list", "--count", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    return "0";
+  }
+}
 
 const ICON_URLS = ["icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 
@@ -22,7 +33,7 @@ function renderServiceWorker(template: string, buildId: string, base: string, pr
 
 export function pwaShellPlugin(): Plugin {
   // Computed once per config load so sw.js and the app agree on one shell name.
-  const buildId = Date.now().toString(36);
+  const buildId = getBuildNumber();
   let base = "/";
   let publicDir = "";
   let assets: string[] = [];

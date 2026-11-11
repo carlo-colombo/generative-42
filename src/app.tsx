@@ -56,7 +56,7 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
   return <aside className="panel panel-left" onKeyDown={generateOnEnter(model)}>
     <header className="panel-header">
       <h1>Generative 42</h1>
-      <p className="build-label" aria-label={`Build ${buildId}`}>BUILD {buildId}</p>
+      <p className="build-label" aria-label={`Version v${buildId}`}>VERSION v{buildId}</p>
       {manifestState === 'loading' && <p>Loading images...</p>}
       {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
     </header>
