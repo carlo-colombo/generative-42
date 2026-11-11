@@ -110,7 +110,6 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     voronoiPoints: Math.round(clampNumber(record.voronoiPoints, 4, 12000, base.voronoiPoints)),
     gridSize: Math.round(clampNumber(record.gridSize, 2, MAX_GRID_SQUARES, base.gridSize)),
     gridMargin: clampNumber(record.gridMargin, 0, 40, base.gridMargin),
-    gridMarginBalance: clampNumber(record.gridMarginBalance, 0, 100, base.gridMarginBalance),
     gridCurtainExtension: clampNumber(record.gridCurtainExtension ?? record.gridCurtainWidth, 0, 100, base.gridCurtainExtension),
     gridCurtainVariation: clampNumber(
       record.gridCurtainVariation ?? Math.max(
@@ -596,7 +595,7 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
     2,
     params.gridCurtainExtension,
     params.gridCurtainVariation,
-    params.gridMarginBalance,
+    params.gridCurtainVariation,
     params.gridCurtainAxis === 'columns' ? 1 : 0,
     effect,
     seed >>> 0,
@@ -666,7 +665,6 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
     defaults: {
       gridSize: 90,
       gridMargin: 8,
-      gridMarginBalance: 50,
       gridCurtainExtension: 35,
       gridCurtainVariation: 35,
       gridCurtainEffect: 'inverse',
@@ -675,7 +673,6 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
     controls: [
       { type: 'range', key: 'gridSize', label: 'Squares', min: 2, max: MAX_GRID_SQUARES, step: 1 },
       { type: 'range', key: 'gridMargin', label: 'Gap', min: 0, max: 40, step: 1 },
-      { type: 'range', key: 'gridMarginBalance', label: 'Gap balance', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainExtension', label: 'Extension', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainVariation', label: 'Variation', min: 0, max: 100, step: 1 },
       { type: 'select', key: 'gridCurtainEffect', label: 'Curtain filter', options: [

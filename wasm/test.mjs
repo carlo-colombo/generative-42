@@ -23,12 +23,12 @@ for (let i = 0; i < bytes; i += 4) {
   source[i + 3] = 255
 }
 
-function render(gapBalance = 50, extension = 35, variation = 40) {
+function render() {
   wasm.pfree()
   const src = wasm.palloc(bytes) >>> 0
   const out = wasm.palloc(bytes) >>> 0
   new Uint8Array(wasm.memory.buffer, src, bytes).set(source)
-  wasm.curtainGrid(src, out, width, height, 16, 8, 2, extension, variation, gapBalance, 0, 2, 123)
+  wasm.curtainGrid(src, out, width, height, 16, 8, 2, 35, 40, 40, 0, 2, 123)
   return new Uint8Array(wasm.memory.buffer, out, bytes).slice()
 }
 
@@ -37,11 +37,6 @@ const second = render()
 assert.deepEqual(first, second, 'curtain output should be deterministic for a seed')
 assert.equal(first.length, bytes)
 assert.ok(first.some((v, i) => i % 4 === 3 && v === 255), 'curtain render should write opaque pixels')
-assert.notDeepEqual(
-  render(0, 0, 0),
-  render(100, 0, 0),
-  'gap balance should shift cell insets from top/left to bottom/right',
-)
 
 wasm.pfree()
 const testPixels = wasm.palloc(8) >>> 0
