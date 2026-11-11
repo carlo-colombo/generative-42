@@ -14,7 +14,7 @@ export type WasmKernels = {
     curtainCount: number,
     curtainWidth: number,
     randomness: number,
-    edgeJitter: number,
+    gapBalance: number,
     axis: number,
     effect: number,
     seed: number,

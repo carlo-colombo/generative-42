@@ -246,14 +246,13 @@ export fn curtainGrid(
     _curtain_count_in: u32,
     curtain_extension_percent: f32,
     curtain_variation_percent: f32,
-    _edge_jitter_percent: f32,
+    gap_balance_percent: f32,
     axis: u32,
     effect_id: u32,
     seed: u32,
 ) void {
     util.resetScratch();
     _ = _curtain_count_in;
-    _ = _edge_jitter_percent;
     const width: usize = width_in;
     const height: usize = height_in;
     if (width == 0 or height == 0) return;
@@ -321,6 +320,9 @@ export fn curtainGrid(
     }
 
     const margin: i64 = util.roundI(cell * util.clampF(margin_percent, 0, 40) / 100);
+    const gap_balance = @as(f64, @floatCast(util.clampF(gap_balance_percent, 0, 100))) / 100;
+    const leading_margin = util.roundI(@as(f64, @floatFromInt(margin)) * (1 - gap_balance));
+    const trailing_margin = margin - leading_margin;
     // The base background is opaque white-lerped source average.
     fillRect(out, width, height, 0, 0, @intCast(width), @intCast(height), bg);
     row = 0;
@@ -334,9 +336,12 @@ export fn curtainGrid(
             const index = row * cols + col;
             const avg = averages[index];
             const border = blendBorder(avg);
-            const sx0 = x0 + margin;
-            fillRect(out, width, height, sx0, y0 + margin, x1, y1, border);
-            fillRect(out, width, height, sx0 + 1, y0 + margin + 1, x1 - 1, y1 - 1, avg);
+            const sx0 = x0 + leading_margin;
+            const sy0 = y0 + leading_margin;
+            const sx1 = x1 - trailing_margin;
+            const sy1 = y1 - trailing_margin;
+            fillRect(out, width, height, sx0, sy0, sx1, sy1, border);
+            fillRect(out, width, height, sx0 + 1, sy0 + 1, sx1 - 1, sy1 - 1, avg);
 
             if (has_curtain and curtain[index] != 0) {
                 const filtered_bg = filters.apply(bg[0], bg[1], bg[2], switch (effect_id) {
@@ -354,7 +359,7 @@ export fn curtainGrid(
                 } else if (effect_id == 3) {
                     color = filters.apply(border[0], border[1], border[2], .grayscale);
                 }
-                fillRect(out, width, height, sx0, y0 + margin, x1, y1, color);
+                fillRect(out, width, height, sx0, sy0, sx1, sy1, color);
                 var face = avg;
                 if (effect_id == 1) {
                     face = filters.apply(avg[0], avg[1], avg[2], .inverse);
@@ -363,7 +368,7 @@ export fn curtainGrid(
                 } else if (effect_id == 3) {
                     face = filters.apply(avg[0], avg[1], avg[2], .grayscale);
                 }
-                fillRect(out, width, height, sx0 + 1, y0 + margin + 1, x1 - 1, y1 - 1, face);
+                fillRect(out, width, height, sx0 + 1, sy0 + 1, sx1 - 1, sy1 - 1, face);
             }
         }
     }

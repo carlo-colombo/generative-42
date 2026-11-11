@@ -61,6 +61,7 @@ export interface EffectParams {
   // Read by curtain-grid only.
   gridSize: number;
   gridMargin: number;
+  gridMarginBalance: number;
   // Curtain reach and edge irregularity, as shares of the canvas side.
   gridCurtainExtension: number;
   gridCurtainVariation: number;
@@ -85,6 +86,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   voronoiPoints: 1200,
   gridSize: 90,
   gridMargin: 8,
+  gridMarginBalance: 50,
   gridCurtainExtension: 35,
   gridCurtainVariation: 35,
   gridCurtainEffect: "inverse",
