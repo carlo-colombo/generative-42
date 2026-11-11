@@ -180,26 +180,35 @@ body {
   flex-shrink: 0;
 }
 
-.panel .section-heading .tool-button {
-  flex-shrink: 0;
-  width: auto;
-  min-height: 26px;
+/* Sits on the artwork, so it stays reachable while the panels scroll. */
+.stage-toggle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  pointer-events: auto;
   padding: 4px 9px;
-  font-size: 10px;
+  border: 1px solid rgb(238 238 238 / 28%);
+  border-radius: 4px;
+  background: rgb(0 0 0 / 55%);
+  color: #ddd;
+  font-family: inherit;
+  font-size: clamp(9px, 1.6vmin, 11px);
   letter-spacing: 0.08em;
-  background: var(--control-bg);
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
-.panel .section-heading .tool-button.active {
+.stage-toggle:hover {
+  border-color: rgb(238 238 238 / 60%);
+  color: #fff;
+}
+
+.stage-toggle.active {
   background: #eee;
   border-color: #eee;
   color: #111;
   font-weight: 600;
-}
-
-.panel .section-heading .tool-button.active:hover:not(:disabled) {
-  background: #fff;
-  border-color: #fff;
 }
 
 .panel button.help-toggle {

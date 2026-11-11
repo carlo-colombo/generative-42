@@ -1016,6 +1016,15 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
           if (tool === 'polygon' && polygonRef.current.length >= 3) closePolygon()
         }}
       />
+      <button
+        type="button"
+        className={showMasks ? 'stage-toggle active' : 'stage-toggle'}
+        aria-pressed={showMasks}
+        title={showMasks ? 'Hide the layer outlines and stop editing the stage' : 'Show the layer outlines and edit on the stage'}
+        onClick={() => { editor.showMasks.value = !editor.showMasks.value }}
+      >
+        {showMasks ? 'Outlines on' : 'Outlines off'}
+      </button>
       {(polygonCount > 0 || pendingCurve) && (
         <div className="editor-prompt">
           {pendingCurve ? (

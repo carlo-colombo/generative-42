@@ -241,7 +241,7 @@ function renderEditor() {
   render(<StageEditor model={model} editor={editor} baseCanvas={baseCanvas} wasm={wasmKernels} />, editorRoot)
 }
 
-render(<LeftPanel model={model} editor={editor} />, leftPanelRoot)
+render(<LeftPanel model={model} />, leftPanelRoot)
 render(<RightPanel model={model} editor={editor} />, rightPanelRoot)
 renderEditor()
 

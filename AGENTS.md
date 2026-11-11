@@ -51,10 +51,9 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   registers the service worker at startup, posts `stage-ready` after the first
   successful render of the load, and reloads once on `online` when the stage is
   stuck at `image-offline`/`image-failed`.
-- `src/app.tsx` — `LeftPanel` (image, the stage outlines toggle in the Image
-  section header, and crop) and `RightPanel` (the layer list, the add-layer
-  controls, the selected layer inspector, the layer presets, the mask preview
-  toggle, and the Offline panel), plus the image manifest fetch.
+- `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
+  the add-layer controls, the selected layer inspector, the layer presets, the
+  mask preview toggle, and the Offline panel), plus the image manifest fetch.
   The manifest fallback only replaces a missing `/assets/...` image, so an
   `upload:` reference is left alone.
 - `src/uploads.ts` — client-side image uploads. Files are decoded locally (never
@@ -160,9 +159,10 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   renames name clashes instead of overwriting.
 - `src/components/StageEditor.tsx` — canvas overlay above the rendered stage.
   Only effect layers are outlined and editable; it owns the drawing tools and canvas
-  gestures. Shapes are stored normalised 0..1 against the cropped canvas. Sort
-  chevrons appear only on `pixel-sort` layers, and the mask preview covers
-  effect layers only.
+  gestures, plus the outlines on/off toggle pinned to the top-right corner of the
+  stage (so it stays reachable while the panels scroll). Shapes are stored
+  normalised 0..1 against the cropped canvas. Sort chevrons appear only on
+  `pixel-sort` layers, and the mask preview covers effect layers only.
 - `src/components/LayerList.tsx` — the unified stack list (UI top = topmost
   layer): type chip, name, visibility, solo, duplicate, delete, up/down, and
   drag-and-drop reorder. `LayerControls.tsx` dispatches on layer kind; the effect
