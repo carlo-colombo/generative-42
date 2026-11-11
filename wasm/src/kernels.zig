@@ -243,10 +243,10 @@ export fn curtainGrid(
     height_in: u32,
     grid_size_in: u32,
     margin_percent: f32,
-    curtain_count_in: u32,
-    curtain_width_percent: f32,
-    curtain_randomness_percent: f32,
-    edge_jitter_percent: f32,
+    _curtain_count_in: u32,
+    curtain_extension_percent: f32,
+    curtain_variation_percent: f32,
+    _edge_jitter_percent: f32,
     axis: u32,
     effect_id: u32,
     seed: u32,
@@ -297,28 +297,20 @@ export fn curtainGrid(
 
     const along = if (axis == 1) cols else rows;
     const across = if (axis == 1) rows else cols;
-    const band_count: usize = @min(8, curtain_count_in);
-    const band_width = util.clampF(curtain_width_percent, 0, 100) / 100;
-    const band_jitter = util.clampF(curtain_randomness_percent, 0, 100) / 100;
-    const edge_jitter = util.clampF(edge_jitter_percent, 0, 100) / 100;
-    const has_curtain = band_count > 0 and band_width > 0;
+    const extension = util.clampF(curtain_extension_percent, 0, 100) / 100;
+    const variation = util.clampF(curtain_variation_percent, 0, 100) / 100;
+    const has_curtain = extension > 0;
     if (has_curtain) {
         var rand = rng_mod.Rng.init(seed);
-        var band: usize = 0;
-        while (band < band_count) : (band += 1) {
-            const length = util.clampF(band_width + (rand.next() * 2 - 1) * band_jitter, 0.02, 1);
-            const base_span: usize = @intFromFloat(util.roundF(@as(f64, @floatFromInt(along)) * length));
-            const span0 = @min(along, @max(1, base_span));
-            const from_start = rand.next() < 0.5;
-            const wobble_range = @as(f64, @floatFromInt(span0)) * edge_jitter;
+        var side: usize = 0;
+        while (side < 2) : (side += 1) {
             var line: usize = 0;
             while (line < across) : (line += 1) {
-                const wobble: i64 = util.roundI((rand.next() * 2 - 1) * wobble_range);
-                const signed_span = @as(i64, @intCast(span0)) + wobble;
-                const span: usize = @intCast(@max(1, @min(@as(i64, @intCast(along)), signed_span)));
+                const length = util.clampF(extension + (rand.next() * 2 - 1) * variation, 0, 1);
+                const span: usize = @intFromFloat(util.roundF(@as(f64, @floatFromInt(along)) * length));
                 var k: usize = 0;
                 while (k < span) : (k += 1) {
-                    const pos = if (from_start) k else along - 1 - k;
+                    const pos = if (side == 0) k else along - 1 - k;
                     const index = if (axis == 1) line * cols + pos else pos * cols + line;
                     curtain[index] = 1;
                 }

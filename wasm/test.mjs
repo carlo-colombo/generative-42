@@ -28,7 +28,7 @@ function render() {
   const src = wasm.palloc(bytes) >>> 0
   const out = wasm.palloc(bytes) >>> 0
   new Uint8Array(wasm.memory.buffer, src, bytes).set(source)
-  wasm.curtainGrid(src, out, width, height, 16, 8, 2, 35, 40, 35, 0, 2, 123)
+  wasm.curtainGrid(src, out, width, height, 16, 8, 2, 35, 40, 40, 0, 2, 123)
   return new Uint8Array(wasm.memory.buffer, out, bytes).slice()
 }
 

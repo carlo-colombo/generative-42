@@ -61,14 +61,9 @@ export interface EffectParams {
   // Read by curtain-grid only.
   gridSize: number;
   gridMargin: number;
-  gridCurtainCount: number;
-  gridCurtainWidth: number;
-  // How far each curtain's length may randomly stray from gridCurtainWidth, as
-  // a share of the canvas side. Read by curtain-grid only.
-  gridCurtainRandomness: number;
-  // How far each cell row (or column) inside a curtain may vary its own length,
-  // as a share of the canvas side. Read by curtain-grid only.
-  gridCurtainEdgeJitter: number;
+  // Curtain reach and edge irregularity, as shares of the canvas side.
+  gridCurtainExtension: number;
+  gridCurtainVariation: number;
   gridCurtainEffect: CurtainEffect;
   gridCurtainAxis: CurtainAxis;
 }
@@ -90,10 +85,8 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   voronoiPoints: 1200,
   gridSize: 90,
   gridMargin: 8,
-  gridCurtainCount: 2,
-  gridCurtainWidth: 35,
-  gridCurtainRandomness: 40,
-  gridCurtainEdgeJitter: 35,
+  gridCurtainExtension: 35,
+  gridCurtainVariation: 35,
   gridCurtainEffect: "inverse",
   gridCurtainAxis: "rows",
 };
