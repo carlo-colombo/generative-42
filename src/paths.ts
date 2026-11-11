@@ -3,7 +3,7 @@
 // Generation values (image references, font paths) stay logical — always
 // root-relative like /assets/x.jpg — so a URL made under one base still renders
 // under another.
-const rawBase = import.meta.env.BASE_URL ?? '/'
+const rawBase = import.meta.env?.BASE_URL ?? '/'
 
 export const BASE = rawBase === '/' || rawBase.endsWith('/') ? rawBase : `${rawBase}/`
 
