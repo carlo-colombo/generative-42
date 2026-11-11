@@ -252,6 +252,8 @@ export fn curtainGrid(
     seed: u32,
 ) void {
     util.resetScratch();
+    _ = _curtain_count_in;
+    _ = _edge_jitter_percent;
     const width: usize = width_in;
     const height: usize = height_in;
     if (width == 0 or height == 0) return;
