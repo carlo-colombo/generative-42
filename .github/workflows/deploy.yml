@@ -40,8 +40,16 @@ jobs:
         env:
           PUPPETEER_SKIP_DOWNLOAD: "1"
 
-      # The kernels are committed as public/wasm/kernels.wasm, so Zig is not
-      # needed here. A project site is served from /<repo>/, which is the base
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.1
+
+      - name: Build and test WASM kernels
+        run: |
+          pnpm build:wasm
+          pnpm test:wasm
+
+      # A project site is served from /<repo>/, which is the base
       # actions/configure-pages reports; vite.config.ts normalises it.
       - name: Build
         run: pnpm build
