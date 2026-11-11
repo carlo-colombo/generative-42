@@ -379,6 +379,7 @@ function compactParams(params: EffectParams): EffectParams {
     gridSize: params.gridSize,
     gridMargin: quantize(params.gridMargin),
     gridCurtainExtension: quantize(params.gridCurtainExtension),
+    gridCurtainBalance: quantize(params.gridCurtainBalance),
     gridCurtainVariation: quantize(params.gridCurtainVariation),
     gridCurtainEffect: params.gridCurtainEffect,
     gridCurtainAxis: params.gridCurtainAxis,

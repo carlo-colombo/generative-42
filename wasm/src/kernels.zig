@@ -245,6 +245,7 @@ export fn curtainGrid(
     margin_percent: f32,
     _curtain_count_in: u32,
     curtain_extension_percent: f32,
+    curtain_balance_percent: f32,
     curtain_variation_percent: f32,
     _edge_jitter_percent: f32,
     axis: u32,
@@ -300,6 +301,7 @@ export fn curtainGrid(
     const along = if (axis == 1) cols else rows;
     const across = if (axis == 1) rows else cols;
     const extension = util.clampF(curtain_extension_percent, 0, 100) / 100;
+    const balance = util.clampF(curtain_balance_percent, 0, 100) / 100;
     const variation = util.clampF(curtain_variation_percent, 0, 100) / 100;
     const has_curtain = extension > 0;
     if (has_curtain) {
@@ -308,7 +310,8 @@ export fn curtainGrid(
         while (side < 2) : (side += 1) {
             var line: usize = 0;
             while (line < across) : (line += 1) {
-                const length = util.clampF(extension + (rand.next() * 2 - 1) * variation, 0, 1);
+                const side_balance = if (side == 0) (1 - balance) * 2 else balance * 2;
+                const length = util.clampF((extension + (rand.next() * 2 - 1) * variation) * side_balance, 0, 1);
                 const span: usize = @intFromFloat(util.roundF(@as(f64, @floatFromInt(along)) * length));
                 var k: usize = 0;
                 while (k < span) : (k += 1) {

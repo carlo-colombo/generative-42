@@ -111,6 +111,7 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     gridSize: Math.round(clampNumber(record.gridSize, 2, MAX_GRID_SQUARES, base.gridSize)),
     gridMargin: clampNumber(record.gridMargin, 0, 40, base.gridMargin),
     gridCurtainExtension: clampNumber(record.gridCurtainExtension ?? record.gridCurtainWidth, 0, 100, base.gridCurtainExtension),
+    gridCurtainBalance: clampNumber(record.gridCurtainBalance, 0, 100, base.gridCurtainBalance),
     gridCurtainVariation: clampNumber(
       record.gridCurtainVariation ?? Math.max(
         typeof record.gridCurtainRandomness === 'number' ? record.gridCurtainRandomness : 0,
@@ -594,6 +595,7 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
     params.gridMargin,
     2,
     params.gridCurtainExtension,
+    params.gridCurtainBalance,
     params.gridCurtainVariation,
     params.gridCurtainVariation,
     params.gridCurtainAxis === 'columns' ? 1 : 0,
@@ -666,6 +668,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       gridSize: 90,
       gridMargin: 8,
       gridCurtainExtension: 35,
+      gridCurtainBalance: 50,
       gridCurtainVariation: 35,
       gridCurtainEffect: 'inverse',
       gridCurtainAxis: 'rows',
@@ -674,6 +677,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { type: 'range', key: 'gridSize', label: 'Squares', min: 2, max: MAX_GRID_SQUARES, step: 1 },
       { type: 'range', key: 'gridMargin', label: 'Gap', min: 0, max: 40, step: 1 },
       { type: 'range', key: 'gridCurtainExtension', label: 'Extension', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'gridCurtainBalance', label: 'Balance', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainVariation', label: 'Variation', min: 0, max: 100, step: 1 },
       { type: 'select', key: 'gridCurtainEffect', label: 'Curtain filter', options: [
         { value: 'inverse', label: 'Invert' },

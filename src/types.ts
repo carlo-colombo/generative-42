@@ -63,6 +63,7 @@ export interface EffectParams {
   gridMargin: number;
   // Curtain reach and edge irregularity, as shares of the canvas side.
   gridCurtainExtension: number;
+  gridCurtainBalance: number;
   gridCurtainVariation: number;
   gridCurtainEffect: CurtainEffect;
   gridCurtainAxis: CurtainAxis;
@@ -86,6 +87,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   gridSize: 90,
   gridMargin: 8,
   gridCurtainExtension: 35,
+  gridCurtainBalance: 50,
   gridCurtainVariation: 35,
   gridCurtainEffect: "inverse",
   gridCurtainAxis: "rows",

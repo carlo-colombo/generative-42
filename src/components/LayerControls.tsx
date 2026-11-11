@@ -126,6 +126,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
       params={layer.params}
       onChange={(key, value) => updateEffectParams(model, layer.id, key, value)}
     />)}
+    {layer.effect === 'curtain-grid' && <p className="hint-text">0% top/left · 50% balanced · 100% bottom/right</p>}
 
     <ControlField label="Label">
       <input aria-label="Label" type="text" value={layer.label} onInput={(event) => {
