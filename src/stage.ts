@@ -47,6 +47,7 @@ export function createStage(
     const target = seed
     if (!target) return
     clearSurface(target)
+    if (!generation.showSeed) return
     const textLayer = generation.layers.find((layer) => layer.kind === 'text')
     const font = fontFor(textLayer?.font ?? DEFAULT_FONT)
     if (font) drawSeedLabel(target.ctx, font, generation.seed)

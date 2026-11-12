@@ -18,6 +18,10 @@ export function Actions({ model }: { model: GenerationModel }) {
         <button type="button" onClick={model.nextSeed}>Next</button>
       </div>
     </ControlField>
+    <label className="checkbox-field">
+      <input type="checkbox" checked={generation.showSeed} onChange={(event) => model.setField('showSeed', event.currentTarget.checked)} />
+      Show seed label
+    </label>
     <button type="button" className="primary" onClick={() => model.applyGeneration()}>Generate</button>
     <div className="preview-row">
       <label className="checkbox-field">

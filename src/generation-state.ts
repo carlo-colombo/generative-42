@@ -49,7 +49,7 @@ const LEGACY_PARAM_KEYS = [
 ]
 
 const numericFields = new Set<keyof Generation>(['seed', 'cropX', 'cropY', 'cropSize'])
-const booleanFields = new Set<keyof Generation>(['cropPreview'])
+const booleanFields = new Set<keyof Generation>(['cropPreview', 'showSeed'])
 
 const generationKeys = (Object.keys(DEFAULT_GENERATION) as (keyof Generation)[]).filter((key) => key !== 'layers')
 
@@ -718,6 +718,7 @@ function generationScalars(record: Record<string, unknown>): Omit<Generation, 'l
   const cropFormat = record.cropFormat as Generation['cropFormat']
   return {
     seed: sanitizeNumber(record.seed, DEFAULT_GENERATION.seed),
+    showSeed: record.showSeed !== false && record.showSeed !== 'false',
     image: typeof record.image === 'string' ? record.image : DEFAULT_GENERATION.image,
     cropFormat: cropFormats.has(cropFormat) ? cropFormat : DEFAULT_GENERATION.cropFormat,
     cropX: sanitizeNumber(record.cropX, DEFAULT_GENERATION.cropX),

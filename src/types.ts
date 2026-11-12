@@ -128,6 +128,7 @@ export const LAYER_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#4cc9f0', '#b388f
 
 export interface Generation {
   seed: number;
+  showSeed: boolean;
   image: string;
   cropFormat: CropFormat;
   cropX: number;
@@ -162,6 +163,7 @@ export const DEFAULT_TEXT_LAYER: TextLayer = {
 // default effect and no sample text.
 export const DEFAULT_GENERATION: Generation = {
   seed: 1,
+  showSeed: true,
   image: "",
   cropFormat: "original",
   cropX: 50,
