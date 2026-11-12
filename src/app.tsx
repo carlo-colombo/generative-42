@@ -44,7 +44,7 @@ function useImages(model: GenerationModel) {
 
 function generateOnEnter(model: GenerationModel) {
   return (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey && ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement).tagName)) {
+    if (event.key === 'Enter' && !event.shiftKey && ['INPUT', 'SELECT'].includes((event.target as HTMLElement).tagName)) {
       event.preventDefault()
       model.applyGeneration()
     }
