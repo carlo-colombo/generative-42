@@ -170,8 +170,8 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   defaults while keeping shape/edge/opacity), generated effect controls, edge
   mode/feather/jitter, opacity, colour, and label.
 - `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
-  crops the image, creates the base canvas at the cropped pixel size, and hands
-  the render function to `main.tsx`. Reports `no-image` when the generation has
+  crops the image, pads it with the frame, creates the base canvas at the framed
+  pixel size, and hands the render function to `main.tsx`. Reports `no-image` when the generation has
   no source image, `image-offline` when a built-in image that is not in the
   `images` cache fails to load (the browser keeps `navigator.onLine` true for a
   stopped server, so the cache decides), and `image-failed` otherwise — an
@@ -180,6 +180,17 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   to the rendered seed for headless capture. The `seed=` label stays on a
   separate overlay canvas that is never exported. `downloadImage` in
   `src/surface.ts` exports the base composition (text included).
+- `src/frame.ts` — framing runs before composition and never crops or rescales
+  the image. `frameLayout(width, height, generation)` returns the padded canvas
+  (`null` when `frameOn` is off): the smallest `frameRatioW:frameRatioH` box
+  around the image, grown by `frameGrowth` percent, long side capped at 8192 px,
+  with the image centred at its native size at `x`/`y`;
+  `frameSurfaceIncrease` is the display-only percent. `applyFrame` fills the box
+  with `frameColor` (falling back to `#ffffff`) and draws the source over it,
+  returning the same surface when framing is off. The compositor's source — the
+  mask, the shapes, the text, every effect sample — is therefore the framed
+  canvas. `src/components/FrameControls.tsx` is the left-panel Frame section
+  (enable, colour, custom ratio, growth, resulting size).
 - `src/color.ts` — scales source `ImageData` and batches quadrilateral color
   samples through WASM.
 - `src/surface.ts` — Canvas 2D `Surface` creation, resize/reset, pixel access,
@@ -218,8 +229,8 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
 ## Layers
 
 `Generation.layers` is stored bottom-to-top; the right panel shows it
-top-to-bottom. The cropped source image is the implicit background, so an empty
-stack renders the source and nothing else.
+top-to-bottom. The cropped, framed source image is the implicit background, so
+an empty stack renders the source and nothing else.
 
 `Layer = EffectLayer | TextLayer`, and both carry `id`, `label`, `visible`, and
 `opacity`.
@@ -273,6 +284,10 @@ selecting a new image triggers.)
 characters the URL stores `layers=<id>` instead and the payload goes to
 `localStorage` under `layers:<id>`, so such a URL resolves only in the browser
 that created it. A failed `localStorage` write falls back to the inline param.
+`frameOn`, `frameRatioW`, `frameRatioH`, `frameGrowth`, and `frameColor` are
+scalar params too. `frameColor` falls back to `#ffffff` when it is not
+`#rrggbb`, and stored state clamps the ratio to 1–50 and the growth to 0–300,
+so a hand-edited URL or localStorage entry cannot ask for an insane canvas.
 `soloLayerId` is a separate scalar param. `applyGeneration` also writes the full
 generation to `localStorage.generation` and deletes the legacy keys (`draw`,
 `texts`, `areas`, `areasMode`, `soloAreaId`, the per-layer text params, and the
