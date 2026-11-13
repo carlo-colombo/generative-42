@@ -68,6 +68,20 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   `MAX_UPLOADS` caps the store at 24; the UI reports quota/read failures.
   `addUploads` loads the store first when it has not been read yet, so an import
   that runs before the panel mounts still counts against the cap.
+  `exportUploads` reads the stored bytes; `importUploadsBlobs` feeds archive
+  payloads back through `addUploads`, which keeps an already-sized image's bytes
+  instead of re-encoding it.
+- `src/upload-archive.ts` — the `.g42images` upload archive: 8 ASCII magic bytes
+  `G42IMG01`, a little-endian uint32 header length, a UTF-8 JSON header
+  (`{ kind: 'generative42-images', version: 1, exportedAt, images: [{ name,
+  width, height, type, createdAt, size }] }`, `size` being the blob byte
+  length), then the image blobs in header order, uncompressed. `parseArchive`
+  rejects a wrong magic, an implausible header length, bad JSON/kind/version, a
+  zero `size`, and any byte total that is not exactly consumed. The Image
+  section exports every upload as
+  `generative42-images-<YYYYMMDD-HHmm>.g42images` and imports one back as a
+  merge: fresh ids, duplicate names kept, `MAX_UPLOADS` still the cap, and the
+  selected source image never changes.
 - `src/share.ts` — Android sharing. `takeShareRequest` consumes the `share` URL
   param before the generation is read, `importShare` turns the files parked by
   the worker into uploads, and `shareNotice` feeds the Image section. See
