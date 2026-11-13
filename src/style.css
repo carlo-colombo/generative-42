@@ -1281,3 +1281,21 @@ body {
     display: none;
   }
 }
+
+.ratio-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel .ratio-row input[type="number"] {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  text-align: center;
+}
+
+.ratio-separator {
+  color: var(--muted);
+  font-size: 11px;
+}

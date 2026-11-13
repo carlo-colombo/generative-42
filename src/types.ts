@@ -135,6 +135,13 @@ export interface Generation {
   cropY: number;
   cropSize: number;
   cropPreview: boolean;
+  // The frame pads the cropped source to the ratio and growth below; it never
+  // crops or rescales the image.
+  frameOn: boolean;
+  frameRatioW: number;
+  frameRatioH: number;
+  frameGrowth: number;
+  frameColor: string;
   soloLayerId: string;
   // Bottom-to-top; the cropped source image is the implicit background.
   layers: Layer[];
@@ -170,6 +177,11 @@ export const DEFAULT_GENERATION: Generation = {
   cropY: 50,
   cropSize: 100,
   cropPreview: true,
+  frameOn: false,
+  frameRatioW: 4,
+  frameRatioH: 3,
+  frameGrowth: 0,
+  frameColor: "#ffffff",
   soloLayerId: '',
   layers: [],
 };

@@ -2,6 +2,7 @@ import { signal } from '@preact/signals'
 import { clampShape, hashString } from './areas'
 import { DEFAULT_GENERATION, DEFAULT_EFFECT_PARAMS, DEFAULT_TEXT_LAYER, LAYER_COLORS } from './types'
 import { DEFAULT_FONT, FONTS } from './fonts'
+import { MAX_FRAME_GROWTH, MAX_FRAME_RATIO } from './frame'
 import { effectLabel, normalizeEffectId, sanitizeParams } from './effects'
 import type {
   AreaShape,
@@ -48,8 +49,8 @@ const LEGACY_PARAM_KEYS = [
   ...legacyTextKeys.flatMap((keys) => Object.values(keys)),
 ]
 
-const numericFields = new Set<keyof Generation>(['seed', 'cropX', 'cropY', 'cropSize'])
-const booleanFields = new Set<keyof Generation>(['cropPreview', 'showSeed'])
+const numericFields = new Set<keyof Generation>(['seed', 'cropX', 'cropY', 'cropSize', 'frameRatioW', 'frameRatioH', 'frameGrowth'])
+const booleanFields = new Set<keyof Generation>(['cropPreview', 'showSeed', 'frameOn'])
 
 const generationKeys = (Object.keys(DEFAULT_GENERATION) as (keyof Generation)[]).filter((key) => key !== 'layers')
 
@@ -98,11 +99,16 @@ function numberOrDefault(value: string, fallback: number) {
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
+function sanitizeFrameColor(value: unknown): string {
+  return typeof value === 'string' && colorPattern.test(value) ? value : DEFAULT_GENERATION.frameColor
+}
+
 function readParam(params: URLSearchParams, key: keyof Generation) {
   const value = params.get(key)
   if (value === null) return DEFAULT_GENERATION[key]
   if (numericFields.has(key)) return numberOrDefault(value, DEFAULT_GENERATION[key] as number)
   if (booleanFields.has(key)) return value === 'true'
+  if (key === 'frameColor') return sanitizeFrameColor(value)
   return value
 }
 
@@ -725,6 +731,11 @@ function generationScalars(record: Record<string, unknown>): Omit<Generation, 'l
     cropY: sanitizeNumber(record.cropY, DEFAULT_GENERATION.cropY),
     cropSize: sanitizeNumber(record.cropSize, DEFAULT_GENERATION.cropSize),
     cropPreview: record.cropPreview !== false && record.cropPreview !== 'false',
+    frameOn: record.frameOn === true || record.frameOn === 'true',
+    frameRatioW: Math.round(clampNumber(record.frameRatioW, 1, MAX_FRAME_RATIO, DEFAULT_GENERATION.frameRatioW)),
+    frameRatioH: Math.round(clampNumber(record.frameRatioH, 1, MAX_FRAME_RATIO, DEFAULT_GENERATION.frameRatioH)),
+    frameGrowth: clampNumber(record.frameGrowth, 0, MAX_FRAME_GROWTH, DEFAULT_GENERATION.frameGrowth),
+    frameColor: sanitizeFrameColor(record.frameColor),
     soloLayerId: '',
   }
 }

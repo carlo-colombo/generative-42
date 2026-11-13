@@ -1,6 +1,7 @@
 import { createCompositionEngine, type CompositionEngine } from './compose'
 import { cropImage } from './crop'
 import { DEFAULT_FONT, FONTS, loadFonts, type LoadedFont } from './fonts'
+import { applyFrame } from './frame'
 import { isImageCached } from './pwa/image-cache'
 import { clearSurface, createSurface, loadImageSurface, releaseSurface, resizeSurface, type Surface } from './surface'
 import { drawSeedLabel } from './text'
@@ -23,6 +24,10 @@ function cropSignature(generation: Generation): string {
   return `${generation.cropFormat}:${generation.cropX}:${generation.cropY}:${generation.cropSize}`
 }
 
+function frameSignature(generation: Generation): string {
+  return `${generation.frameOn}:${generation.frameRatioW}:${generation.frameRatioH}:${generation.frameGrowth}:${generation.frameColor}`
+}
+
 export function createStage(
   container: HTMLElement,
   initial: Generation,
@@ -32,8 +37,11 @@ export function createStage(
   const fonts = new Map<string, LoadedFont>()
   let current = initial
   let cropKey = cropSignature(initial)
+  let frameKey = frameSignature(initial)
   let sourceImage: Surface | null = null
   let cropped: Surface | null = null
+  // The cropped source padded to the frame; equal to `cropped` when framing is off.
+  let framed: Surface | null = null
   let base: Surface | null = null
   let seed: Surface | null = null
   let engine: CompositionEngine | null = null
@@ -65,19 +73,26 @@ export function createStage(
     if (!image || !baseSurface || !seedSurface || !composition) return { imageChanged: false, resized: false }
     let resized = false
     const nextCrop = cropSignature(next)
-    if (nextCrop !== cropKey) {
-      const previous = cropped
+    const nextFrame = frameSignature(next)
+    if (nextCrop !== cropKey || nextFrame !== frameKey) {
+      const replaced = new Set<Surface>()
+      if (cropped) replaced.add(cropped)
+      if (framed) replaced.add(framed)
       cropped = cropImage(image, next)
-      if (previous) releaseSurface(previous)
+      framed = applyFrame(cropped, next)
       cropKey = nextCrop
-      resizeSurface(baseSurface, cropped.width, cropped.height)
-      resizeSurface(seedSurface, cropped.width, cropped.height)
+      frameKey = nextFrame
+      for (const surface of replaced) {
+        if (surface !== cropped && surface !== framed) releaseSurface(surface)
+      }
+      resizeSurface(baseSurface, framed.width, framed.height)
+      resizeSurface(seedSurface, framed.width, framed.height)
       composition.reset()
       resized = true
     }
     if (next.seed !== current.seed) composition.reset()
     current = next
-    const source = cropped
+    const source = framed
     if (source) composition.render(next, source, fontFor)
     seedLabel(next)
     baseSurface.canvas.dataset.composed = String(next.seed)
@@ -126,9 +141,10 @@ export function createStage(
     }
     sourceImage = image
     cropped = cropImage(image, current)
-    base = createSurface(cropped.width, cropped.height)
+    framed = applyFrame(cropped, current)
+    base = createSurface(framed.width, framed.height)
     base.canvas.classList.add('base-layer')
-    seed = createSurface(cropped.width, cropped.height)
+    seed = createSurface(framed.width, framed.height)
     seed.canvas.classList.add('seed-layer')
     seed.canvas.style.display = 'block'
     container.appendChild(base.canvas)
@@ -145,10 +161,11 @@ export function createStage(
       surface.canvas.remove()
       releaseSurface(surface)
     }
-    for (const surface of [cropped, sourceImage]) if (surface) releaseSurface(surface)
+    for (const surface of [cropped, framed, sourceImage]) if (surface) releaseSurface(surface)
     base = null
     seed = null
     cropped = null
+    framed = null
     sourceImage = null
     engine = null
   }

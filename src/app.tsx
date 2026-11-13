@@ -6,6 +6,7 @@ import { EFFECT_LIST } from './effects'
 import { Actions } from './components/Actions'
 import { ControlField } from './components/ControlField'
 import { CropControls } from './components/CropControls'
+import { FrameControls } from './components/FrameControls'
 import { LayerControls } from './components/LayerControls'
 import { LayerList } from './components/LayerList'
 import { Presets } from './components/Presets'
@@ -63,6 +64,7 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
     <div className="panel-scroll">
       <SourceControls model={model} images={images} />
       <CropControls model={model} />
+      <FrameControls model={model} />
     </div>
     <Actions model={model} />
   </aside>
