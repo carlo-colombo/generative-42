@@ -137,6 +137,10 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   draws; pixel mask generation is handled by WASM.
 - `src/text.ts` — Canvas 2D text rasterization (opaque; the engine applies layer
   opacity) and the exported `drawSeedLabel` for the `seed=` overlay.
+- `src/text-cut.ts` — the text-layer cut. `cutTextAtWords` wraps every existing
+  paragraph on word boundaries with the limit clamped to 1..200, hard-splitting
+  a word longer than the limit and keeping blank lines; it does not change case.
+  The limit is ephemeral UI state, not part of the generation.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
   `maskPreview`, `showMasks`, `canvasSize`, `newEffect`) and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
@@ -168,7 +172,10 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   drag-and-drop reorder. `LayerControls.tsx` dispatches on layer kind; the effect
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge
-  mode/feather/jitter, opacity, colour, and label.
+  mode/feather/jitter, opacity, colour, and label. The text inspector holds
+  Content, the cut length, and the Cut text/Reset buttons; the pre-cut source is
+  a per-layer ref, so pressing Cut again re-cuts from that source and Reset
+  restores it.
 - `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
   crops the image, pads it with the frame, creates the base canvas at the framed
   pixel size, and hands the render function to `main.tsx`. Reports `no-image` when the generation has
@@ -243,7 +250,9 @@ an empty stack renders the source and nothing else.
 - `TextLayer` adds `text`, `align`, `vAlign`, `x`, `y`, `size`, and `font`. Text
   layers are full-canvas positioned, are not stage-editable, and have no shape
   mask in this pass. Text is rasterized into a transparent scratch, composited
-  in stack order with its opacity, and baked into exports.
+  in stack order with its opacity, and baked into exports. The inspector can
+  insert line breaks into `text` at a chosen character limit (the cut), in place
+  and in the same layer; it never adds layers.
 
 Each visible layer renders over the composite below it, so galaxy -> pixel-sort
 chains sample the galaxy output. Only normal alpha compositing is used; there
