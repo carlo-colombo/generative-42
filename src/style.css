@@ -1299,3 +1299,14 @@ body {
   color: var(--muted);
   font-size: 11px;
 }
+
+.cut-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cut-row button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}

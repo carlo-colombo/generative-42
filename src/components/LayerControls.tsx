@@ -1,3 +1,4 @@
+import { useRef, useState } from 'preact/hooks'
 import { DEFAULT_FONT, FONTS } from '../fonts'
 import { EFFECTS, EFFECT_LIST, type EffectControl } from '../effects'
 import {
@@ -9,6 +10,7 @@ import {
   type EditorModel,
 } from '../editor-state'
 import type { GenerationModel } from '../generation-state'
+import { clampCutLimit, CUT_LIMIT_DEFAULT, CUT_LIMIT_MAX, CUT_LIMIT_MIN, cutTextAtWords } from '../text-cut'
 import type { EffectId, EffectLayer, EffectParams, TextLayer } from '../types'
 import { ControlField } from './ControlField'
 import { HelpPopover } from './HelpPopover'
@@ -208,6 +210,23 @@ const verticalAlignments = ['top', 'center', 'bottom'] as const
 
 function TextInspector({ model, layer }: { model: GenerationModel; layer: TextLayer }) {
   const field = (name: TextField) => (value: string) => updateTextLayerField(model, layer.id, name, value)
+  const cuts = useRef<Map<string, { source: string; result: string }>>(new Map())
+  const [cutLimit, setCutLimit] = useState(CUT_LIMIT_DEFAULT)
+  const cut = cuts.current.get(layer.id)
+
+  const cutText = () => {
+    const source = cut && layer.text === cut.result ? cut.source : layer.text
+    const result = cutTextAtWords(source, cutLimit).toUpperCase()
+    cuts.current.set(layer.id, { source, result })
+    updateTextLayerField(model, layer.id, 'text', result)
+  }
+
+  const resetText = () => {
+    if (!cut) return
+    cuts.current.delete(layer.id)
+    updateTextLayerField(model, layer.id, 'text', cut.source)
+  }
+
   return <section className="panel-section">
     <div className="section-heading">
       <h2 className="section-title">Text layer</h2>
@@ -219,6 +238,18 @@ function TextInspector({ model, layer }: { model: GenerationModel; layer: TextLa
     <ControlField label="Content">
       <textarea aria-label="Content" rows={3} value={layer.text} onInput={(event) => field('text')(event.currentTarget.value)} />
     </ControlField>
+    <ControlField label="Cut at (chars)">
+      <input aria-label="Cut at (chars)" type="number" min={CUT_LIMIT_MIN} max={CUT_LIMIT_MAX} step="1" value={cutLimit} onInput={(event) => {
+        const raw = Number(event.currentTarget.value)
+        if (event.currentTarget.value.trim() === '' || !Number.isFinite(raw)) return
+        setCutLimit(clampCutLimit(raw))
+      }} />
+    </ControlField>
+    <div className="cut-row">
+      <button type="button" onClick={cutText} disabled={layer.text.trim() === ''}>Cut text</button>
+      {cut && <button type="button" onClick={resetText}>Reset</button>}
+    </div>
+    <p className="hint-text">Cutting breaks lines at word boundaries from the original text; pressing it again re-cuts from that original, and a word longer than the limit is split.</p>
     <ControlField label="Font">
       <select aria-label="Font" id="text-font" value={FONTS.some((font) => font.path === layer.font) ? layer.font : DEFAULT_FONT} onChange={(event) => field('font')(event.currentTarget.value)}>
         {FONTS.map((font) => <option value={font.path}>{font.label}</option>)}
