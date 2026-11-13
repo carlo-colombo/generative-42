@@ -4,9 +4,12 @@ import type { GenerationModel } from '../generation-state'
 import { cachedImagePaths } from '../pwa/image-cache'
 import { online } from '../pwa/update-state'
 import { shareHintVisible, shareNotice } from '../share'
+import { archiveFileName, buildArchive, parseArchive } from '../upload-archive'
 import {
   addUploads,
   deleteUpload,
+  exportUploads,
+  importUploadsBlobs,
   isUploadRef,
   keepUploadErrors,
   loadUploads,
@@ -29,10 +32,13 @@ function availabilityHint(total: number, cached: number, isOnline: boolean): str
 export function SourceControls({ model, images }: { model: GenerationModel; images: string[] }) {
   const generation = model.draft.value
   const [busy, setBusy] = useState(false)
+  const [archiveBusy, setArchiveBusy] = useState<'export' | 'import' | ''>('')
+  const [archiveStatus, setArchiveStatus] = useState('')
   const [error, setError] = useState(takeUploadErrors)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  const archiveInput = useRef<HTMLInputElement>(null)
   const uploaded = uploads.value
   const unavailable = uploadsStatus.value === 'unavailable'
   const notice = shareNotice.value
@@ -54,7 +60,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     const input = event.currentTarget as HTMLInputElement
     const files = Array.from(input.files ?? [])
     input.value = ''
-    if (files.length === 0) return
+    if (files.length === 0 || archiveBusy !== '') return
     shareNotice.value = ''
     setBusy(true)
     setError('')
@@ -66,6 +72,71 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
       keepUploadErrors(result.errors.join(' · '))
       selectImage(uploadRef(first.id))
     }
+  }
+
+  const downloadBlob = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportAll = async () => {
+    if (archiveBusy) return
+    setError('')
+    setArchiveStatus('')
+    setArchiveBusy('export')
+    try {
+      const entries = await exportUploads()
+      if (entries.length === 0) {
+        setError('No uploaded images to export')
+        return
+      }
+      const archive = buildArchive(entries.map(({ image, blob }) => ({
+        name: image.name,
+        width: image.width,
+        height: image.height,
+        type: blob.type,
+        createdAt: image.createdAt,
+        blob,
+      })))
+      downloadBlob(archive, archiveFileName())
+      setArchiveStatus(`Exported ${entries.length} image${entries.length === 1 ? '' : 's'}`)
+    } catch {
+      setError('Could not export the uploaded images')
+    } finally {
+      setArchiveBusy('')
+    }
+  }
+
+  const importArchive = async (file: File | undefined) => {
+    if (!file || archiveBusy) return
+    setError('')
+    setArchiveStatus('')
+    setArchiveBusy('import')
+    const room = Math.max(0, MAX_UPLOADS - uploads.value.length)
+    try {
+      const entries = await parseArchive(file)
+      const result = await importUploadsBlobs(entries.map((entry) => ({ name: entry.name, type: entry.type, blob: entry.blob })))
+      setError(result.errors.join(' · '))
+      if (result.added.length === 0) return
+      const skipped = Math.max(0, entries.length - Math.min(entries.length, room))
+      const count = `Imported ${result.added.length} image${result.added.length === 1 ? '' : 's'}`
+      setArchiveStatus(skipped > 0 ? `${count}, ${skipped} skipped: limit of ${MAX_UPLOADS}` : count)
+    } catch (thrown) {
+      setError(thrown instanceof Error ? thrown.message : 'Could not read the archive')
+    } finally {
+      setArchiveBusy('')
+    }
+  }
+
+  const handleArchiveFile = async (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    input.value = ''
+    await importArchive(file)
   }
 
   const removeUpload = async (id: string) => {
@@ -133,7 +204,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     </ControlField>
     {images.length > 0 && <p className="hint-text">{availabilityHint(images.length, cachedCount, isOnline)}</p>}
     <div className="upload-row">
-      <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || unavailable}>
+      <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || archiveBusy !== '' || unavailable}>
         {busy ? 'Reading images…' : 'Upload images'}
       </button>
       <input
@@ -146,7 +217,32 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
         onChange={handleFiles}
       />
     </div>
+    <div className="upload-archive-row">
+      <button
+        type="button"
+        onClick={() => { void exportAll() }}
+        disabled={archiveBusy !== '' || busy || unavailable || uploaded.length === 0}
+      >
+        {archiveBusy === 'export' ? `Packing ${uploaded.length} image${uploaded.length === 1 ? '' : 's'}…` : 'Export all'}
+      </button>
+      <button
+        type="button"
+        onClick={() => archiveInput.current?.click()}
+        disabled={archiveBusy !== '' || busy || unavailable}
+      >
+        {archiveBusy === 'import' ? 'Reading archive…' : 'Import'}
+      </button>
+      <input
+        id="upload-import-input"
+        ref={archiveInput}
+        className="upload-input"
+        type="file"
+        accept=".g42images,application/octet-stream"
+        onChange={handleArchiveFile}
+      />
+    </div>
     {error && <p className="text-hint">{error}</p>}
+    {archiveStatus && <p className="text-hint" role="status">{archiveStatus}</p>}
     {notice && <p className="text-hint">{notice}</p>}
     {uploaded.length > 0 && <div className="upload-grid">
       {uploaded.map((image) => {

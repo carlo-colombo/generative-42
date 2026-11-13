@@ -239,6 +239,32 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
   return { added, errors }
 }
 
+export async function exportUploads(): Promise<{ image: UploadedImage; blob: Blob }[]> {
+  const db = await openDb()
+  let records: UploadedImage[]
+  let stored: { id: string; blob?: Blob }[]
+  try {
+    records = await requestResult(db.transaction(META_STORE).objectStore(META_STORE).getAll()) as UploadedImage[]
+    stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).getAll()) as { id: string; blob?: Blob }[]
+  } finally {
+    db.close()
+  }
+  const blobs = new Map(stored.map((record) => [record.id, record.blob]))
+  return records
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .flatMap((image) => {
+      const blob = blobs.get(image.id)
+      return blob ? [{ image, blob }] : []
+    })
+}
+
+export async function importUploadsBlobs(entries: { name: string; type: string; blob: Blob }[]): Promise<{ added: UploadedImage[]; errors: string[] }> {
+  // Archive payloads are already encoded images, so the normal add path only
+  // decodes them to measure and thumbnail; it keeps the bytes untouched when
+  // the image is within MAX_UPLOAD_DIMENSION.
+  return addUploads(entries.map((entry) => new File([entry.blob], entry.name, { type: entry.type })))
+}
+
 export async function deleteUpload(id: string): Promise<void> {
   const url = objectUrls.get(id)
   if (url) {
