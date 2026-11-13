@@ -19,6 +19,9 @@ export function createEditorModel() {
     maskPreview: signal(false),
     showMasks: signal(true),
     canvasSize: signal({ width: 0, height: 0 }),
+    // The area the composition owns inside the base canvas; the frame sits
+    // outside it and shapes are normalised against it.
+    contentRect: signal({ x: 0, y: 0, width: 0, height: 0 }),
     // The effect a newly drawn shape creates.
     newEffect: signal<EffectId>('pixel-sort'),
   }

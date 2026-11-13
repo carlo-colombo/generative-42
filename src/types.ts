@@ -135,8 +135,8 @@ export interface Generation {
   cropY: number;
   cropSize: number;
   cropPreview: boolean;
-  // The frame pads the cropped source to the ratio and growth below; it never
-  // crops or rescales the image.
+  // The frame is a margin around the composition, sized by the ratio and growth
+  // below; it never crops or rescales the image and effects never paint over it.
   frameOn: boolean;
   frameRatioW: number;
   frameRatioH: number;

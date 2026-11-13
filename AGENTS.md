@@ -123,7 +123,9 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   and walks visible layers bottom-to-top, rendering each into one clear
   Canvas 2D `Surface` scratch (pixel density 1, draw state reset), then
   compositing it with normal alpha over the accumulated result through the
-  chunked WASM compositor. Effect `render` receives `{ ctx, source, mask, seed,
+  chunked WASM compositor. Its output is content-sized and is written into the
+  base canvas at the frame's content origin, so the frame margin is never
+  composed over. Effect `render` receives `{ ctx, source, mask, seed,
   random, params, edge, generation, wasm }`, where `source` is an `ImageData`
   view of the composite below (so effects chain). Caches masks and per-layer
   buffers; cache keys chain the config of every layer below, so a top-layer edit
@@ -179,8 +181,10 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   Only effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures, plus the outlines on/off toggle pinned to the top-right corner of the
   stage (so it stays reachable while the panels scroll). Shapes are stored
-  normalised 0..1 against the cropped canvas. Sort chevrons appear only on
-  `pixel-sort` layers, and the mask preview covers effect layers only.
+  normalised 0..1 against the content area (the frame offset is removed from
+  pointer positions and added back when drawing, and the frame margin is not
+  editable: a click there only clears the selection). Sort chevrons appear only
+  on `pixel-sort` layers, and the mask preview covers effect layers only.
 - `src/components/LayerList.tsx` — the unified stack list (UI top = topmost
   layer): type chip, name, visibility, solo, duplicate, delete, up/down, and
   drag-and-drop reorder. `LayerControls.tsx` dispatches on layer kind; the effect
@@ -191,8 +195,11 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   a per-layer ref, so pressing Cut again re-cuts from that source and Reset
   restores it.
 - `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
-  crops the image, pads it with the frame, creates the base canvas at the framed
-  pixel size, and hands the render function to `main.tsx`. Reports `no-image` when the generation has
+  crops the image, creates the base canvas at the framed pixel size, and hands
+  the render function to `main.tsx`. The composition always runs at the cropped
+  size and is written into the base canvas at the content rect inside the frame,
+  so a frame is pure margin. Reports the content rect to `main.tsx` on ready and
+  whenever it changes. Reports `no-image` when the generation has
   no source image, `image-offline` when a built-in image that is not in the
   `images` cache fails to load (the browser keeps `navigator.onLine` true for a
   stopped server, so the cache decides), and `image-failed` otherwise — an
@@ -201,17 +208,19 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   to the rendered seed for headless capture. The `seed=` label stays on a
   separate overlay canvas that is never exported. `downloadImage` in
   `src/surface.ts` exports the base composition (text included).
-- `src/frame.ts` — framing runs before composition and never crops or rescales
-  the image. `frameLayout(width, height, generation)` returns the padded canvas
-  (`null` when `frameOn` is off): the smallest `frameRatioW:frameRatioH` box
-  around the image, grown by `frameGrowth` percent, long side capped at 8192 px,
-  with the image centred at its native size at `x`/`y`;
-  `frameSurfaceIncrease` is the display-only percent. `applyFrame` fills the box
-  with `frameColor` (falling back to `#ffffff`) and draws the source over it,
-  returning the same surface when framing is off. The compositor's source — the
-  mask, the shapes, the text, every effect sample — is therefore the framed
-  canvas. `src/components/FrameControls.tsx` is the left-panel Frame section
-  (enable, colour, custom ratio, growth, resulting size).
+- `src/frame.ts` — the frame is a margin around the composition, like CSS
+  padding, and never crops or rescales the image. `frameLayout(width, height,
+  generation)` returns the padded canvas (`null` when `frameOn` is off): the
+  smallest `frameRatioW:frameRatioH` box around the image, grown by
+  `frameGrowth` percent, long side capped at 8192 px, with the image centred at
+  its native size at `x`/`y`. `contentRect` turns that into the area the
+  composition owns, `frameCanvasSize` the padded canvas size, and
+  `frameSurfaceIncrease` the display-only percent. `frameFillColor` is the
+  `frameColor` with a `#ffffff` fallback; `stage.ts` paints it around the
+  composition. `reducedRatio` reduces an image size to the smallest ratio the
+  controls hold (600x800 becomes 3:4). `src/components/FrameControls.tsx` is the
+  left-panel Frame section (enable, colour, custom ratio, growth, resulting
+  size); turning the frame on starts from the cropped image's own reduced ratio.
 - `src/color.ts` — scales source `ImageData` and batches quadrilateral color
   samples through WASM.
 - `src/surface.ts` — Canvas 2D `Surface` creation, resize/reset, pixel access,
@@ -259,8 +268,8 @@ an empty stack renders the source and nothing else.
 - `EffectLayer` adds `color` (the editor outline and chip tint, not part of the
   render), `shape` (`rect`, `ellipse`, or `path`, normalised 0..1), `edge`
   (`feather`, `jitter`, `mode`), `effect`, and `params`. The effect paints inside
-  the shape mask. A full-canvas effect is a rect layer covering 0..1; there is
-  no global draw selector.
+  the shape mask. A full-canvas effect is a rect layer covering 0..1 of the
+  content area inside the frame; there is no global draw selector.
 - `TextLayer` adds `text`, `align`, `vAlign`, `x`, `y`, `size`, and `font`. Text
   layers are full-canvas positioned, are not stage-editable, and have no shape
   mask in this pass. Text is rasterized into a transparent scratch, composited

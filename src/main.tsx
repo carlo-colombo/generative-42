@@ -3,7 +3,8 @@ import { signal } from '@preact/signals'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { createEditorModel } from './editor-state'
-import { createStage, type StageStatus } from './stage'
+import type { ContentRect } from './frame'
+import { createStage, type RenderResult, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration, syncGenerationURL } from './generation-state'
 import { refreshImageStates, warmImage } from './pwa/image-cache'
 import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
@@ -23,7 +24,7 @@ editor.selectedLayerId.value = generation.layers[generation.layers.length - 1]?.
 const app = document.getElementById('app')!
 let seedCanvas: HTMLCanvasElement | undefined
 let baseCanvas: HTMLCanvasElement | undefined
-let renderComposition: ((generation: Generation) => { imageChanged: boolean; resized: boolean }) | undefined
+let renderComposition: ((generation: Generation) => RenderResult) | undefined
 let wasmKernels: WasmKernels | undefined
 let drawnSignature = ''
 let previewTimer = 0
@@ -133,6 +134,11 @@ function selectFallbackLayer(generation: Generation) {
   editor.selectedLayerId.value = generation.layers[generation.layers.length - 1]?.id ?? null
 }
 
+function updateEditorArea(content: ContentRect) {
+  editor.contentRect.value = content
+  editor.canvasSize.value = { width: content.width, height: content.height }
+}
+
 function applyPreview(generation: Generation) {
   if (!renderComposition) return
   const result = renderComposition(generation)
@@ -140,7 +146,7 @@ function applyPreview(generation: Generation) {
   // signature matches one.
   drawnSignature = result.imageChanged ? '' : compositionSignature(generation)
   if (result.resized && baseCanvas) {
-    editor.canvasSize.value = { width: baseCanvas.width, height: baseCanvas.height }
+    updateEditorArea(result.content)
     aspectRatio = baseCanvas.width / baseCanvas.height
     fitStage()
     renderEditor()
@@ -222,13 +228,13 @@ window.addEventListener('online', () => {
   location.reload()
 })
 
-const stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm) => {
+const stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm, content) => {
   baseCanvas = base
   seedCanvas = seed
   wasmKernels = wasm
   renderComposition = renderLayer
   aspectRatio = base.width / base.height
-  editor.canvasSize.value = { width: base.width, height: base.height }
+  updateEditorArea(content)
   fitStage()
   drawnSignature = compositionSignature(generation)
   renderEditor()

@@ -111,7 +111,7 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
           <button type="button" onClick={addText} disabled={atCapacity}>Add text</button>
         </div>
         {atCapacity && <p className="text-hint">Limit of {MAX_LAYERS} layers</p>}
-        <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole frame.</p>
+        <p className="hint-text">Drawing a shape on the stage adds a {newEffectLabel} layer clipped to it. A full-canvas effect is a rect layer covering the whole image area.</p>
       </section>
       <Presets model={model} editor={editor} />
       <UpdatePanel />

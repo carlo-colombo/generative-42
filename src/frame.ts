@@ -1,7 +1,10 @@
-import { createSurface, type Surface } from './surface'
 import type { Generation } from './types'
 
 export type FrameLayout = { width: number; height: number; x: number; y: number }
+
+// The area the composition owns: the cropped image inside the frame. Effects,
+// shapes, and text are normalised against it, so the frame stays a margin.
+export type ContentRect = { x: number; y: number; width: number; height: number }
 
 export type FrameConfig = Pick<Generation, 'frameOn' | 'frameRatioW' | 'frameRatioH' | 'frameGrowth' | 'frameColor'>
 
@@ -56,14 +59,41 @@ export function frameSurfaceIncrease(width: number, height: number, layout: { wi
   return Math.round((layout.width * layout.height / source - 1) * 100)
 }
 
-// Returns the source itself when framing is off; otherwise a new surface the
-// caller owns.
-export function applyFrame(source: Surface, generation: Generation): Surface {
-  const layout = frameLayout(source.width, source.height, generation)
-  if (!layout) return source
-  const framed = createSurface(layout.width, layout.height)
-  framed.ctx.fillStyle = frameFillColor(generation.frameColor)
-  framed.ctx.fillRect(0, 0, framed.width, framed.height)
-  framed.ctx.drawImage(source.canvas, layout.x, layout.y, source.width, source.height)
-  return framed
+export function frameCanvasSize(width: number, height: number, generation: FrameConfig): { width: number; height: number } {
+  const layout = frameLayout(width, height, generation)
+  return layout ? { width: layout.width, height: layout.height } : { width, height }
+}
+
+export function contentRect(width: number, height: number, generation: FrameConfig): ContentRect {
+  const layout = frameLayout(width, height, generation)
+  if (!layout) return { x: 0, y: 0, width, height }
+  return { x: layout.x, y: layout.y, width, height }
+}
+
+function gcd(a: number, b: number): number {
+  let x = a
+  let y = b
+  while (y !== 0) {
+    const rest = x % y
+    x = y
+    y = rest
+  }
+  return x
+}
+
+// The image's own aspect ratio as the smallest whole numbers the ratio controls
+// can hold, e.g. 600x800 becomes 3:4.
+export function reducedRatio(width: number, height: number): { width: number; height: number } {
+  const w = Math.max(1, Math.round(width))
+  const h = Math.max(1, Math.round(height))
+  const divisor = gcd(w, h)
+  let ratioW = w / divisor
+  let ratioH = h / divisor
+  const longest = Math.max(ratioW, ratioH)
+  if (longest > MAX_FRAME_RATIO) {
+    const scale = MAX_FRAME_RATIO / longest
+    ratioW = Math.max(1, Math.round(ratioW * scale))
+    ratioH = Math.max(1, Math.round(ratioH * scale))
+  }
+  return { width: ratioW, height: ratioH }
 }

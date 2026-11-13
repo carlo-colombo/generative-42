@@ -21,9 +21,10 @@ type Pixels = Uint8ClampedArray<ArrayBuffer>
 type LayerCacheEntry = { key: string; pixels: Pixels }
 
 export type CompositionEngine = {
-  // `source` is the cropped source image at canvas size; `fontFor` resolves a
-  // preloaded font by path.
-  render: (generation: Generation, source: Surface, fontFor: (path: string) => LoadedFont | undefined) => void
+  // `source` is the cropped source image; `fontFor` resolves a preloaded font by
+  // path. The result is written into the base canvas at `origin`, the top-left of
+  // the content area inside the frame.
+  render: (generation: Generation, source: Surface, fontFor: (path: string) => LoadedFont | undefined, origin: { x: number; y: number }) => void
   reset: () => void
 }
 
@@ -150,7 +151,12 @@ export function createCompositionEngine(base: Surface, wasm: WasmKernels): Compo
     }
   }
 
-  function render(generation: Generation, source: Surface, fontFor: (path: string) => LoadedFont | undefined) {
+  function render(
+    generation: Generation,
+    source: Surface,
+    fontFor: (path: string) => LoadedFont | undefined,
+    origin: { x: number; y: number },
+  ) {
     ensureSize(source.width, source.height)
     const result = source.ctx.getImageData(0, 0, source.width, source.height).data
     const solo = generation.soloLayerId
@@ -209,8 +215,7 @@ export function createCompositionEngine(base: Surface, wasm: WasmKernels): Compo
     const live = new Set(layers.map((layer) => layer.id))
     for (const id of [...layerCache.keys()]) if (!live.has(id)) layerCache.delete(id)
 
-    base.ctx.clearRect(0, 0, width, height)
-    base.ctx.putImageData(new ImageData(result, width, height), 0, 0)
+    base.ctx.putImageData(new ImageData(result, width, height), origin.x, origin.y)
   }
 
   return { render, reset }

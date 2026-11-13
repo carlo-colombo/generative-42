@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { getCropRect } from '../crop'
-import { frameLayout, frameSurfaceIncrease, MAX_FRAME_GROWTH, MAX_FRAME_RATIO } from '../frame'
+import { frameLayout, frameSurfaceIncrease, MAX_FRAME_GROWTH, MAX_FRAME_RATIO, reducedRatio } from '../frame'
 import type { GenerationModel } from '../generation-state'
 import { useImageSource } from '../uploads'
 import { ControlField } from './ControlField'
@@ -41,10 +41,20 @@ export function FrameControls({ model }: { model: GenerationModel }) {
   const framed = cropped ? frameLayout(cropped.width, cropped.height, generation) ?? cropped : null
   const increase = cropped && framed ? frameSurfaceIncrease(cropped.width, cropped.height, framed) : 0
 
+  // A fresh frame starts at the image's own ratio, so growth alone decides the
+  // margin instead of an arbitrary 4:3 box.
+  const toggleFrame = (on: boolean) => {
+    model.setField('frameOn', on)
+    if (!on || !cropped) return
+    const ratio = reducedRatio(cropped.width, cropped.height)
+    model.setField('frameRatioW', ratio.width)
+    model.setField('frameRatioH', ratio.height)
+  }
+
   return <section className="panel-section">
     <h2 className="section-title">Frame</h2>
     <label className="checkbox-field">
-      <input type="checkbox" checked={generation.frameOn} onChange={(event) => model.setField('frameOn', event.currentTarget.checked)} />
+      <input type="checkbox" checked={generation.frameOn} onChange={(event) => toggleFrame(event.currentTarget.checked)} />
       Add frame
     </label>
     <ControlField label="Colour" value={generation.frameColor}>
@@ -68,6 +78,7 @@ export function FrameControls({ model }: { model: GenerationModel }) {
     <p className="hint-text" data-frame-dims>
       {framed ? `${framed.width} x ${framed.height} · +${increase}% surface` : 'Upload an image to see the framed size.'}
     </p>
-    <p className="hint-text">Padding only: the image is never cropped, rescaled, or stretched.</p>
+    <p className="hint-text">The frame is a margin: effects, shapes, and text stay inside the image area, and the image is never cropped, rescaled, or stretched.</p>
+    <p className="hint-text">Growth sets the margin; the ratio starts at the image's own.</p>
   </section>
 }

@@ -263,6 +263,11 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
   const [pendingCurve, setPendingCurve] = useState<Px[] | null>(null)
 
   const draft = model.draft.value
+  // Reading the content area here subscribes the overlay to it: a frame or crop
+  // change has to redraw against the new image area.
+  const content = editor.contentRect.value
+  const contentRef = useRef(content)
+  contentRef.current = content
   const tool = editor.tool.value
   const selectedId = editor.selectedLayerId.value
   const maskPreview = editor.maskPreview.value
@@ -282,9 +287,18 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
     })
   }
 
-  function canvasSize(): Size | null {
+  // The frame is a margin, so every shape coordinate is relative to the content
+  // area inside it. Falls back to the whole overlay before the stage reports one.
+  function contentArea(): { x: number; y: number; width: number; height: number } {
+    const area = contentRef.current
+    if (area.width > 0 && area.height > 0) return area
     const canvas = canvasRef.current
-    return canvas && canvas.width > 0 && canvas.height > 0 ? { width: canvas.width, height: canvas.height } : null
+    return canvas ? { x: 0, y: 0, width: canvas.width, height: canvas.height } : { x: 0, y: 0, width: 0, height: 0 }
+  }
+
+  function canvasSize(): Size | null {
+    const area = contentArea()
+    return area.width > 0 && area.height > 0 ? { width: area.width, height: area.height } : null
   }
 
   function drawLayer(context: CanvasRenderingContext2D, layer: EffectLayer, size: Size, isSelected: boolean, scale: number) {
@@ -518,7 +532,9 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
       maskCacheRef.current = { key, image }
     }
 
-    context.putImageData(maskCacheRef.current.image, 0, 0)
+    const area = contentArea()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.putImageData(maskCacheRef.current.image, area.x, area.y)
   }
 
   function draw() {
@@ -534,8 +550,10 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
     const context = canvas.getContext('2d')
     if (!size || !context) return
     const scale = uiScaleOf(canvas)
+    const area = contentArea()
 
-    context.clearRect(0, 0, size.width, size.height)
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.clearRect(0, 0, canvas.width, canvas.height)
     if (!showMasks) return
     if (maskPreview && dragRef.current.kind === 'none') {
       drawMaskPreview(context, size)
@@ -543,8 +561,10 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
     }
     // While a gesture is in flight the outlines follow it live and the weight map
     // is rebuilt once, when the pointer is released.
+    context.setTransform(1, 0, 0, 1, area.x, area.y)
     for (const layer of layers) drawLayer(context, layer, size, layer.id === selectedId, scale)
     drawPending(context, size, scale)
+    context.setTransform(1, 0, 0, 1, 0, 0)
   }
 
   useEffect(() => {
@@ -564,11 +584,13 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
 
   useEffect(() => {
     if (!baseCanvas) return
-    editor.canvasSize.value = { width: baseCanvas.width, height: baseCanvas.height }
+    const area = contentArea()
+    editor.canvasSize.value = { width: area.width, height: area.height }
     scheduleDraw()
   }, [baseCanvas, editor])
 
-  function pointerToPx(event: PointerEvent): Px | null {
+  // Pointer position in overlay pixels, before the frame offset is removed.
+  function pointerToCanvasPx(event: PointerEvent): Px | null {
     const canvas = canvasRef.current
     if (!canvas) return null
     const bounds = canvas.getBoundingClientRect()
@@ -576,6 +598,16 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
     return {
       x: ((event.clientX - bounds.left) / bounds.width) * canvas.width,
       y: ((event.clientY - bounds.top) / bounds.height) * canvas.height,
+    }
+  }
+
+  function pointerToPx(event: PointerEvent): Px | null {
+    const raw = pointerToCanvasPx(event)
+    if (!raw) return null
+    const area = contentArea()
+    return {
+      x: Math.max(area.x, Math.min(area.x + area.width, raw.x)) - area.x,
+      y: Math.max(area.y, Math.min(area.y + area.height, raw.y)) - area.y,
     }
   }
 
@@ -783,9 +815,17 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
   function handlePointerDown(event: PointerEvent) {
     if (maskPreview || !baseCanvas) return
     const canvas = canvasRef.current
-    const point = pointerToPx(event)
+    const raw = pointerToCanvasPx(event)
+    const area = contentArea()
     const size = canvasSize()
-    if (!canvas || !point || !size) return
+    if (!canvas || !raw || !size) return
+    // The frame margin is not editable: a click there only clears the selection.
+    if (raw.x < area.x || raw.x > area.x + area.width || raw.y < area.y || raw.y > area.y + area.height) {
+      if (tool === 'select') editor.selectedLayerId.value = null
+      scheduleDraw()
+      return
+    }
+    const point = { x: raw.x - area.x, y: raw.y - area.y }
 
     const scale = uiScaleOf(canvas)
 
