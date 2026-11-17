@@ -47,7 +47,7 @@
   --right-width: clamp(252px, 21vw, 320px);
 }
 
-:where(button, select, input, textarea, a, [role="button"]):focus-visible {
+:where(button, select, input, textarea, a, summary, [role="button"]):focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
   box-shadow: 0 0 0 1px #111;
@@ -1088,25 +1088,77 @@ body.is-dragging .drop-overlay {
   line-height: 1.45;
 }
 
-.update-row {
+.offline-details {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
 }
 
-.update-build {
-  font-size: 10px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.offline-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  list-style: none;
+  cursor: pointer;
 }
 
-.update-build span {
-  color: #ddd;
+.offline-summary::-webkit-details-marker {
+  display: none;
+}
+
+.offline-summary::after {
+  content: '▸';
+  display: inline-block;
+  color: var(--muted);
+  font-size: 10px;
+  transition: transform 120ms ease;
+}
+
+.offline-details[open] > .offline-summary::after {
+  transform: rotate(90deg);
+}
+
+.offline-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.offline-build {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.offline-flag {
+  white-space: nowrap;
+  color: #ffd166;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.offline-flag.is-error {
+  color: #e8a4a4;
+}
+
+.offline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-summary::after {
+    transition: none;
+  }
 }
 
 .connection-chip {
@@ -1182,6 +1234,14 @@ body.is-dragging .drop-overlay {
   flex-direction: column;
   gap: 4px;
   list-style: none;
+}
+
+@media (min-width: 941px) {
+  .layer-list {
+    max-height: 40vh;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
 }
 
 .layer-item {
@@ -1642,6 +1702,10 @@ body.is-dragging .drop-overlay {
   }
 
   .mobile-tabs button {
+    min-height: 44px;
+  }
+
+  .offline-summary {
     min-height: 44px;
   }
 }

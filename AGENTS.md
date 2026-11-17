@@ -212,8 +212,10 @@ on a device that already has the app.
 - `src/components/LayerList.tsx` — the unified stack list (UI top = topmost
   layer): type chip, name, visibility and a ⋯ disclosure menu holding solo,
   duplicate, move up/down and delete, plus drag-and-drop reorder. The menu is an
-  in-flow panel below the row, so it is never clipped by the scrolling list.
-  `LayerControls.tsx` dispatches on layer kind; the effect
+  in-flow panel below the row, so it is never clipped by the scrolling list. On
+  desktop the list is capped at 40vh and scrolls the selected row into view;
+  `LayerControls.tsx` scrolls the inspector into view when the selection changes.
+  It dispatches on layer kind; the effect
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge
   mode/feather/jitter, opacity, colour, and label. The text inspector holds
@@ -270,9 +272,10 @@ on a device that already has the app.
   bookkeeping, the quota-derived image budget, the bulk download, and the
   cached/online/offline state of each built-in image. It also owns the
   `gen42-pwa` IndexedDB (stores `images` and `meta`).
-- `src/components/UpdatePanel.tsx` — the right-panel Offline section: build and
-  connection state, update check/prompt/rollback, install hint, storage bars,
-  image cache size, bulk download, and the two clear actions.
+- `src/components/UpdatePanel.tsx` — the right-panel Offline disclosure. Its
+  summary shows the build, connection and any update/rollback/error flag; opening
+  it reveals update check/prompt/rollback, install hint, storage bars, image
+  cache size, bulk download and the two clear actions.
 - `public/manifest.webmanifest`, `public/icons/*` — installability metadata; the
   webmanifest is precached, the icons are too. It also declares the
   `share_target` (`./share-target`, POST multipart, images only).

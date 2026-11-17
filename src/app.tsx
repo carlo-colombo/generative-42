@@ -16,7 +16,6 @@ import { UpdatePanel } from './components/UpdatePanel'
 import { FULL_CANVAS_SHAPE, type EffectId } from './types'
 
 import { appUrl } from './paths'
-import { buildId } from './pwa/update-state'
 
 function useImages(model: GenerationModel) {
   const [images, setImages] = useState<string[]>([])
@@ -59,7 +58,6 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
   return <aside className="panel panel-left" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
       <h1>Generative 42</h1>
-      <p className="build-label" aria-label={`Version v${buildId}`}>VERSION v{buildId}</p>
       {manifestState === 'loading' && <p>Loading images...</p>}
       {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
     </header>

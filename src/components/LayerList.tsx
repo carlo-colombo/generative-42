@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { EditorModel } from '../editor-state'
 import { duplicateLayer, moveLayer, removeLayer, updateLayer } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
@@ -24,6 +24,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
   const selectedId = editor.selectedLayerId.value
   const atCapacity = layers.length >= MAX_LAYERS
   const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
 
@@ -35,6 +36,15 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
     window.addEventListener('pointerdown', close)
     return () => window.removeEventListener('pointerdown', close)
   }, [menuFor])
+
+  useEffect(() => {
+    const list = listRef.current
+    const row = list?.querySelector<HTMLElement>('.layer-row.selected')
+    if (!list || !row || list.scrollHeight <= list.clientHeight) return
+    const bounds = list.getBoundingClientRect()
+    const rowBounds = row.getBoundingClientRect()
+    if (rowBounds.top < bounds.top || rowBounds.bottom > bounds.bottom) row.scrollIntoView({ block: 'nearest' })
+  }, [selectedId])
 
   const select = (id: string) => {
     setMenuFor(null)
@@ -70,7 +80,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
     <h2 className="section-title">Layers</h2>
     {display.length === 0
       ? <p className="hint-text">Empty stack: only the cropped source renders. Add an effect or a text layer.</p>
-      : <ul className="layer-list">
+      : <ul className="layer-list" ref={listRef}>
         {display.map((layer, displayIndex) => {
           const solo = generation.soloLayerId === layer.id
           const name = layerName(layer)

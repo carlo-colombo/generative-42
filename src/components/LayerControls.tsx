@@ -1,4 +1,4 @@
-import { useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { DEFAULT_FONT, FONTS } from '../fonts'
 import { EFFECTS, EFFECT_LIST, type EffectControl } from '../effects'
 import {
@@ -284,13 +284,24 @@ function TextInspector({ model, layer }: { model: GenerationModel; layer: TextLa
 
 export function LayerControls({ model, editor }: { model: GenerationModel; editor: EditorModel }) {
   const layer = model.draft.value.layers.find((candidate) => candidate.id === editor.selectedLayerId.value)
+  const inspectorRef = useRef<HTMLDivElement>(null)
+  const previousId = useRef<string | null>(layer?.id ?? null)
+  useEffect(() => {
+    const id = layer?.id ?? null
+    if (!id || previousId.current === id) return
+    previousId.current = id
+    if (!window.matchMedia('(min-width: 941px)').matches) return
+    inspectorRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [layer?.id])
   if (!layer) {
     return <section className="panel-section">
       <h2 className="section-title">Layer</h2>
       <p className="hint-text">Select a layer in the list to edit it.</p>
     </section>
   }
-  return layer.kind === 'effect'
-    ? <EffectInspector model={model} editor={editor} layer={layer} />
-    : <TextInspector model={model} layer={layer} />
+  return <div ref={inspectorRef}>
+    {layer.kind === 'effect'
+      ? <EffectInspector model={model} editor={editor} layer={layer} />
+      : <TextInspector model={model} layer={layer} />}
+  </div>
 }

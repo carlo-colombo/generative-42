@@ -111,72 +111,87 @@ export function UpdatePanel() {
     ? `${progress.done}/${progress.total} images · ${formatBytes(progress.bytes)} of ${formatBytes(progress.totalBytes)}`
     : ''
 
-  return <section className="panel-section" aria-labelledby="offline-title" data-update-status={status}>
-    <h2 className="section-title" id="offline-title">Offline</h2>
-    <div className="update-row">
-      <span className="update-build">
-        VERSION <span data-build-id={buildId}>v{buildId}</span>{servingPrevious ? ' · PREVIOUS' : ''}
-      </span>
-      <span
-        className={isOnline ? 'connection-chip is-online' : 'connection-chip is-offline'}
-        role="status"
-        aria-live="polite"
-        aria-label={isOnline ? 'Online' : 'Offline'}
-      >{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
-    </div>
-    <button type="button" onClick={() => { void checkForUpdates() }} disabled={status === 'checking' || status === 'installing'}>
-      {status === 'checking' ? 'CHECKING FOR UPDATES…' : 'CHECK FOR UPDATES'}
-    </button>
-    {status === 'ready' && <div className="update-block">
-      <p className="hint-text" role="status">NEW VERSION AVAILABLE{waiting ? ` · v${waiting}` : ''}</p>
-      <button type="button" onClick={() => { void acceptUpdate() }}>RELOAD</button>
-    </div>}
-    {status === 'installing' && <p className="hint-text" role="status">UPDATING…</p>}
-    {status === 'error' && <p className="hint-text" role="status">{(updateError.value ?? 'Update failed.').toUpperCase()}</p>}
-    {canRollback.value && <div className="update-block">
-      <p className="hint-text" role="status">THIS BUILD HAS NOT RENDERED YET; YOUR PREVIOUS BUILD IS STILL ON THIS DEVICE</p>
-      <button type="button" onClick={() => { void rollbackToPrevious() }}>GO BACK TO THE PREVIOUS VERSION</button>
-    </div>}
-    {prompt && <button type="button" onClick={() => { void install() }}>INSTALL APP</button>}
-    {!prompt && isIos() && <p className="hint-text">
-      INSTALL ON iOS: SHARE → ADD TO HOME SCREEN. INSTALLED APPS KEEP THEIR OWN STORAGE AND ARE NOT EVICTED AFTER 7 DAYS WITHOUT A VISIT.
-    </p>}
-    <div className="storage-rows">
-      <div className="storage-row">
-        <span className="storage-label">
-          <span>Storage used</span>
-          <span>{estimate ? `${formatBytes(estimate.usage)} / ${formatBytes(estimate.quota)}` : 'Unavailable'}</span>
+  const flag = status === 'error'
+    ? 'UPDATE ERROR'
+    : canRollback.value
+      ? 'ROLLBACK'
+      : status === 'ready'
+        ? 'NEW VERSION'
+        : status === 'installing'
+          ? 'UPDATING'
+          : ''
+
+  return <section className="panel-section offline-section" aria-labelledby="offline-title" data-update-status={status}>
+    <details className="offline-details">
+      <summary className="offline-summary">
+        <span className="section-title" id="offline-title">Offline</span>
+        <span className="offline-state">
+          <span className="offline-build" data-build-id={buildId}>v{buildId}{servingPrevious ? ' · PREVIOUS' : ''}</span>
+          <span
+            className={isOnline ? 'connection-chip is-online' : 'connection-chip is-offline'}
+            role="status"
+            aria-live="polite"
+            aria-label={isOnline ? 'Online' : 'Offline'}
+          >{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+          {flag && <span className={status === 'error' ? 'offline-flag is-error' : 'offline-flag'} role="status">{flag}</span>}
         </span>
-        <div className="storage-bar" role="img" aria-label="Storage usage">
-          <div className="storage-bar-fill" style={{ width: `${percent(estimate?.usage ?? 0, estimate?.quota ?? 0)}%` }} />
+      </summary>
+      <div className="offline-body">
+        <button type="button" onClick={() => { void checkForUpdates() }} disabled={status === 'checking' || status === 'installing'}>
+          {status === 'checking' ? 'CHECKING FOR UPDATES…' : 'CHECK FOR UPDATES'}
+        </button>
+        {status === 'ready' && <div className="update-block">
+          <p className="hint-text" role="status">NEW VERSION AVAILABLE{waiting ? ` · v${waiting}` : ''}</p>
+          <button type="button" onClick={() => { void acceptUpdate() }}>RELOAD</button>
+        </div>}
+        {status === 'installing' && <p className="hint-text" role="status">UPDATING…</p>}
+        {status === 'error' && <p className="hint-text" role="status">{(updateError.value ?? 'Update failed.').toUpperCase()}</p>}
+        {canRollback.value && <div className="update-block">
+          <p className="hint-text" role="status">THIS BUILD HAS NOT RENDERED YET; YOUR PREVIOUS BUILD IS STILL ON THIS DEVICE</p>
+          <button type="button" onClick={() => { void rollbackToPrevious() }}>GO BACK TO THE PREVIOUS VERSION</button>
+        </div>}
+        {prompt && <button type="button" onClick={() => { void install() }}>INSTALL APP</button>}
+        {!prompt && isIos() && <p className="hint-text">
+          INSTALL ON iOS: SHARE → ADD TO HOME SCREEN. INSTALLED APPS KEEP THEIR OWN STORAGE AND ARE NOT EVICTED AFTER 7 DAYS WITHOUT A VISIT.
+        </p>}
+        <div className="storage-rows">
+          <div className="storage-row">
+            <span className="storage-label">
+              <span>Storage used</span>
+              <span>{estimate ? `${formatBytes(estimate.usage)} / ${formatBytes(estimate.quota)}` : 'Unavailable'}</span>
+            </span>
+            <div className="storage-bar" role="img" aria-label="Storage usage">
+              <div className="storage-bar-fill" style={{ width: `${percent(estimate?.usage ?? 0, estimate?.quota ?? 0)}%` }} />
+            </div>
+          </div>
+          <div className="storage-row">
+            <span className="storage-label">
+              <span>Offline images</span>
+              <span>{stats ? `${formatBytes(stats.bytes)} / ${formatBytes(stats.budget)} · ${stats.count}` : 'Unavailable'}</span>
+            </span>
+            <div className="storage-bar" role="img" aria-label="Offline image cache">
+              <div className="storage-bar-fill" style={{ width: `${percent(stats?.bytes ?? 0, stats?.budget ?? 0)}%` }} />
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="storage-row">
-        <span className="storage-label">
-          <span>Offline images</span>
-          <span>{stats ? `${formatBytes(stats.bytes)} / ${formatBytes(stats.budget)} · ${stats.count}` : 'Unavailable'}</span>
-        </span>
-        <div className="storage-bar" role="img" aria-label="Offline image cache">
-          <div className="storage-bar-fill" style={{ width: `${percent(stats?.bytes ?? 0, stats?.budget ?? 0)}%` }} />
+        <button type="button" onClick={() => { void makeAll() }} disabled={!isOnline || busy}>
+          {busy
+            ? 'Saving images for offline…'
+            : `Make all images available offline${total !== null ? ` · ${formatBytes(total)}` : ''}`}
+        </button>
+        {progress?.state === 'measuring' && <p className="hint-text">Measuring image sizes…</p>}
+        {progressText && <p className="hint-text">{progressText}</p>}
+        <div className="add-row">
+          <button type="button" onClick={() => { void clearImages() }} disabled={busy}>Clear offline images</button>
+          <button type="button" onClick={() => { void clearAll() }} disabled={busy}>Clear offline data</button>
         </div>
+        <p className="hint-text">
+          {isOnline
+            ? `Clearing offline data deletes ${uploadLabel(uploadCount)} and the cached images. Presets and the current generation stay.`
+            : `Offline: only cached images and ${uploadLabel(uploadCount)} are available. Reconnect to download more.`}
+        </p>
+        {message && <p className="text-hint" role="status">{message}</p>}
       </div>
-    </div>
-    <button type="button" onClick={() => { void makeAll() }} disabled={!isOnline || busy}>
-      {busy
-        ? 'Saving images for offline…'
-        : `Make all images available offline${total !== null ? ` · ${formatBytes(total)}` : ''}`}
-    </button>
-    {progress?.state === 'measuring' && <p className="hint-text">Measuring image sizes…</p>}
-    {progressText && <p className="hint-text">{progressText}</p>}
-    <div className="add-row">
-      <button type="button" onClick={() => { void clearImages() }} disabled={busy}>Clear offline images</button>
-      <button type="button" onClick={() => { void clearAll() }} disabled={busy}>Clear offline data</button>
-    </div>
-    <p className="hint-text">
-      {isOnline
-        ? `Clearing offline data deletes ${uploadLabel(uploadCount)} and the cached images. Presets and the current generation stay.`
-        : `Offline: only cached images and ${uploadLabel(uploadCount)} are available. Reconnect to download more.`}
-    </p>
-    {message && <p className="text-hint" role="status">{message}</p>}
+    </details>
   </section>
 }
