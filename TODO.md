@@ -4,14 +4,14 @@
 
 ### Tooling
 
-- [ ] Remove all headless generation infrastructure:
-  - delete `generate/headless.ts` and the `generate/` directory
-  - drop the `generate` and `generate:all` scripts from `package.json`
-  - remove `puppeteer` and update `pnpm-lock.yaml`
-  - delete the `output/` artifacts and its ignore entry
-  - drop `PUPPETEER_SKIP_DOWNLOAD` from `.github/workflows/deploy.yml`
-  - remove the `canvas.base-layer.dataset.composed` capture flag and the headless-capture references in `AGENTS.md`, `src/stage.ts`, and `generate/headless.ts`
-  - re-check the `?sw=0` rationale once the headless script is gone
+- [x] Remove all headless generation infrastructure:
+  - [x] delete `generate/headless.ts` and the `generate/` directory
+  - [x] drop the `generate` and `generate:all` scripts from `package.json`
+  - [x] remove `puppeteer` and update `pnpm-lock.yaml`
+  - [x] delete the `output/` artifacts and its ignore entry
+  - [x] drop `PUPPETEER_SKIP_DOWNLOAD` from `.github/workflows/deploy.yml`
+  - [x] remove the `canvas.base-layer.dataset.composed` capture flag and the headless-capture references in `AGENTS.md`, `src/stage.ts`, and `generate/headless.ts`
+  - [x] re-check the `?sw=0` rationale once the headless script is gone
 
 ### UX review follow-ups
 

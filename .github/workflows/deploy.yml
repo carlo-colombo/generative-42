@@ -33,12 +33,8 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # Puppeteer's bundled Chrome is only needed by `pnpm generate`, a local
-      # headless render, so skip the ~150 MB download.
       - name: Install
         run: pnpm install --frozen-lockfile
-        env:
-          PUPPETEER_SKIP_DOWNLOAD: "1"
 
       - uses: mlugg/setup-zig@v2
         with:

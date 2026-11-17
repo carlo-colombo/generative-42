@@ -8,16 +8,13 @@ Generative art tool built with TypeScript, Canvas 2D, and WebAssembly. Given an
 image, a stack of
 layers, and some text, it renders a single static canvas per `seed`. Each stack
 row is either an effect layer (a shape plus any effect from the registry) or a
-text layer. A browser UI edits the stack; a headless Puppeteer script renders
-seeds to PNG for offline use.
+text layer. A browser UI edits the stack and exports the composition as PNG.
 
 ## Commands
 
 - `pnpm dev` — rebuild the WASM kernels, then start Vite
 - `pnpm build` — rebuild WASM, typecheck (`tsc`), then build (`vite build`)
 - `pnpm preview` — serve the built `dist/`
-- `pnpm generate --image=<path>` — headless render seed 1 to `output/gen-1.png`
-- `pnpm generate:all --image=<path>` — headless render seeds 1–10
 - `pnpm build:wasm` — compile the Zig kernels with Zig 0.17.x
 - `pnpm test:wasm` — rebuild and test WASM kernels, including pixel sort, detail noise, and Voronoi
 - `VITE_BASE=/generative-42/ pnpm build` — build for a subdirectory deployment
@@ -30,8 +27,7 @@ under `pnpm dev`/`preview`) and `?sw=0` to skip registering one; without the fla
 registration runs only in a production build. `?sw=0` does not uninstall or
 disable an installed worker: that worker still serves navigations, `/app/*`,
 fonts, WASM, and icons from its cached shell, so the flag is not an escape hatch
-on a device that already has the app. `pnpm generate` opens `?sw=0` and uses a
-fresh Puppeteer profile, so no worker exists to intercept the capture.
+on a device that already has the app.
 
 ## Architecture
 
@@ -218,11 +214,9 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   no source image, `image-offline` when a built-in image that is not in the
   `images` cache fails to load (the browser keeps `navigator.onLine` true for a
   stopped server, so the cache decides), and `image-failed` otherwise — an
-  upload or a corrupt cached image. Sets
-  `canvas.base-layer.dataset.composed`
-  to the rendered seed for headless capture. The `seed=` label stays on a
-  separate overlay canvas that is never exported. `downloadImage` in
-  `src/surface.ts` exports the base composition (text included).
+  upload or a corrupt cached image. The `seed=` label stays on a separate
+  overlay canvas that is never exported. `downloadImage` in `src/surface.ts`
+  exports the base composition (text included).
 - `src/frame.ts` — the frame is a margin around the composition, like CSS
   padding, and never crops or rescales the image. `frameLayout(width, height,
   generation)` returns the padded canvas (`null` when `frameOn` is off): the
@@ -245,9 +239,6 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
 - `src/fonts.ts` — `FONTS` list (`label` + `path`), `DEFAULT_FONT`, and the
   `FontFace` loader. Font files live in `public/fonts/`; every `FONTS` entry
   must exist there, because the stage loads them during bootstrap.
-- `generate/headless.ts` — Puppeteer script. Builds, starts `pnpm preview` on
-  port 4173, opens the app with `?seed=N&sw=0`, waits for the composition-ready
-  flag, captures `canvas.base-layer`, and writes `output/gen-N.png`.
 - `vite-plugin-pwa-shell.ts` — stamps one build id per config load, exposes it
   as `__BUILD_ID__`, substitutes it plus the precache list into `public/sw.js`
   as a build artifact, and emits `dist/assets/manifest.json`. In dev it serves
@@ -514,14 +505,12 @@ Because the site lives under a subdirectory, `base` is not `/` in production:
 `src/paths.ts` and the `__BASE__` placeholder in `public/sw.js` carry the base
 into registration scope, service-worker routing, the precache list, fonts,
 WASM, and the image manifest. Building without `VITE_BASE` still targets the
-domain root, so local `pnpm dev`, `pnpm preview`, and `pnpm generate` behave as
-before.
+domain root, so local `pnpm dev` and `pnpm preview` behave as before.
 
 `public/wasm/kernels.wasm` is generated and ignored by Git. The deploy workflow
 installs Zig 0.17.1, rebuilds and tests the kernels before building the app;
 `pnpm dev`, `pnpm build`, and `pnpm test:wasm` also rebuild them locally.
-Puppeteer is installed with `PUPPETEER_SKIP_DOWNLOAD=1` because only the local
-`pnpm generate` script uses it. The deployed site ships no built-in images (the
+The deployed site ships no built-in images (the
 repository has none), so thumbnails come from the user's own uploads, which
 stay in that browser's IndexedDB.
 
@@ -541,5 +530,3 @@ for the UI but never registers a worker, because that origin is not secure.
   through `.github/workflows/deploy.yml`. No feature branches, pull requests, or
   release tagging unless requested.
 - `dist/` is a build output; regenerate via `pnpm build`.
-- `/generate/headless.ts` captures `canvas.base-layer`, which now includes text;
-  the stage overlay and the `seed=` canvas are never part of an export.

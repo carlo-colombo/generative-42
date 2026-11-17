@@ -1,6 +1,5 @@
 node_modules
 dist
-output
 *.local
 
 # Source images are not tracked; the app ships with none and reads uploads or

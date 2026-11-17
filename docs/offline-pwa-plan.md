@@ -83,10 +83,8 @@ Notes:
   updates the shell cache entry; images that disappeared from the manifest are
   left in the `images` cache but hidden by the dropdown.
 - No `skipWaiting` on install; see §6.
-- Registration is skipped outside `import.meta.env.PROD` unless `?sw=1`, and
-  `generate/headless.ts` must open with `?sw=0`: `pnpm generate` runs through
-  `vite preview`, so a fresh Puppeteer profile would otherwise install a
-  service worker mid-capture.
+- Registration is skipped outside `import.meta.env.PROD` unless `?sw=1`;
+  `?sw=0` skips registration for a manual test.
 
 ## 5. Offline image behavior and UX
 
@@ -185,8 +183,8 @@ source tree from `assetManifestPlugin`, and Vite emits app chunks into
 - Emit `manifest.json` as a build artifact (`dist/assets/manifest.json`),
   served in dev by middleware, instead of writing into `public/`.
 - Keep every payload URL as-is (`/assets/…`, `/fonts/…`, `/wasm/…`) so
-  existing `?image=` links, `?layers=` generations, `localStorage.generation`
-  and `generate/headless.ts` are unaffected.
+  existing `?image=` links, `?layers=` generations and
+  `localStorage.generation` are unaffected.
 - Optional: have the plugin also expose the manifest list as a virtual module
   so the image dropdown has a built-in fallback list even on a first offline
   visit.
@@ -224,23 +222,21 @@ Changed:
 - `src/stage.ts` / `src/main.tsx` — the "no image offline" state instead of
   "IMAGE FAILED".
 - `src/uploads.ts` — `persist()` before writes.
-- `generate/headless.ts` — `?sw=0`.
 - `AGENTS.md` — document the shell/image cache split and the `?sw=0` flag.
 
 ## 11. Milestones
 
 **M0 — routing split, no behavior change.**
 `assetsDir: 'app'`; `manifest.json` as a build artifact; no SW.
-Acceptance: `pnpm build && pnpm preview` renders; `pnpm generate` writes the
-same PNG; `git status` clean after a build; old `?image=`/`?layers=` URLs
-unchanged.
+Acceptance: `pnpm build && pnpm preview` renders; `git status` clean after a
+build; old `?image=`/`?layers=` URLs unchanged.
 
 **M1 — installable shell.**
 `sw.js` + webmanifest + icons + registration; precache shell, fonts, wasm,
 manifest.
 Acceptance: DevTools offline + hard reload renders and loads fonts/WASM;
-Lighthouse "Installable" passes; `pnpm dev` unaffected; `pnpm generate`
-byte-identical for a seed.
+Lighthouse "Installable" passes; `pnpm dev` unaffected; a seed still renders
+deterministically.
 
 **M2 — offline images.**
 `images` runtime cache, warm-on-use, dropdown badges, "NO IMAGE OFFLINE"

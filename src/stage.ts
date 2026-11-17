@@ -137,7 +137,6 @@ export function createStage(
       composition.render(next, source, fontFor, content)
     }
     seedLabel(next)
-    baseSurface.canvas.dataset.composed = String(next.seed)
     onStatus?.('rendered')
     return { imageChanged: false, resized, content }
   }
