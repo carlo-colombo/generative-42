@@ -485,6 +485,43 @@ body {
   min-height: 0;
 }
 
+.mobile-tabs-root {
+  display: none;
+  width: 100%;
+}
+
+.mobile-tabs {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+}
+
+.mobile-tabs button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mobile-tabs button:hover {
+  color: var(--text);
+  border-color: #3d3d3d;
+}
+
+.mobile-tabs button.active {
+  background: #eee;
+  border-color: #eee;
+  color: #111;
+  font-weight: 600;
+}
+
 .stage-toolbar {
   display: flex;
   align-items: center;
@@ -574,12 +611,15 @@ body {
 }
 
 .stage-loading-hint {
+  white-space: normal;
   font-size: 0.85em;
   letter-spacing: 0.08em;
   color: var(--muted);
 }
 
 .stage-loading-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
   pointer-events: auto;
   padding: 6px 12px;
   border: 1px solid rgb(238 238 238 / 28%);
@@ -607,11 +647,16 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.8em;
+  max-width: calc(100% - 24px);
+  text-align: center;
 }
 
 .stage-loading-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
+  max-width: calc(100% - 24px);
   pointer-events: auto;
 }
 
@@ -1468,10 +1513,13 @@ body.is-dragging .drop-overlay {
     overflow: visible;
   }
 
-  .panel-footer {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
+  .mobile-tabs-root {
+    display: block;
+  }
+
+  body[data-panel="image"] .panel-right,
+  body[data-panel="layers"] .panel-left {
+    display: none;
   }
 }
 
@@ -1592,6 +1640,10 @@ body.is-dragging .drop-overlay {
   .panel input[type="range"] {
     min-height: 44px;
   }
+
+  .mobile-tabs button {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 940px) and (pointer: coarse) {
@@ -1599,5 +1651,12 @@ body.is-dragging .drop-overlay {
     width: 44px;
     height: 44px;
     font-size: 14px;
+  }
+}
+
+@media (max-width: 940px) and (max-height: 620px) {
+  #app.is-docked .stage-loading-hint,
+  #app.is-docked .stage-loading-actions {
+    display: none;
   }
 }

@@ -23,7 +23,8 @@
 - [x] Stage empty state with Upload, sample, drag-and-drop and paste; split offline vs missing-upload errors
 - [x] Focus rings and 24 px desktop targets (20 px layer icons use the 4 px spacing exception)
 - [x] 44 px touch targets for layer/upload actions (layer overflow menu; footer buttons remain 36 px)
-- [ ] Right-panel IA: layer-list scroll, sticky inspector, collapse the Offline panel, mobile tabs
+- [x] Mobile Image/Layers tabs with the stage and tabs sticky; footer no longer overlays the panel
+- [ ] Collapse the Offline panel and keep the inspector reachable in long stacks
 - [ ] Seed/layer label collision and contrast
 - [ ] Canvas semantics and help-popover dismissal
 - [ ] Accessibility pass (landmarks, announcements, headings) and validation

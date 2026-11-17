@@ -49,7 +49,9 @@ on a device that already has the app.
   stuck at `image-offline`/`image-failed`. It also owns the history shortcuts:
   Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z or Ctrl+Y redo, ignored in text-entry fields
   so native text undo still works. It also owns the global image ingest
-  (drag/drop/paste), the stage empty-state actions and the stage notice.
+  (drag/drop/paste), the stage empty-state actions and the stage notice. Below
+  940 px it renders the Image/Layers tab bar inside the sticky stage, sizes the
+  stage around the tabs, and persists the chosen tab in sessionStorage.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -107,7 +109,7 @@ on a device that already has the app.
   and `wasmProfile`) and reports when the stack is stored in this browser's
   localStorage.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
-  `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
+  `LayerList`, `LayerControls`, `Presets`, `Actions`, `MobileTabs`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
   with upload/select/rename/remove; rename edits the name inline in the tile.
@@ -116,7 +118,8 @@ on a device that already has the app.
   otherwise) and download. Upload and preset deletion confirm before removing
   browser-local data.
 - `src/style.css` — three-column layout: left controls, centered stage, right
-  layer controls; stacks vertically below 940px.
+  layer controls; below 940px it stacks, keeps the stage and Image/Layers tabs
+  sticky, shows one panel at a time, and makes the panel footer static.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
   `EffectParams`/`DEFAULT_EFFECT_PARAMS`, `DEFAULT_GENERATION`, `LAYER_COLORS`,
   and `FULL_CANVAS_SHAPE`. Adding a new generation option means updating
@@ -178,7 +181,7 @@ on a device that already has the app.
   a word longer than the limit and keeping blank lines; it does not change case.
   The limit is ephemeral UI state, not part of the generation.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
-  `maskPreview`, `showMasks`, `canvasSize`, `newEffect`) and the unified layer
+  `maskPreview`, `showMasks`, `canvasSize`, `newEffect`, `mobileTab`) and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
   duplicate/move), plus the shape clamp/translate/copy helpers. `newEffect` is
   the effect a newly drawn shape creates.
@@ -200,7 +203,8 @@ on a device that already has the app.
 - `src/components/StageEditor.tsx` — canvas overlay above the rendered stage.
   Only effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures, plus the outlines on/off toggle pinned to the top-right corner of the
-  stage (so it stays reachable while the panels scroll). Shapes are stored
+  stage once a base canvas exists (so it stays reachable while the panels
+  scroll, but is absent on the empty stage). Shapes are stored
   normalised 0..1 against the content area (the frame offset is removed from
   pointer positions and added back when drawing, and the frame margin is not
   editable: a click there only clears the selection). Sort chevrons appear only

@@ -1,8 +1,9 @@
 import { render } from 'preact'
-import { signal } from '@preact/signals'
+import { effect, signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
+import { MobileTabs } from './components/MobileTabs'
 import { createEditorModel } from './editor-state'
 import type { ContentRect } from './frame'
 import { createStage, type RenderResult, type StageStatus } from './stage'
@@ -25,6 +26,26 @@ const generation = getGeneration()
 const model = createGenerationModel(generation)
 const editor = createEditorModel()
 editor.selectedLayerId.value = generation.layers[generation.layers.length - 1]?.id ?? null
+
+const storedTab = (() => {
+  try {
+    return sessionStorage.getItem('mobile-tab')
+  } catch {
+    return null
+  }
+})()
+if (!generation.image) editor.mobileTab.value = 'image'
+else if (storedTab === 'image' || storedTab === 'layers') editor.mobileTab.value = storedTab
+else editor.mobileTab.value = 'layers'
+const stopPanelTab = effect(() => {
+  const tab = editor.mobileTab.value
+  document.body.dataset.panel = tab
+  try {
+    sessionStorage.setItem('mobile-tab', tab)
+  } catch {
+    // Private mode only loses the remembered tab.
+  }
+})
 const app = document.getElementById('app')!
 let seedCanvas: HTMLCanvasElement | undefined
 let baseCanvas: HTMLCanvasElement | undefined
@@ -171,14 +192,23 @@ loadingRoot.className = 'stage-loading-root'
 stage.appendChild(loadingRoot)
 render(<><StageLoading /><StageNotice /></>, loadingRoot)
 
+const tabsRoot = document.createElement('div')
+tabsRoot.className = 'mobile-tabs-root'
+stageColumn.appendChild(tabsRoot)
+render(<MobileTabs editor={editor} />, tabsRoot)
+
+const mobileQuery = window.matchMedia('(max-width: 940px)')
+
 let aspectRatio = 1
 function fitStage() {
   const style = getComputedStyle(app)
   const bounds = app.getBoundingClientRect()
   const availableWidth = Math.max(0, bounds.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight))
+  const tabsHeight = tabsRoot.offsetHeight
+  const tabsGap = tabsHeight > 0 ? 8 : 0
   const availableHeight = Math.max(
     0,
-    bounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+    bounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom) - tabsHeight - tabsGap,
   )
   const width = Math.min(availableWidth, availableHeight * aspectRatio)
   stage.style.width = `${Math.floor(width)}px`
@@ -187,12 +217,12 @@ function fitStage() {
 
 const stageObserver = new ResizeObserver(fitStage)
 stageObserver.observe(app)
+stageObserver.observe(tabsRoot)
 fitStage()
 
 // Below the three-column breakpoint the stage docks to the top of the page so it
 // stays visible while the panels scroll. The docked height is smaller, and the
 // app box is observed above, so the stage refits without a resize event.
-const mobileQuery = window.matchMedia('(max-width: 940px)')
 function updateStageDock() {
   app.classList.toggle('is-docked', mobileQuery.matches && window.scrollY > 24)
 }
@@ -440,6 +470,7 @@ if (import.meta.hot) {
     unsubscribePreview()
     unsubscribeWarm()
     unsubscribeURL()
+    stopPanelTab()
     if (urlTimer) clearTimeout(urlTimer)
     window.removeEventListener('scroll', updateStageDock)
     window.removeEventListener('keydown', handleHistoryShortcut)

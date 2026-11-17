@@ -10,6 +10,7 @@ import type { AreaShape, EffectId, EffectLayer, EffectParams, Generation, Layer,
 export { clamp01, clampShape } from './areas'
 
 export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'curve'
+export type MobileTab = 'image' | 'layers'
 export type TextField = 'text' | 'align' | 'vAlign' | 'x' | 'y' | 'size' | 'font' | 'opacity'
 
 export function createEditorModel() {
@@ -24,6 +25,8 @@ export function createEditorModel() {
     contentRect: signal({ x: 0, y: 0, width: 0, height: 0 }),
     // The effect a newly drawn shape creates.
     newEffect: signal<EffectId>('pixel-sort'),
+    // Which panel the mobile tab bar shows; ignored on desktop.
+    mobileTab: signal<MobileTab>('image'),
   }
 }
 
