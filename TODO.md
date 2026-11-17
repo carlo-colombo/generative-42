@@ -21,7 +21,8 @@
 - [x] Copy-link / Web Share for the current generation
 - [x] Make shared links portable: Web Share sends the PNG when files are supported; Download PNG otherwise
 - [x] Stage empty state with Upload, sample, drag-and-drop and paste; split offline vs missing-upload errors
-- [ ] Focus and target-size pass (24 px minimum, 44 px on touch)
+- [x] Focus rings and 24 px desktop targets (20 px layer icons use the 4 px spacing exception)
+- [ ] 44 px touch targets for layer/upload actions (needs the row overflow menu)
 - [ ] Right-panel IA: layer-list scroll, sticky inspector, collapse the Offline panel, mobile tabs
 - [ ] Seed/layer label collision and contrast
 - [ ] Canvas semantics and help-popover dismissal

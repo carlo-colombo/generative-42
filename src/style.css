@@ -42,8 +42,15 @@
   --line: #2e2e2e;
   --text: #eee;
   --muted: #8a8a8a;
+  --focus: #3a8ee6;
   --left-width: clamp(272px, 23vw, 344px);
   --right-width: clamp(252px, 21vw, 320px);
+}
+
+:where(button, select, input, textarea, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 1px #111;
 }
 
 body {
@@ -215,14 +222,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border-radius: 50%;
   border-color: var(--line);
   background: var(--control-bg);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 
@@ -337,12 +344,12 @@ body {
 .panel select:focus-visible,
 .panel textarea:focus-visible,
 .panel input:focus-visible {
-  outline: 1px solid #6a6a6a;
   border-color: #6a6a6a;
 }
 
 .panel input[type="range"] {
   width: 100%;
+  min-height: 24px;
   accent-color: #eee;
 }
 
@@ -372,6 +379,15 @@ body {
 
 .panel select[id$="-font"]:has(option[value="/fonts/MonaspaceKrypton-Regular.ttf"]:checked) {
   font-family: "Monaspace Krypton", sans-serif;
+}
+
+.stage-toggle:focus-visible,
+.editor-prompt button:focus-visible,
+.panel .upload-tile .upload-remove:focus-visible,
+.panel .upload-tile .upload-rename:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #111;
 }
 
 .panel button {
@@ -830,21 +846,21 @@ body.is-dragging .drop-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: 50%;
   background: rgb(0 0 0 / 72%);
   color: #ddd;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
   opacity: 0;
   transition: opacity 120ms ease;
 }
 
 .panel .upload-tile .upload-rename {
-  right: 22px;
+  right: 28px;
 }
 
 .upload-tile:hover .upload-remove,
@@ -891,6 +907,15 @@ body.is-dragging .drop-overlay {
 
 .segmented button:last-child {
   border-right: 0;
+}
+
+.segmented button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.segmented button.active:focus-visible {
+  outline-color: #111;
 }
 
 .segmented button.active {
@@ -1143,7 +1168,12 @@ body.is-dragging .drop-overlay {
 
 .layer-grip {
   flex: 0 0 auto;
-  padding: 0 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1;
@@ -1186,7 +1216,8 @@ body.is-dragging .drop-overlay {
 .layer-row-actions {
   display: flex;
   flex: 0 0 auto;
-  gap: 2px;
+  gap: 4px;
+  margin-left: 2px;
 }
 
 .preset-list {
