@@ -175,7 +175,7 @@ on a device that already has the app.
   and `shapePolygon`. `shapePolygon` returns the pixel-space mask ring the editor
   draws; pixel mask generation is handled by WASM.
 - `src/text.ts` — Canvas 2D text rasterization (opaque; the engine applies layer
-  opacity) and the exported `drawSeedLabel` for the `seed=` overlay.
+  opacity) and `drawSeedLabel`, the bottom-left `seed=` overlay with a scrim.
 - `src/text-cut.ts` — the text-layer cut. `cutTextAtWords` wraps every existing
   paragraph on word boundaries with the limit clamped to 1..200, hard-splitting
   a word longer than the limit and keeping blank lines; it does not change case.
@@ -232,7 +232,7 @@ on a device that already has the app.
   `images` cache fails to load (the browser keeps `navigator.onLine` true for a
   stopped server, so the cache decides), and `image-failed` otherwise — an
   upload or a corrupt cached image. The `seed=` label stays on a separate
-  overlay canvas that is never exported. `downloadImage` in `src/surface.ts`
+  overlay canvas at the bottom-left, with a dark scrim, and is never exported. `downloadImage` in `src/surface.ts`
   exports the base composition (text included).
 - `src/frame.ts` — the frame is a margin around the composition, like CSS
   padding, and never crops or rescales the image. `frameLayout(width, height,

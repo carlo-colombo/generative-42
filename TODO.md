@@ -25,6 +25,6 @@
 - [x] 44 px touch targets for layer/upload actions (layer overflow menu; footer buttons remain 36 px)
 - [x] Mobile Image/Layers tabs with the stage and tabs sticky; footer no longer overlays the panel
 - [x] Collapse the Offline panel and keep the inspector reachable in long stacks
-- [ ] Seed/layer label collision and contrast
+- [x] Seed/layer label collision and contrast
 - [ ] Canvas semantics and help-popover dismissal
 - [ ] Accessibility pass (landmarks, announcements, headings) and validation

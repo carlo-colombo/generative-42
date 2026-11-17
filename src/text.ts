@@ -48,13 +48,24 @@ export function drawText(
 }
 
 // The seed label lives on a separate, non-exported canvas above the composition.
+// It sits at the bottom-left with a scrim so it neither collides with the
+// top-left layer label nor disappears on a light image.
 export function drawSeedLabel(ctx: CanvasRenderingContext2D, font: LoadedFont, seed: number): void {
   ctx.save()
-  ctx.fillStyle = '#fff'
+  const unit = Math.min(ctx.canvas.width, ctx.canvas.height) / 926
+  const text = `seed=${seed}`
+  ctx.font = fontCss(font, 24 * unit)
   ctx.textAlign = 'left'
   ctx.textBaseline = 'alphabetic'
-  const unit = Math.min(ctx.canvas.width, ctx.canvas.height) / 926
-  ctx.font = fontCss(font, 24 * unit)
-  ctx.fillText(`seed=${seed}`, 20 * unit, 40 * unit)
+  const metrics = ctx.measureText(text)
+  const ascent = metrics.actualBoundingBoxAscent || 24 * unit
+  const descent = metrics.actualBoundingBoxDescent || 0
+  const pad = 6 * unit
+  const x = 20 * unit
+  const y = ctx.canvas.height - 20 * unit
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+  ctx.fillRect(x - pad, y - ascent - pad, metrics.width + pad * 2, ascent + descent + pad * 2)
+  ctx.fillStyle = '#fff'
+  ctx.fillText(text, x, y)
   ctx.restore()
 }
