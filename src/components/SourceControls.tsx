@@ -140,7 +140,12 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   }
 
   const removeUpload = async (id: string) => {
+    const name = uploads.value.find((upload) => upload.id === id)?.name ?? 'this image'
     const wasSelected = generation.image === uploadRef(id)
+    const message = wasSelected
+      ? `Delete ${name}? The stored local file is removed from this browser, and another image will be selected.`
+      : `Delete ${name}? The stored local file is removed from this browser.`
+    if (!window.confirm(message)) return
     try {
       await deleteUpload(id)
     } catch {

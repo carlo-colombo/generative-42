@@ -84,12 +84,15 @@ export function createTextLayer(generation: Generation): TextLayer {
 export function addLayer(model: GenerationModel, layer: Layer): boolean {
   const layers = model.draft.value.layers
   if (layers.length >= MAX_LAYERS) return false
-  model.setField('layers', [...layers, layer])
+  model.setField('layers', [...layers, layer], `add:${layer.id}`)
   return true
 }
 
 export function updateLayer(model: GenerationModel, id: string, update: (layer: Layer) => Layer) {
-  model.setField('layers', model.draft.value.layers.map((layer) => (layer.id === id ? update(layer) : layer)))
+  const layers = model.draft.value.layers
+  const next = layers.map((layer) => (layer.id === id ? update(layer) : layer))
+  if (next.every((layer, index) => layer === layers[index])) return
+  model.setField('layers', next, `edit:${id}`)
 }
 
 export function updateEffectLayer(model: GenerationModel, id: string, update: (layer: EffectLayer) => EffectLayer) {
@@ -98,8 +101,9 @@ export function updateEffectLayer(model: GenerationModel, id: string, update: (l
 
 export function removeLayer(model: GenerationModel, id: string) {
   const generation = model.draft.value
-  model.setField('layers', generation.layers.filter((layer) => layer.id !== id))
-  if (generation.soloLayerId === id) model.setField('soloLayerId', '')
+  const group = `remove:${id}`
+  model.setField('layers', generation.layers.filter((layer) => layer.id !== id), group)
+  if (generation.soloLayerId === id) model.setField('soloLayerId', '', group)
 }
 
 function copyLayer(layer: Layer, id: string): Layer {
@@ -112,7 +116,7 @@ export function duplicateLayer(model: GenerationModel, id: string): Layer | null
   const index = layers.findIndex((layer) => layer.id === id)
   if (index === -1 || layers.length >= MAX_LAYERS) return null
   const copy = copyLayer(layers[index], nextLayerId(layers, layers[index].kind === 'text' ? 't' : 'e').id)
-  model.setField('layers', [...layers.slice(0, index + 1), copy, ...layers.slice(index + 1)])
+  model.setField('layers', [...layers.slice(0, index + 1), copy, ...layers.slice(index + 1)], `duplicate:${copy.id}`)
   return copy
 }
 
@@ -124,7 +128,7 @@ export function moveLayer(model: GenerationModel, id: string, to: number) {
   const next = [...layers]
   const [layer] = next.splice(from, 1)
   next.splice(target, 0, layer)
-  model.setField('layers', next)
+  model.setField('layers', next, `move:${id}`)
 }
 
 export function updateTextLayerField(model: GenerationModel, id: string, field: TextField, value: string) {

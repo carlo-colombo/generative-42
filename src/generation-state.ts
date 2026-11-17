@@ -792,14 +792,81 @@ export function applyGeneration(gen: Generation) {
   window.location.href = generationURL(gen).toString()
 }
 
+const HISTORY_LIMIT = 50
+// Slider drags and text typing emit one change per event; a run on the same
+// field becomes a single undo step instead of hundreds.
+const HISTORY_COALESCE_MS = 600
+// View-only fields and image swaps are not undoable: cropPreview is an editor
+// affordance, and a source change cannot be re-rendered in place.
+const HISTORY_IGNORED = new Set<keyof Generation>(['image', 'cropPreview'])
+// A crop drag writes cropX and cropY on every pointer event; grouped fields
+// share one undo step instead of flooding the history with half-moves.
+const HISTORY_GROUP: Partial<Record<keyof Generation, string>> = {
+  cropX: 'crop',
+  cropY: 'crop',
+  frameRatioW: 'frameRatio',
+  frameRatioH: 'frameRatio',
+}
+
 export function createGenerationModel(initial: Generation) {
   const committed = signal(initial)
   const draft = signal({ ...initial })
   const draftListeners = new Set<(generation: Generation) => void>()
   const previewListeners = new Set<() => void>()
   const livePreview = signal(true)
+  const history = signal({ canUndo: false, canRedo: false })
+  const past: Generation[] = []
+  const future: Generation[] = []
+  let coalesceField: string | null = null
+  let coalesceAt = 0
 
-  function setField<K extends keyof Generation>(field: K, value: Generation[K]) {
+  function publishHistory() {
+    const canUndo = past.length > 0
+    const canRedo = future.length > 0
+    if (history.value.canUndo === canUndo && history.value.canRedo === canRedo) return
+    history.value = { canUndo, canRedo }
+  }
+
+  function recordHistory(group: string) {
+    const now = Date.now()
+    if (coalesceField === group && now - coalesceAt <= HISTORY_COALESCE_MS) {
+      coalesceAt = now
+      return
+    }
+    past.push(draft.value)
+    if (past.length > HISTORY_LIMIT) past.shift()
+    future.length = 0
+    coalesceField = group
+    coalesceAt = now
+    publishHistory()
+  }
+
+  function restore(snapshot: Generation) {
+    // View-only and source-image state is not part of the history.
+    draft.value = { ...snapshot, image: draft.value.image, cropPreview: draft.value.cropPreview }
+    coalesceField = null
+    coalesceAt = 0
+    publishHistory()
+    for (const listener of draftListeners) listener(draft.value)
+  }
+
+  function undo() {
+    const previous = past.pop()
+    if (!previous) return
+    future.push(draft.value)
+    restore(previous)
+  }
+
+  function redo() {
+    const next = future.pop()
+    if (!next) return
+    past.push(draft.value)
+    restore(next)
+  }
+
+  function setField<K extends keyof Generation>(field: K, value: Generation[K], historyGroup?: string) {
+    if (draft.value[field] === value) return
+    if (!HISTORY_IGNORED.has(field)) recordHistory(historyGroup ?? HISTORY_GROUP[field] ?? field)
     draft.value = { ...draft.value, [field]: value }
     for (const listener of draftListeners) listener(draft.value)
   }
@@ -826,6 +893,9 @@ export function createGenerationModel(initial: Generation) {
       return () => previewListeners.delete(listener)
     },
     setField,
+    history,
+    undo,
+    redo,
     subscribeDraft: (listener: (generation: Generation) => void) => {
       draftListeners.add(listener)
       return () => draftListeners.delete(listener)

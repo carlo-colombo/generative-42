@@ -53,8 +53,9 @@ export function Presets({ model, editor }: { model: GenerationModel; editor: Edi
       setStatus(`The stack is full (${MAX_LAYERS} layers).`)
       return
     }
-    model.setField('layers', result.layers)
-    if (draft.soloLayerId && !result.layers.some((layer) => layer.id === draft.soloLayerId)) model.setField('soloLayerId', '')
+    const group = `preset:${preset.id}`
+    model.setField('layers', result.layers, group)
+    if (draft.soloLayerId && !result.layers.some((layer) => layer.id === draft.soloLayerId)) model.setField('soloLayerId', '', group)
     editor.selectedLayerId.value = result.added[result.added.length - 1].id
     const count = `${result.added.length} layer${result.added.length === 1 ? '' : 's'}`
     setStatus(`${mode === 'replace' ? 'Loaded' : 'Added'} ${count} from ${preset.name}`)
@@ -66,6 +67,7 @@ export function Presets({ model, editor }: { model: GenerationModel; editor: Edi
   }
 
   const remove = (preset: LayerPreset) => {
+    if (!window.confirm(`Delete the preset ${preset.name}?`)) return
     deletePreset(preset.id)
     if (editingId === preset.id) setEditingId(null)
     setStatus(`Deleted ${preset.name}`)

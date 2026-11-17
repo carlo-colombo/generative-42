@@ -668,6 +668,16 @@ body {
   width: auto;
 }
 
+.history-row {
+  display: flex;
+  gap: 6px;
+}
+
+.panel .history-row button {
+  flex: 1;
+  width: auto;
+}
+
 .upload-row {
   display: flex;
   gap: 6px;

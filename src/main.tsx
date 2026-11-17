@@ -183,6 +183,37 @@ const unsubscribeURL = model.subscribeDraft(() => {
   }, 200)
 })
 
+// Native undo has to keep working inside text fields, so the shortcut only
+// reaches the generation history from the panels and the stage. Sliders,
+// checkboxes and colour pickers keep app undo; they have no native undo.
+const NON_TEXT_INPUTS = new Set(['range', 'checkbox', 'radio', 'color', 'button', 'submit', 'reset', 'file'])
+
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  if (target.isContentEditable || target.tagName === 'TEXTAREA') return true
+  if (target.tagName !== 'INPUT') return false
+  return !NON_TEXT_INPUTS.has((target as HTMLInputElement).type)
+}
+
+function handleHistoryShortcut(event: KeyboardEvent) {
+  if (event.defaultPrevented || event.altKey) return
+  if (!event.metaKey && !event.ctrlKey) return
+  if (isTextEntry(event.target)) return
+  const key = event.code === 'KeyZ' ? 'z' : event.code === 'KeyY' ? 'y' : event.key.toLowerCase()
+  if (key === 'z') {
+    event.preventDefault()
+    if (event.shiftKey) model.redo()
+    else model.undo()
+    return
+  }
+  if (key === 'y' && !event.shiftKey) {
+    event.preventDefault()
+    model.redo()
+  }
+}
+
+window.addEventListener('keydown', handleHistoryShortcut)
+
 function lastStoredImage(): string {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem('generation') ?? 'null')
@@ -266,6 +297,7 @@ if (import.meta.hot) {
     unsubscribeURL()
     if (urlTimer) clearTimeout(urlTimer)
     window.removeEventListener('scroll', updateStageDock)
+    window.removeEventListener('keydown', handleHistoryShortcut)
     mobileQuery.removeEventListener('change', updateStageDock)
     stageObserver.disconnect()
     seedCanvas?.remove()

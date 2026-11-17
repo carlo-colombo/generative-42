@@ -50,7 +50,9 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   pending `?share=` request before reading the generation (see `## Sharing`),
   registers the service worker at startup, posts `stage-ready` after the first
   successful render of the load, and reloads once on `online` when the stage is
-  stuck at `image-offline`/`image-failed`.
+  stuck at `image-offline`/`image-failed`. It also owns the history shortcuts:
+  Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z or Ctrl+Y redo, ignored in text-entry fields
+  so native text undo still works.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -89,12 +91,18 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
   migration. `applyGeneration` navigates to a new URL, so the stage bootstraps
-  from scratch. `MAX_LAYERS` (20) caps the stack.
+  from scratch. `MAX_LAYERS` (20) caps the stack. The model also keeps a bounded
+  (50) in-memory undo history recorded by `setField`: edits coalesce within
+  600 ms per logical group, `image` and `cropPreview` are not recorded, and
+  `undo`/`redo` re-notify the draft listeners. `history` exposes `canUndo` and
+  `canRedo`. A navigation (`Generate`, `Next`, image select) clears the history.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
   with upload/select/rename/remove; rename edits the name inline in the tile.
+  `Actions` holds the seed, Generate, Undo/Redo, live preview and download.
+  Upload and preset deletion confirm before removing browser-local data.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
