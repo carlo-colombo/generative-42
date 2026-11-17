@@ -1139,6 +1139,12 @@ body.is-dragging .drop-overlay {
   list-style: none;
 }
 
+.layer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .layer-row {
   display: flex;
   align-items: center;
@@ -1203,9 +1209,16 @@ body.is-dragging .drop-overlay {
   line-height: 1;
 }
 
+.layer-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .layer-kind {
   flex: 0 1 auto;
-  max-width: 96px;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -1218,6 +1231,64 @@ body.is-dragging .drop-overlay {
   flex: 0 0 auto;
   gap: 4px;
   margin-left: 2px;
+}
+
+.panel .layer-row .icon-button {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.layer-solo {
+  flex: 0 0 auto;
+  color: #ffd166;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.layer-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #141414;
+}
+
+.panel .layer-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11px;
+  text-align: left;
+}
+
+.panel .layer-menu button:hover:not(:disabled) {
+  background: #2d2d2d;
+}
+
+.panel .layer-menu button:disabled {
+  opacity: 0.35;
+}
+
+.panel .layer-menu button.danger:hover:not(:disabled) {
+  background: #b93a3a;
+  color: #fff;
+}
+
+.layer-menu-icon {
+  flex: 0 0 auto;
+  width: 16px;
+  color: var(--muted);
+  text-align: center;
 }
 
 .preset-list {
@@ -1299,8 +1370,17 @@ body.is-dragging .drop-overlay {
   border-color: transparent;
 }
 
-.layer-preview {
+.layer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   flex: 1;
+  min-width: 0;
+}
+
+.layer-preview {
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1446,4 +1526,78 @@ body.is-dragging .drop-overlay {
 .panel .upload-archive-row button {
   flex: 1;
   width: auto;
+}
+
+@media (pointer: coarse) {
+  .panel .layer-row .icon-button {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .layer-grip {
+    width: 44px;
+    height: 44px;
+  }
+
+  .layer-row {
+    min-height: 48px;
+  }
+
+  .panel .layer-menu button {
+    min-height: 44px;
+    font-size: 12px;
+  }
+
+  .upload-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  }
+
+  .panel .upload-tile .upload-remove,
+  .panel .upload-tile .upload-rename {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+
+  .panel .upload-tile .upload-rename {
+    right: 48px;
+  }
+
+  .stage-toggle {
+    min-height: 44px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .stage-loading-action {
+    min-height: 44px;
+    padding: 10px 16px;
+    font-size: 12px;
+  }
+
+  .segmented button {
+    min-height: 44px;
+  }
+
+  .panel .tool-buttons .tool-button,
+  .panel .stage-toolbar > .tool-button {
+    min-height: 44px;
+  }
+
+  .editor-prompt button {
+    min-height: 44px;
+  }
+
+  .panel input[type="range"] {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 940px) and (pointer: coarse) {
+  .panel .preset-row .icon-button {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
 }

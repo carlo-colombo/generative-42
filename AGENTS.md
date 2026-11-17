@@ -206,8 +206,10 @@ on a device that already has the app.
   editable: a click there only clears the selection). Sort chevrons appear only
   on `pixel-sort` layers, and the mask preview covers effect layers only.
 - `src/components/LayerList.tsx` — the unified stack list (UI top = topmost
-  layer): type chip, name, visibility, solo, duplicate, delete, up/down, and
-  drag-and-drop reorder. `LayerControls.tsx` dispatches on layer kind; the effect
+  layer): type chip, name, visibility and a ⋯ disclosure menu holding solo,
+  duplicate, move up/down and delete, plus drag-and-drop reorder. The menu is an
+  in-flow panel below the row, so it is never clipped by the scrolling list.
+  `LayerControls.tsx` dispatches on layer kind; the effect
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge
   mode/feather/jitter, opacity, colour, and label. The text inspector holds
