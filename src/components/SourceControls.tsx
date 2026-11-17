@@ -265,7 +265,11 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
               onInput={(event) => setRenameValue(event.currentTarget.value)}
               onBlur={commitRename}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') commitRename()
+                if (event.key === 'Enter') {
+                  if (event.isComposing || event.keyCode === 229) return
+                  event.preventDefault()
+                  commitRename()
+                }
                 if (event.key === 'Escape') cancelRename()
               }}
             />

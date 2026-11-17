@@ -128,7 +128,11 @@ export function Presets({ model, editor }: { model: GenerationModel; editor: Edi
         value={name}
         onInput={(event) => setName(event.currentTarget.value.toUpperCase())}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') save()
+          if (event.key === 'Enter') {
+            if (event.isComposing || event.keyCode === 229) return
+            event.preventDefault()
+            save()
+          }
         }}
       />
     </ControlField>
@@ -158,7 +162,11 @@ export function Presets({ model, editor }: { model: GenerationModel; editor: Edi
               onInput={(event) => setEditingName(event.currentTarget.value.toUpperCase())}
               onBlur={commitRename}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') commitRename()
+                if (event.key === 'Enter') {
+                  if (event.isComposing || event.keyCode === 229) return
+                  event.preventDefault()
+                  commitRename()
+                }
                 if (event.key === 'Escape') {
                   setEditingId(null)
                   setEditingName('')

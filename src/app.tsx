@@ -45,10 +45,12 @@ function useImages(model: GenerationModel) {
 
 function generateOnEnter(model: GenerationModel) {
   return (event: KeyboardEvent) => {
-    if (event.key === 'Enter' && !event.shiftKey && ['INPUT', 'SELECT'].includes((event.target as HTMLElement).tagName)) {
-      event.preventDefault()
-      model.applyGeneration()
-    }
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key !== 'Enter' || event.shiftKey) return
+    const target = event.target
+    if (!(target instanceof HTMLElement) || !['INPUT', 'SELECT'].includes(target.tagName)) return
+    if (!target.hasAttribute('data-commit-enter')) return
+    event.preventDefault()
+    model.applyGeneration()
   }
 }
 
