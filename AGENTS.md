@@ -97,15 +97,17 @@ on a device that already has the app.
   (50) in-memory undo history recorded by `setField`: edits coalesce within
   600 ms per logical group, `image` and `cropPreview` are not recorded, and
   `undo`/`redo` re-notify the draft listeners. `history` exposes `canUndo` and
-  `canRedo`.
+  `canRedo`. `shareLink` builds the clean share URL (dropping `sw`, `share`
+  and `wasmProfile`) and reports when the stack is stored in this browser's
+  localStorage.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
   with upload/select/rename/remove; rename edits the name inline in the tile.
   `Actions` holds the seed, Generate (a new random seed), Undo/Redo, live
-  preview and download. Upload and preset deletion confirm before removing
-  browser-local data.
+  preview, copy-link, Web Share and download. Upload and preset deletion confirm
+  before removing browser-local data.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,

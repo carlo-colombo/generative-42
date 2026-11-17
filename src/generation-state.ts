@@ -771,6 +771,21 @@ export function generationURL(gen: Generation): URL {
   return url
 }
 
+// The share URL drops debug-only flags and reports whether the stack lives in
+// this browser's localStorage, so the UI can warn that the link is not portable.
+export function shareLink(gen: Generation): { url: string; local: boolean } {
+  const url = generationURL(gen)
+  for (const key of ['sw', 'share', 'wasmProfile']) url.searchParams.delete(key)
+  const layers = url.searchParams.get('layers') ?? ''
+  let local = false
+  try {
+    local = layers !== '' && localStorage.getItem(LAYERS_STORAGE_PREFIX + layers) !== null
+  } catch {
+    local = false
+  }
+  return { url: url.toString(), local }
+}
+
 let lastSyncedURL = ''
 
 // Keep the address bar on the current draft so a reload restores what the stage

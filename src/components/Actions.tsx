@@ -1,16 +1,93 @@
+import { useEffect, useRef, useState } from 'preact/hooks'
+import { shareLink, type GenerationModel } from '../generation-state'
 import { downloadImage } from '../surface'
-import type { GenerationModel } from '../generation-state'
 import { imageLabel } from '../uploads'
 import { ControlField } from './ControlField'
 
+function fallbackCopy(text: string): boolean {
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.opacity = '0'
+  document.body.appendChild(area)
+  area.select()
+  let copied = false
+  try {
+    copied = document.execCommand('copy')
+  } catch {
+    copied = false
+  }
+  area.remove()
+  return copied
+}
+
 export function Actions({ model }: { model: GenerationModel }) {
   const generation = model.draft.value
+  const [copied, setCopied] = useState(false)
+  const [localOnly, setLocalOnly] = useState(false)
+  const [message, setMessage] = useState('')
+  const copyTimer = useRef<number | undefined>(undefined)
+  const canShare = typeof navigator.share === 'function'
+  const localHint = 'Uploads and large stacks stay in this browser, so the link opens only here.'
+
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current)
+  }, [])
+
+  useEffect(() => {
+    if (!message) return
+    const timer = window.setTimeout(() => setMessage(''), 4000)
+    return () => clearTimeout(timer)
+  }, [message])
+
+  const flashCopied = (local: boolean) => {
+    setLocalOnly(local)
+    setCopied(true)
+    if (copyTimer.current) clearTimeout(copyTimer.current)
+    copyTimer.current = window.setTimeout(() => setCopied(false), 2400)
+  }
+
+  const copy = async () => {
+    setMessage('')
+    const { url, local } = shareLink(generation)
+    let ok = false
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url)
+        ok = true
+      } catch {
+        ok = false
+      }
+    }
+    if (!ok) ok = fallbackCopy(url)
+    if (!ok) {
+      setCopied(false)
+      setMessage('Could not copy the link')
+      return
+    }
+    flashCopied(local || generation.image.startsWith('upload:'))
+  }
+
+  const share = async () => {
+    setMessage('')
+    const { url, local } = shareLink(generation)
+    const localLink = local || generation.image.startsWith('upload:')
+    try {
+      await navigator.share({ title: 'Generative 42', url })
+      if (localLink) setMessage(`Shared. ${localHint}`)
+    } catch (error) {
+      if ((error as DOMException)?.name !== 'AbortError') setMessage('Could not share the link')
+    }
+  }
+
   const download = () => {
     const baseCanvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
     if (!baseCanvas) return
     const imageName = imageLabel(generation.image).replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-') || 'image'
     downloadImage(baseCanvas, `gen-${generation.seed}-${imageName}.png`)
   }
+
   return <footer className="panel-footer">
     <ControlField label="Seed">
       <div className="seed-row">
@@ -34,6 +111,13 @@ export function Actions({ model }: { model: GenerationModel }) {
       </label>
       <button type="button" onClick={model.requestPreview} disabled={model.livePreview.value}>Preview</button>
     </div>
-    <button type="button" onClick={download}>Download PNG</button>
+    <div className="action-row">
+      <button type="button" title="Copy a link to this generation" onClick={() => { void copy() }}>{copied ? 'Copied' : 'Copy link'}</button>
+      {canShare && <button type="button" title="Share this generation" onClick={() => { void share() }}>Share</button>}
+      <button type="button" aria-label="Download PNG" title="Download PNG" onClick={download}>Download</button>
+    </div>
+    {copied && localOnly && <p className="text-hint">Copied. {localHint}</p>}
+    {message && <p className="text-hint" role="status">{message}</p>}
+    <span className="sr-only" role="status">{copied ? `Link copied.${localOnly ? ` ${localHint}` : ''}` : ''}</span>
   </footer>
 }

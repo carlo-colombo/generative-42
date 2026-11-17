@@ -18,7 +18,8 @@
 - [ ] Undo toast for layer deletes; undo or two-step confirm for upload/preset deletes
 - [x] Commit Generate/Next/seed edits in place; Generate picks a new random seed
 - [ ] Swap the source image in place (image select and share still reload)
-- [ ] Copy-link / Web Share for the current generation
+- [x] Copy-link / Web Share for the current generation
+- [ ] Make shared links portable: uploads and large stacks stay browser-local; share the PNG instead
 - [ ] Stage empty state with Upload, sample, drag-and-drop and paste; split offline vs missing-upload errors
 - [ ] Focus and target-size pass (24 px minimum, 44 px on touch)
 - [ ] Right-panel IA: layer-list scroll, sticky inspector, collapse the Offline panel, mobile tabs
