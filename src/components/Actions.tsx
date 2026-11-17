@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { shareLink, type GenerationModel } from '../generation-state'
+import type { Generation } from '../types'
 import { downloadImage } from '../surface'
 import { imageLabel } from '../uploads'
 import { ControlField } from './ControlField'
@@ -20,6 +21,11 @@ function fallbackCopy(text: string): boolean {
   }
   area.remove()
   return copied
+}
+
+function generationFileName(generation: Generation): string {
+  const imageName = imageLabel(generation.image).replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-') || 'image'
+  return `gen-${generation.seed}-${imageName}.png`
 }
 
 export function Actions({ model }: { model: GenerationModel }) {
@@ -71,6 +77,27 @@ export function Actions({ model }: { model: GenerationModel }) {
 
   const share = async () => {
     setMessage('')
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
+    if (canvas && typeof navigator.canShare === 'function') {
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      if (blob) {
+        const file = new File([blob], generationFileName(generation), { type: 'image/png' })
+        let fileShare = false
+        try {
+          fileShare = navigator.canShare({ files: [file] })
+        } catch {
+          fileShare = false
+        }
+        if (fileShare) {
+          try {
+            await navigator.share({ files: [file], title: 'Generative 42' })
+            return
+          } catch (error) {
+            if ((error as DOMException)?.name === 'AbortError') return
+          }
+        }
+      }
+    }
     const { url, local } = shareLink(generation)
     const localLink = local || generation.image.startsWith('upload:')
     try {
@@ -84,8 +111,7 @@ export function Actions({ model }: { model: GenerationModel }) {
   const download = () => {
     const baseCanvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
     if (!baseCanvas) return
-    const imageName = imageLabel(generation.image).replace(/\.[^.]+$/, '').replace(/[^a-z0-9-_]+/gi, '-') || 'image'
-    downloadImage(baseCanvas, `gen-${generation.seed}-${imageName}.png`)
+    downloadImage(baseCanvas, generationFileName(generation))
   }
 
   return <footer className="panel-footer">
