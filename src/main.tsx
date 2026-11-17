@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { signal } from '@preact/signals'
+import { useEffect, useState } from 'preact/hooks'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { createEditorModel } from './editor-state'
@@ -9,6 +10,9 @@ import { createGenerationModel, getGeneration, syncGenerationURL } from './gener
 import { refreshImageStates, warmImage } from './pwa/image-cache'
 import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
 import { importShare, takeShareRequest } from './share'
+import { createSampleImage } from './sample'
+import { addImageFiles } from './upload-images'
+import { uploadsStatus } from './uploads'
 import type { Generation } from './types'
 import type { WasmKernels } from './wasm'
 import './style.css'
@@ -34,14 +38,69 @@ let retriedImage = false
 
 type LoadingStatus = StageStatus | 'loading'
 const stageStatus = signal<LoadingStatus>('loading')
+const stageNotice = signal('')
+let uploadBusy = false
+
+async function ingestImages(files: File[]) {
+  if (uploadBusy) return
+  const images = files.filter((file) => file.type.startsWith('image/'))
+  if (images.length === 0) {
+    stageNotice.value = 'Drop or paste an image file'
+    return
+  }
+  uploadBusy = true
+  stageNotice.value = 'Reading images…'
+  try {
+    const result = await addImageFiles(images, model)
+    stageNotice.value = result.errors.length > 0 ? result.errors.join(' · ') : ''
+  } catch {
+    stageNotice.value = 'Could not read the image'
+  } finally {
+    uploadBusy = false
+  }
+}
+
+async function addSampleImage() {
+  if (uploadBusy) return
+  uploadBusy = true
+  stageNotice.value = 'Creating a sample…'
+  try {
+    const file = await createSampleImage()
+    if (!file) {
+      stageNotice.value = 'Could not create the sample image'
+      return
+    }
+    const result = await addImageFiles([file], model)
+    stageNotice.value = result.errors.length > 0 ? result.errors.join(' · ') : ''
+  } catch {
+    stageNotice.value = 'Could not create the sample image'
+  } finally {
+    uploadBusy = false
+  }
+}
+
+function StageNotice() {
+  const notice = stageNotice.value
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => { stageNotice.value = '' }, 6000)
+    return () => clearTimeout(timer)
+  }, [notice])
+  if (!notice) return null
+  return <div className="stage-notice" role="status" aria-live="polite">{notice}</div>
+}
 
 function StageLoading() {
   const status = stageStatus.value
+  const [sampleBusy, setSampleBusy] = useState(false)
   if (status === 'rendered') return null
   const failed = status === 'image-failed' || status === 'wasm-failed'
   const offline = status === 'image-offline'
+  const imageFailed = status === 'image-failed'
+  const unavailable = uploadsStatus.value === 'unavailable'
+  const canUpload = status === 'no-image' || offline || imageFailed
   const label =
-    status === 'image-failed'
+    imageFailed
       ? 'IMAGE UNAVAILABLE'
       : offline
         ? 'NO IMAGE OFFLINE'
@@ -51,21 +110,38 @@ function StageLoading() {
             ? 'NO IMAGE'
             : 'LOADING'
   const hint =
-    offline || status === 'image-failed'
-      ? 'Upload an image or reconnect'
-      : status === 'no-image'
-        ? 'Upload an image to start'
-        : ''
+    status === 'no-image'
+      ? 'Upload, drop, or paste an image to start'
+      : offline
+        ? 'Reconnect, or upload a different image'
+        : imageFailed
+          ? 'Upload an image, or choose another source'
+          : ''
+  const startSample = async () => {
+    setSampleBusy(true)
+    await addSampleImage()
+    setSampleBusy(false)
+  }
   return (
-    <div className={failed ? 'stage-loading is-error' : 'stage-loading'} role="status" aria-live="polite">
-      {!failed && !offline && status !== 'no-image' && <span className="stage-loading-spinner" aria-hidden="true" />}
-      <span className="stage-loading-label">{label}</span>
-      {hint && <span className="stage-loading-hint">{hint}</span>}
-      {offline && (
-        <button type="button" className="stage-loading-action" onClick={() => document.getElementById('upload-input')?.click()}>
-          Upload image
-        </button>
+    <div className={failed ? 'stage-loading is-error' : 'stage-loading'}>
+      <div className="stage-loading-message" role="status" aria-live="polite">
+        {!failed && !offline && status !== 'no-image' && <span className="stage-loading-spinner" aria-hidden="true" />}
+        <span className="stage-loading-label">{label}</span>
+        {hint && <span className="stage-loading-hint">{hint}</span>}
+      </div>
+      {canUpload && !unavailable && (
+        <div className="stage-loading-actions">
+          <button type="button" className="stage-loading-action" onClick={() => document.getElementById('upload-input')?.click()}>
+            Upload image
+          </button>
+          {status === 'no-image' && (
+            <button type="button" className="stage-loading-action" disabled={sampleBusy} onClick={() => { void startSample() }}>
+              {sampleBusy ? 'Creating…' : 'Try a sample'}
+            </button>
+          )}
+        </div>
       )}
+      {canUpload && unavailable && <span className="stage-loading-hint">Image uploads are unavailable in this browser.</span>}
     </div>
   )
 }
@@ -93,7 +169,7 @@ stage.appendChild(editorRoot)
 const loadingRoot = document.createElement('div')
 loadingRoot.className = 'stage-loading-root'
 stage.appendChild(loadingRoot)
-render(<StageLoading />, loadingRoot)
+render(<><StageLoading /><StageNotice /></>, loadingRoot)
 
 let aspectRatio = 1
 function fitStage() {
@@ -287,6 +363,70 @@ render(<LeftPanel model={model} />, leftPanelRoot)
 render(<RightPanel model={model} editor={editor} />, rightPanelRoot)
 renderEditor()
 
+const dropOverlay = document.createElement('div')
+dropOverlay.className = 'drop-overlay'
+dropOverlay.setAttribute('aria-hidden', 'true')
+const dropOverlayLabel = document.createElement('span')
+dropOverlayLabel.textContent = 'Drop image to upload'
+dropOverlay.appendChild(dropOverlayLabel)
+document.body.appendChild(dropOverlay)
+
+let dragDepth = 0
+
+function hasFileDrag(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
+}
+
+function handleDragEnter(event: DragEvent) {
+  if (!hasFileDrag(event)) return
+  dragDepth += 1
+  document.body.classList.add('is-dragging')
+}
+
+function handleDragLeave(event: DragEvent) {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (event.relatedTarget === null || dragDepth === 0) resetDrag()
+}
+
+function handleDragOver(event: DragEvent) {
+  if (!hasFileDrag(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+function resetDrag() {
+  dragDepth = 0
+  document.body.classList.remove('is-dragging')
+}
+
+function handleDrop(event: DragEvent) {
+  if (!hasFileDrag(event)) return
+  event.preventDefault()
+  resetDrag()
+  void ingestImages(Array.from(event.dataTransfer?.files ?? []))
+}
+
+function handlePaste(event: ClipboardEvent) {
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length === 0) {
+    for (const item of Array.from(event.clipboardData?.items ?? [])) {
+      if (item.kind !== 'file' || !item.type.startsWith('image/')) continue
+      const file = item.getAsFile()
+      if (file) files.push(file)
+    }
+  }
+  if (files.length === 0) return
+  event.preventDefault()
+  void ingestImages(files)
+}
+
+window.addEventListener('dragenter', handleDragEnter)
+window.addEventListener('dragleave', handleDragLeave)
+window.addEventListener('dragover', handleDragOver)
+window.addEventListener('dragend', resetDrag)
+window.addEventListener('drop', handleDrop)
+window.addEventListener('paste', handlePaste)
+
 // Registered before the stage renders: a build that cannot render still has to
 // offer the update prompt and the rollback of the build before it.
 void registerServiceWorker()
@@ -303,6 +443,14 @@ if (import.meta.hot) {
     if (urlTimer) clearTimeout(urlTimer)
     window.removeEventListener('scroll', updateStageDock)
     window.removeEventListener('keydown', handleHistoryShortcut)
+    window.removeEventListener('dragenter', handleDragEnter)
+    window.removeEventListener('dragleave', handleDragLeave)
+    window.removeEventListener('dragover', handleDragOver)
+    window.removeEventListener('dragend', resetDrag)
+    window.removeEventListener('drop', handleDrop)
+    window.removeEventListener('paste', handlePaste)
+    dropOverlay.remove()
+    document.body.classList.remove('is-dragging')
     mobileQuery.removeEventListener('change', updateStageDock)
     stageObserver.disconnect()
     seedCanvas?.remove()

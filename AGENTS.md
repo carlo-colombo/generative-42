@@ -48,7 +48,8 @@ on a device that already has the app.
   successful render of the load, and reloads once on `online` when the stage is
   stuck at `image-offline`/`image-failed`. It also owns the history shortcuts:
   Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z or Ctrl+Y redo, ignored in text-entry fields
-  so native text undo still works.
+  so native text undo still works. It also owns the global image ingest
+  (drag/drop/paste), the stage empty-state actions and the stage notice.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -69,6 +70,11 @@ on a device that already has the app.
   `exportUploads` reads the stored bytes; `importUploadsBlobs` feeds archive
   payloads back through `addUploads`, which keeps an already-sized image's bytes
   instead of re-encoding it.
+- `src/upload-images.ts` — the shared add-and-select path: stores files through
+  `addUploads`, selects the first as the source and reloads, carrying load
+  notices across that reload. Used by `SourceControls`, the stage empty state,
+  drag/drop and paste.
+- `src/sample.ts` — deterministic generated sample for the empty stage.
 - `src/upload-archive.ts` — the `.g42images` upload archive: 8 ASCII magic bytes
   `G42IMG01`, a little-endian uint32 header length, a UTF-8 JSON header
   (`{ kind: 'generative42-images', version: 1, exportedAt, images: [{ name,

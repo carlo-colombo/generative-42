@@ -5,13 +5,12 @@ import { cachedImagePaths } from '../pwa/image-cache'
 import { online } from '../pwa/update-state'
 import { shareHintVisible, shareNotice } from '../share'
 import { archiveFileName, buildArchive, parseArchive } from '../upload-archive'
+import { addImageFiles } from '../upload-images'
 import {
-  addUploads,
   deleteUpload,
   exportUploads,
   importUploadsBlobs,
   isUploadRef,
-  keepUploadErrors,
   loadUploads,
   MAX_UPLOADS,
   renameUpload,
@@ -64,14 +63,9 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     shareNotice.value = ''
     setBusy(true)
     setError('')
-    const result = await addUploads(files)
+    const result = await addImageFiles(files, model)
     setBusy(false)
     setError(result.errors.join(' · '))
-    const first = result.added[0]
-    if (first) {
-      keepUploadErrors(result.errors.join(' · '))
-      selectImage(uploadRef(first.id))
-    }
   }
 
   const downloadBlob = (blob: Blob, fileName: string) => {
