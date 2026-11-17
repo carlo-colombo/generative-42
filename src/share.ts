@@ -1,6 +1,6 @@
 import { signal } from '@preact/signals'
 
-import { applyGeneration } from './generation-state'
+import { reloadGeneration } from './generation-state'
 import { appUrl } from './paths'
 import { addUploads, keepUploadErrors, uploadRef } from './uploads'
 import type { Generation } from './types'
@@ -91,5 +91,5 @@ export async function importShare(request: ShareRequest, base: Generation): Prom
   }
   // The reload that commits the new image cannot show this load's notice.
   if (result.errors.length > 0) keepUploadErrors(result.errors.join(' · '))
-  applyGeneration({ ...base, image: uploadRef(first.id) })
+  reloadGeneration({ ...base, image: uploadRef(first.id) })
 }

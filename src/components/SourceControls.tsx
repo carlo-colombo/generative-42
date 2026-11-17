@@ -53,7 +53,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const selectImage = (ref: string) => {
     shareNotice.value = ''
     model.setField('image', ref)
-    model.applyGeneration()
+    model.reload()
   }
 
   const handleFiles = async (event: Event) => {

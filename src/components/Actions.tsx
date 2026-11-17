@@ -22,7 +22,7 @@ export function Actions({ model }: { model: GenerationModel }) {
       <input type="checkbox" checked={generation.showSeed} onChange={(event) => model.setField('showSeed', event.currentTarget.checked)} />
       Show seed label
     </label>
-    <button type="button" className="primary" onClick={() => model.applyGeneration()}>Generate</button>
+    <button type="button" className="primary" aria-label="Generate a new random seed" title="New random seed" onClick={model.randomSeed}>Generate</button>
     <div className="history-row">
       <button type="button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" onClick={model.undo} disabled={!model.history.value.canUndo}>Undo</button>
       <button type="button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)" onClick={model.redo} disabled={!model.history.value.canRedo}>Redo</button>

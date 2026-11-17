@@ -16,7 +16,8 @@
 ### UX review follow-ups
 
 - [ ] Undo toast for layer deletes; undo or two-step confirm for upload/preset deletes
-- [ ] Commit edits in place (no reload on Generate/Next/image select); Generate becomes "new seed"
+- [x] Commit Generate/Next/seed edits in place; Generate picks a new random seed
+- [ ] Swap the source image in place (image select and share still reload)
 - [ ] Copy-link / Web Share for the current generation
 - [ ] Stage empty state with Upload, sample, drag-and-drop and paste; split offline vs missing-upload errors
 - [ ] Focus and target-size pass (24 px minimum, 44 px on touch)

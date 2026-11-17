@@ -43,20 +43,20 @@ function useImages(model: GenerationModel) {
   return { images, manifestState }
 }
 
-function generateOnEnter(model: GenerationModel) {
+function commitOnEnter(model: GenerationModel) {
   return (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key !== 'Enter' || event.shiftKey) return
     const target = event.target
     if (!(target instanceof HTMLElement) || !['INPUT', 'SELECT'].includes(target.tagName)) return
     if (!target.hasAttribute('data-commit-enter')) return
     event.preventDefault()
-    model.applyGeneration()
+    model.commit()
   }
 }
 
 export function LeftPanel({ model }: { model: GenerationModel }) {
   const { images, manifestState } = useImages(model)
-  return <aside className="panel panel-left" onKeyDown={generateOnEnter(model)}>
+  return <aside className="panel panel-left" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
       <h1>Generative 42</h1>
       <p className="build-label" aria-label={`Version v${buildId}`}>VERSION v{buildId}</p>
@@ -90,7 +90,7 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
     if (addLayer(model, layer)) editor.selectedLayerId.value = layer.id
   }
 
-  return <aside className="panel panel-right" onKeyDown={generateOnEnter(model)}>
+  return <aside className="panel panel-right" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
       <h1>Layers</h1>
     </header>

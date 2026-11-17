@@ -90,19 +90,26 @@ fresh Puppeteer profile, so no worker exists to intercept the capture.
   `## Sharing`.
 - `src/generation-state.ts` — Preact signals model (`committed` / `draft`), the
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
-  migration. `applyGeneration` navigates to a new URL, so the stage bootstraps
-  from scratch. `MAX_LAYERS` (20) caps the stack. The model also keeps a bounded
+  migration. `commit` applies the draft in place: it copies the draft into
+  `committed`, persists it, syncs the URL, and notifies the preview listeners,
+  so its callers do not reload. `reload` is the navigation path for a source
+  image swap (it persists and sets `window.location.href`, so the stage
+  bootstraps from scratch) and does not notify the preview listeners. Generate
+  picks a new random seed, Next steps the seed, and both commit in place;
+  a reload that does happen (image select, share) clears the history.
+  `MAX_LAYERS` (20) caps the stack. The model also keeps a bounded
   (50) in-memory undo history recorded by `setField`: edits coalesce within
   600 ms per logical group, `image` and `cropPreview` are not recorded, and
   `undo`/`redo` re-notify the draft listeners. `history` exposes `canUndo` and
-  `canRedo`. A navigation (`Generate`, `Next`, image select) clears the history.
+  `canRedo`.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
   with upload/select/rename/remove; rename edits the name inline in the tile.
-  `Actions` holds the seed, Generate, Undo/Redo, live preview and download.
-  Upload and preset deletion confirm before removing browser-local data.
+  `Actions` holds the seed, Generate (a new random seed), Undo/Redo, live
+  preview and download. Upload and preset deletion confirm before removing
+  browser-local data.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; stacks vertically below 940px.
 - `src/types.ts` — the `Layer` union (`EffectLayer | TextLayer`), `EffectId`,
@@ -328,10 +335,11 @@ that created it. A failed `localStorage` write falls back to the inline param.
 scalar params too. `frameColor` falls back to `#ffffff` when it is not
 `#rrggbb`, and stored state clamps the ratio to 1–50 and the growth to 0–300,
 so a hand-edited URL or localStorage entry cannot ask for an insane canvas.
-`soloLayerId` is a separate scalar param. `applyGeneration` also writes the full
-generation to `localStorage.generation` and deletes the legacy keys (`draw`,
+`soloLayerId` is a separate scalar param. `commit` and `reloadGeneration` also
+write the full generation to `localStorage.generation`; both build the URL
+through `generationURL`, so the legacy keys (`draw`,
 `texts`, `areas`, `areasMode`, `soloAreaId`, the per-layer text params, and the
-old effect globals).
+old effect globals) never reach it.
 
 When a URL or stored generation has no `layers`, it is migrated:
 
@@ -362,7 +370,7 @@ defaults, which is null for every effect but pixel-sort.
 - TypeScript, single quotes, no semicolon-statement comments; keep code
   uncommented unless asked.
 - UI is Preact + `@preact/signals`; controls read `model.draft.value` so edits
-  preview live, and `model.applyGeneration()` commits them via a reload.
+  preview live, and `model.commit()` applies them in place without a reload.
 - The canvas is sized exactly to the cropped source image; do not assume a fixed
   canvas size.
 - Generation is deterministic across runs given the seed, using one seeded
@@ -480,7 +488,7 @@ stored generation is what survives.
 with `replaceState`, so the rest of the URL still describes the generation the
 app had open, reads the cached files, deletes those cache entries, stores the
 files as uploads (all of them, up to `MAX_UPLOADS`), and commits the first one
-as the source with `applyGeneration` — the same reload the upload button uses.
+as the source with `reloadGeneration` — the same reload the upload button uses.
 A share therefore works offline end to end: the POST is answered by the worker,
 the shell comes from its cache, and the file never leaves the device.
 Unconsumed shares are pruned after 24 h, on activation and on the next share.

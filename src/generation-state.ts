@@ -783,12 +783,18 @@ export function syncGenerationURL(gen: Generation) {
   window.history.replaceState(window.history.state, '', url)
 }
 
-export function applyGeneration(gen: Generation) {
+function persistGeneration(gen: Generation) {
   try {
     localStorage.setItem('generation', JSON.stringify(gen))
   } catch {
     // A full quota must not block the render; the URL still carries the state.
   }
+}
+
+// A source-image swap cannot be rendered in place, so it navigates: the stage
+// bootstraps from scratch and the whole generation is persisted first.
+export function reloadGeneration(gen: Generation) {
+  persistGeneration(gen)
   window.location.href = generationURL(gen).toString()
 }
 
@@ -848,6 +854,9 @@ export function createGenerationModel(initial: Generation) {
     coalesceAt = 0
     publishHistory()
     for (const listener of draftListeners) listener(draft.value)
+    // With live preview off the draft listener is a no-op, but an undo/redo is
+    // an explicit action and must still repaint what it restored.
+    if (!livePreview.value) notifyPreview()
   }
 
   function undo() {
@@ -871,23 +880,43 @@ export function createGenerationModel(initial: Generation) {
     for (const listener of draftListeners) listener(draft.value)
   }
 
-  function nextSeed() {
-    applyGeneration({ ...draft.value, seed: draft.value.seed + 1 })
+  function notifyPreview() {
+    for (const listener of previewListeners) listener()
   }
 
-  function commit(nextGeneration?: Generation) {
-    const generation: Generation = nextGeneration ?? draft.value
-    committed.value = { ...generation }
-    applyGeneration(committed.value)
+  // Commit applies the draft without navigating, so the stage re-renders in
+  // place and the history survives. The preview listeners always run, which is
+  // what makes Generate, Next, and the seed field render with live preview off.
+  function commit() {
+    committed.value = { ...draft.value }
+    persistGeneration(committed.value)
+    syncGenerationURL(committed.value)
+    notifyPreview()
+  }
+
+  function reload() {
+    reloadGeneration(draft.value)
+  }
+
+  function nextSeed() {
+    const next = draft.value.seed + 1
+    setField('seed', next, `seed:${next}`)
+    commit()
+  }
+
+  function randomSeed() {
+    const current = draft.value.seed
+    const picked = Math.floor(Math.random() * 999_999) + 1
+    const next = picked === current ? (current % 999_999) + 1 : picked
+    setField('seed', next, `seed:${next}`)
+    commit()
   }
 
   return {
     committed,
     draft,
     livePreview,
-    requestPreview: () => {
-      for (const listener of previewListeners) listener()
-    },
+    requestPreview: notifyPreview,
     onPreview: (listener: () => void) => {
       previewListeners.add(listener)
       return () => previewListeners.delete(listener)
@@ -901,7 +930,9 @@ export function createGenerationModel(initial: Generation) {
       return () => draftListeners.delete(listener)
     },
     nextSeed,
-    applyGeneration: commit,
+    randomSeed,
+    commit,
+    reload,
   }
 }
 

@@ -170,10 +170,12 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
   if (compositionSignature(nextGeneration) === drawnSignature) return
   schedulePreview(nextGeneration)
 })
-const unsubscribePreview = model.onPreview(() => applyPreview(model.draft.value))
+const unsubscribePreview = model.onPreview(() => {
+  if (compositionSignature(model.draft.value) === drawnSignature) return
+  applyPreview(model.draft.value)
+})
 
-// The address bar trails the draft so reloading restores the last rendered
-// image without pressing Generate first.
+// The address bar trails the draft so reloading restores the current edits.
 let urlTimer = 0
 const unsubscribeURL = model.subscribeDraft(() => {
   if (urlTimer) clearTimeout(urlTimer)
@@ -271,6 +273,9 @@ const stageHandle = createStage(stage, generation, (base, seed, renderLayer, was
   renderEditor()
   if (model.livePreview.value && compositionSignature(model.draft.value) !== drawnSignature) {
     schedulePreview(model.draft.value)
+  } else if (compositionSignature(model.committed.value) !== drawnSignature) {
+    // A commit made before the stage was ready must still be what renders.
+    schedulePreview(model.committed.value)
   }
 }, handleStageStatus)
 
