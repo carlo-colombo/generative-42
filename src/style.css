@@ -1841,13 +1841,40 @@ body.is-dragging .toast-root {
   .undo-toast button {
     min-height: 44px;
   }
-}
 
-@media (max-width: 940px) and (pointer: coarse) {
+  .panel button.help-toggle {
+    width: 44px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .help-popover {
+    top: 48px;
+  }
+
   .panel .preset-row .icon-button {
     width: 44px;
     height: 44px;
     font-size: 14px;
+  }
+
+  .panel select,
+  .panel input[type="number"],
+  .panel input[type="text"],
+  .panel input[type="color"] {
+    min-height: 44px;
+  }
+
+  .panel .color-row input[type="color"] {
+    width: 44px;
+  }
+
+  .checkbox-field {
+    min-height: 44px;
+  }
+
+  .panel button:not(.help-toggle):not(.icon-button):not(.upload-select):not(.upload-remove):not(.upload-rename) {
+    min-height: 44px;
   }
 }
 

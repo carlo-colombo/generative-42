@@ -1058,7 +1058,7 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
         }}
       />
       <p id="stage-editor-help" className="sr-only">Drawing on the stage uses a pointer. Select a layer in the Layers panel to nudge it with the arrow keys; its menu moves and deletes it.</p>
-      {baseCanvas && (
+      {baseCanvas?.dataset.hasSource === 'true' && (
         <button
           type="button"
           className={showMasks ? 'stage-toggle active' : 'stage-toggle'}

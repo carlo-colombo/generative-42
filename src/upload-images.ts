@@ -1,5 +1,5 @@
 import type { GenerationModel } from './generation-state'
-import { addUploads, keepUploadErrors, uploadRef, type UploadedImage } from './uploads'
+import { addUploads, uploadRef, type UploadedImage } from './uploads'
 
 export type AddImageResult = { added: UploadedImage[]; errors: string[] }
 
@@ -9,8 +9,7 @@ export async function addImageFiles(files: File[], model: GenerationModel): Prom
   const result = await addUploads(files)
   const first = result.added[0]
   if (!first) return result
-  if (result.errors.length > 0) keepUploadErrors(result.errors.join(' · '))
   model.setField('image', uploadRef(first.id))
-  model.reload()
+  model.commit()
   return result
 }

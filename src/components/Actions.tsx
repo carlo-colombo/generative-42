@@ -78,7 +78,7 @@ export function Actions({ model }: { model: GenerationModel }) {
   const share = async () => {
     setMessage('')
     const canvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
-    if (canvas && typeof navigator.canShare === 'function') {
+    if (canvas && canvas.dataset.hasSource === 'true' && typeof navigator.canShare === 'function') {
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
       if (blob) {
         const file = new File([blob], generationFileName(generation), { type: 'image/png' })
@@ -110,7 +110,7 @@ export function Actions({ model }: { model: GenerationModel }) {
 
   const download = () => {
     const baseCanvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
-    if (!baseCanvas) return
+    if (!baseCanvas || baseCanvas.dataset.hasSource !== 'true') return
     downloadImage(baseCanvas, generationFileName(generation))
   }
 

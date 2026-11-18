@@ -17,15 +17,15 @@
 
 - [x] Undo toast for layer deletes; two-step confirm for upload/preset deletes
 - [x] Commit Generate/Next/seed edits in place; Generate picks a new random seed
-- [ ] Swap the source image in place (image select and share still reload)
+- [x] Swap the source image in place (first upload, selects, drop/paste and share commit without reloading)
 - [x] Copy-link / Web Share for the current generation
 - [x] Make shared links portable: Web Share sends the PNG when files are supported; Download PNG otherwise
 - [x] Stage empty state with Upload, sample, drag-and-drop and paste; split offline vs missing-upload errors
 - [x] Focus rings and 24 px desktop targets (20 px layer icons use the 4 px spacing exception)
-- [x] 44 px touch targets for layer/upload actions (layer overflow menu; footer buttons remain 36 px)
+- [x] 44 px touch targets for layer, upload, footer, form and help controls (layer overflow menu)
 - [x] Mobile Image/Layers tabs with the stage and tabs sticky; footer no longer overlays the panel
 - [x] Collapse the Offline panel and keep the inspector reachable in long stacks
 - [x] Seed/layer label collision and contrast
 - [x] Canvas semantics and help-popover dismissal
 - [x] Landmarks, heading hierarchy, announcements and help-popover keyboard handling
-- [ ] Screen-reader/axe validation and remaining form/checkbox target sizes
+- [x] Axe 4.10.2 clean on desktop and both mobile tabs; 44 px form/checkbox targets

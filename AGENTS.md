@@ -32,7 +32,7 @@ on a device that already has the app.
 ## Architecture
 
 - `index.html` — the app shell: a skip link to the `<main id="app" aria-label="Artwork">`
-  stage landmark.
+  stage landmark, which carries the visually hidden app `h1`.
 - `src/paths.ts` — the deployment base. `BASE` is `import.meta.env.BASE_URL`
   (from `vite.config.ts` `base`, set by `VITE_BASE`), `appUrl` prefixes a
   logical app path, `logicalPath` strips the base from a URL pathname. Deployed
@@ -53,8 +53,10 @@ on a device that already has the app.
   so native text undo still works. It also owns the global image ingest
   (drag/drop/paste), the stage empty-state actions and the stage notice. Below
   940 px it renders the Image/Layers tab bar inside the sticky stage, sizes the
-  stage around the tabs, and persists the chosen tab in sessionStorage. It also
-  mounts the live announcer used for layer changes and the undo toast.
+  stage around the tabs, and persists the chosen tab in sessionStorage. Its
+  preview pipeline awaits the stage's `setImage` when the source changes, then
+  renders, so image select/share never navigate. It also mounts the live
+  announcer used for layer changes and the undo toast.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -76,9 +78,8 @@ on a device that already has the app.
   payloads back through `addUploads`, which keeps an already-sized image's bytes
   instead of re-encoding it.
 - `src/upload-images.ts` — the shared add-and-select path: stores files through
-  `addUploads`, selects the first as the source and reloads, carrying load
-  notices across that reload. Used by `SourceControls`, the stage empty state,
-  drag/drop and paste.
+  `addUploads`, selects the first as the source and commits in place. Used by
+  `SourceControls`, the stage empty state, drag/drop and paste.
 - `src/sample.ts` — deterministic generated sample for the empty stage.
 - `src/upload-archive.ts` — the `.g42images` upload archive: 8 ASCII magic bytes
   `G42IMG01`, a little-endian uint32 header length, a UTF-8 JSON header
@@ -99,12 +100,10 @@ on a device that already has the app.
   `layers` serialization, layer sanitization, and legacy-URL/localStorage
   migration. `commit` applies the draft in place: it copies the draft into
   `committed`, persists it, syncs the URL, and notifies the preview listeners,
-  so its callers do not reload. `reload` is the navigation path for a source
-  image swap (it persists and sets `window.location.href`, so the stage
-  bootstraps from scratch) and does not notify the preview listeners. Generate
-  picks a new random seed, Next steps the seed, and both commit in place;
-  a reload that does happen (image select, share) clears the history.
-  `MAX_LAYERS` (20) caps the stack. The model also keeps a bounded
+  so its callers do not reload. A source-image change is also committed in
+  place: the preview pipeline loads it through the stage's `setImage` and keeps
+  the history. Generate picks a new random seed, Next steps the seed, and both
+  commit in place. `MAX_LAYERS` (20) caps the stack. The model also keeps a bounded
   (50) in-memory undo history recorded by `setField`: edits coalesce within
   600 ms per logical group, `image` and `cropPreview` are not recorded, and
   `undo`/`redo` re-notify the draft listeners. `history` exposes `canUndo` and
@@ -209,8 +208,8 @@ on a device that already has the app.
 - `src/components/StageEditor.tsx` — canvas overlay above the rendered stage.
   Only effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures, plus the outlines on/off toggle pinned to the top-right corner of the
-  stage once a base canvas exists (so it stays reachable while the panels
-  scroll, but is absent on the empty stage). The canvas is a labelled group with
+  stage once `base-layer` reports `data-has-source` (so it stays reachable
+  while the panels scroll, but is absent on the empty or failed stage). The canvas is a labelled group with
   hidden keyboard instructions. Shapes are stored
   normalised 0..1 against the content area (the frame offset is removed from
   pointer positions and added back when drawing, and the frame margin is not
@@ -232,16 +231,17 @@ on a device that already has the app.
   Content, the cut length, and the Cut text/Reset buttons; the pre-cut source is
   a per-layer ref, so pressing Cut again re-cuts from that source and Reset
   restores it.
-- `src/stage.ts` — asynchronously loads the source image, fonts, and WASM,
-  crops the image, creates the base canvas at the framed pixel size, and hands
-  the render function to `main.tsx`. The composition always runs at the cropped
-  size and is written into the base canvas at the content rect inside the frame,
-  so a frame is pure margin. Reports the content rect to `main.tsx` on ready and
-  whenever it changes. Reports `no-image` when the generation has
-  no source image, `image-offline` when a built-in image that is not in the
-  `images` cache fails to load (the browser keeps `navigator.onLine` true for a
-  stopped server, so the cache decides), and `image-failed` otherwise — an
-  upload or a corrupt cached image. The `seed=` label stays on a separate
+- `src/stage.ts` — loads fonts and WASM, creates a lazy 1x1 base/seed/engine,
+  and hands the render function to `main.tsx`. `setImage(ref)` loads or replaces
+  the source asynchronously, crops it, resets the composition and lets the next
+  render resize the base/seed; a failed load reports `image-offline` for a
+  built-in not in the `images` cache and `image-failed` otherwise (an upload or
+  a corrupt cached image). The `base-layer` canvas carries
+  `data-has-source` so the editor hides its outlines toggle until an image
+  exists. The composition always runs at the cropped size and is written into
+  the base canvas at the content rect inside the frame, so a frame is pure
+  margin. Reports the content rect to `main.tsx` on ready and whenever it
+  changes, and `no-image` when there is no source. The `seed=` label stays on a separate
   overlay canvas at the bottom-left, with a dark scrim, and is never exported. `downloadImage` in `src/surface.ts`
   exports the base composition (text included).
 - `src/frame.ts` — the frame is a margin around the composition, like CSS
@@ -343,9 +343,6 @@ Presets are the one browser-local store that is not part of the generation:
 or the rendered output depends on it. Uploaded images are the other
 browser-local store, kept in IndexedDB and referenced as `image=upload:<id>`; a
 URL with an upload reference only renders in the browser that made the upload.
-(`sessionStorage.upload-errors` carries upload notices across the reload that
-selecting a new image triggers.)
-
 `layers` is one URL param: base64url-encoded, quantized JSON. Past 6000
 characters the URL stores `layers=<id>` instead and the payload goes to
 `localStorage` under `layers:<id>`, so such a URL resolves only in the browser
@@ -354,9 +351,9 @@ that created it. A failed `localStorage` write falls back to the inline param.
 scalar params too. `frameColor` falls back to `#ffffff` when it is not
 `#rrggbb`, and stored state clamps the ratio to 1–50 and the growth to 0–300,
 so a hand-edited URL or localStorage entry cannot ask for an insane canvas.
-`soloLayerId` is a separate scalar param. `commit` and `reloadGeneration` also
-write the full generation to `localStorage.generation`; both build the URL
-through `generationURL`, so the legacy keys (`draw`,
+`soloLayerId` is a separate scalar param. `commit` also writes the full
+ generation to `localStorage.generation` and builds the URL through
+`generationURL`, so the legacy keys (`draw`,
 `texts`, `areas`, `areasMode`, `soloAreaId`, the per-layer text params, and the
 old effect globals) never reach it.
 
@@ -507,7 +504,7 @@ stored generation is what survives.
 with `replaceState`, so the rest of the URL still describes the generation the
 app had open, reads the cached files, deletes those cache entries, stores the
 files as uploads (all of them, up to `MAX_UPLOADS`), and commits the first one
-as the source with `reloadGeneration` — the same reload the upload button uses.
+as the source and commits it in place, like the upload button.
 A share therefore works offline end to end: the POST is answered by the worker,
 the shell comes from its cache, and the file never leaves the device.
 Unconsumed shares are pruned after 24 h, on activation and on the next share.

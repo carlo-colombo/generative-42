@@ -19,7 +19,7 @@ export type StageReady = (
   content: ContentRect,
 ) => void
 
-export type Stage = { remove(): void }
+export type Stage = { remove(): void; setImage(ref: string): Promise<boolean> }
 
 function cropSignature(generation: Generation): string {
   return `${generation.cropFormat}:${generation.cropX}:${generation.cropY}:${generation.cropSize}`
@@ -52,6 +52,7 @@ export function createStage(
   let seed: Surface | null = null
   let engine: CompositionEngine | null = null
   let removed = false
+  let imageSeq = 0
 
   function fontFor(path: string): LoadedFont | undefined {
     return fonts.get(path) ?? fonts.get(DEFAULT_FONT) ?? fonts.values().next().value
@@ -141,6 +142,66 @@ export function createStage(
     return { imageChanged: false, resized, content }
   }
 
+  async function setImage(ref: string): Promise<boolean> {
+    const seq = ++imageSeq
+    if (ref === current.image && sourceImage) return true
+    if (!ref) {
+      if (sourceImage) releaseSurface(sourceImage)
+      if (cropped) releaseSurface(cropped)
+      sourceImage = null
+      cropped = null
+      current = { ...current, image: '' }
+      if (base) {
+        base.canvas.dataset.hasSource = 'false'
+        clearSurface(base)
+      }
+      if (seed) clearSurface(seed)
+      if (!removed) onStatus?.('no-image')
+      return true
+    }
+    onStatus?.('image-changed')
+    let loaded: Surface | null = null
+    try {
+      const url = await imageSource(ref)
+      if (!url) throw new Error(`No source for ${ref}`)
+      loaded = await loadImageSurface(url)
+    } catch (error) {
+      console.error('Source image failed to load', error)
+      if (removed || seq !== imageSeq) {
+        if (loaded) releaseSurface(loaded)
+        return false
+      }
+      if (sourceImage) releaseSurface(sourceImage)
+      if (cropped) releaseSurface(cropped)
+      sourceImage = null
+      cropped = null
+      current = { ...current, image: ref }
+      if (base) {
+        base.canvas.dataset.hasSource = 'false'
+        clearSurface(base)
+      }
+      if (seed) clearSurface(seed)
+      const offline = !isUploadRef(ref)
+        && (!navigator.onLine || !(await isImageCached(ref)))
+      if (seq === imageSeq && !removed) onStatus?.(offline ? 'image-offline' : 'image-failed')
+      return false
+    }
+    if (removed || seq !== imageSeq) {
+      releaseSurface(loaded)
+      return false
+    }
+    if (sourceImage) releaseSurface(sourceImage)
+    if (cropped) releaseSurface(cropped)
+    sourceImage = loaded
+    cropped = cropImage(loaded, current)
+    cropKey = cropSignature(current)
+    frameKey = ''
+    engine?.reset()
+    current = { ...current, image: ref }
+    if (base) base.canvas.dataset.hasSource = 'true'
+    return true
+  }
+
   async function bootstrap() {
     const fontPaths = [
       ...FONTS.map((font) => font.path),
@@ -156,44 +217,23 @@ export function createStage(
     ])
     if (!wasm) return
     for (const [path, font] of loadedFonts) fonts.set(path, font)
-    // No source is a normal state: the repository ships no images, so a fresh
-    // install renders nothing until the user uploads one.
-    if (!initial.image) {
-      onStatus?.('no-image')
-      return
-    }
-    const image = await imageSource(initial.image)
-      .then((url) => loadImageSurface(url))
-      .catch(async (error) => {
-        console.error('Source image failed to load', error)
-        // A built-in image that was never cached cannot be loaded with no
-        // network, which is the expected offline case, not a broken image. The
-        // browser reports navigator.onLine true for a stopped server or a dead
-        // route, so the cache is the authority.
-        const offline = !isUploadRef(initial.image)
-          && (!navigator.onLine || !(await isImageCached(initial.image)))
-        onStatus?.(offline ? 'image-offline' : 'image-failed')
-        return null
-      })
-    if (!image) return
-    if (removed) {
-      releaseSurface(image)
-      return
-    }
-    sourceImage = image
-    cropped = cropImage(image, current)
-    content = contentRect(cropped.width, cropped.height, current)
-    const size = frameCanvasSize(cropped.width, cropped.height, current)
-    base = createSurface(size.width, size.height)
+    // Start with a placeholder base even when there is no source, so the first
+    // image can be swapped in without navigating. The main module drives the
+    // initial load through setImage().
+    base = createSurface(1, 1)
     base.canvas.classList.add('base-layer')
-    seed = createSurface(size.width, size.height)
+    base.canvas.dataset.hasSource = 'false'
+    base.canvas.setAttribute('role', 'img')
+    base.canvas.setAttribute('aria-label', 'Generated artwork')
+    seed = createSurface(1, 1)
     seed.canvas.classList.add('seed-layer')
     seed.canvas.style.display = 'block'
+    seed.canvas.setAttribute('aria-hidden', 'true')
     container.appendChild(base.canvas)
     container.appendChild(seed.canvas)
     engine = createCompositionEngine(base, wasm)
     onReady?.(base.canvas, seed.canvas, render, wasm, content)
-    render(current)
+    if (!initial.image) onStatus?.('no-image')
   }
 
   function remove() {
@@ -213,5 +253,5 @@ export function createStage(
 
   void bootstrap()
 
-  return { remove }
+  return { remove, setImage }
 }

@@ -14,7 +14,6 @@ import {
   loadUploads,
   MAX_UPLOADS,
   renameUpload,
-  takeUploadErrors,
   uploadRef,
   uploads,
   uploadsStatus,
@@ -33,7 +32,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const [busy, setBusy] = useState(false)
   const [archiveBusy, setArchiveBusy] = useState<'export' | 'import' | ''>('')
   const [archiveStatus, setArchiveStatus] = useState('')
-  const [error, setError] = useState(takeUploadErrors)
+  const [error, setError] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
@@ -52,7 +51,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const selectImage = (ref: string) => {
     shareNotice.value = ''
     model.setField('image', ref)
-    model.reload()
+    model.commit()
   }
 
   const handleFiles = async (event: Event) => {
@@ -179,7 +178,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   return <section className="panel-section">
     <h2 className="section-title">Image</h2>
     <ControlField label="Source">
-      <select id="image-select" value={generation.image} onChange={(event) => selectImage((event.currentTarget as HTMLSelectElement).value)}>
+      <select id="image-select" aria-label="Source image" value={generation.image} onChange={(event) => selectImage((event.currentTarget as HTMLSelectElement).value)}>
         {generation.image === '' && <option value="">No image</option>}
         <optgroup label="Built in">
           {images.map((file) => {

@@ -32,7 +32,10 @@ function useImages(model: GenerationModel) {
         setManifestState('ready')
         const current = model.draft.value.image
         const missingBuiltIn = current.startsWith('/assets/') && !availableImages.includes(current.replace('/assets/', ''))
-        if (missingBuiltIn && availableImages[0]) model.setField('image', `/assets/${availableImages[0]}`)
+        if (missingBuiltIn && availableImages[0]) {
+          model.setField('image', `/assets/${availableImages[0]}`)
+          model.commit()
+        }
       })
       .catch(() => {
         setImages([])
@@ -57,7 +60,7 @@ export function LeftPanel({ model }: { model: GenerationModel }) {
   const { images, manifestState } = useImages(model)
   return <aside className="panel panel-left" aria-label="Image and frame" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
-      <h1>Generative 42</h1>
+      <h2>Generative 42</h2>
       {manifestState === 'loading' && <p>Loading images...</p>}
       {manifestState === 'error' && <p>Image manifest unavailable; using the current image.</p>}
     </header>

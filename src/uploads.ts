@@ -14,29 +14,6 @@ const META_STORE = 'uploads'
 const FILE_STORE = 'upload-files'
 const THUMB_SIZE = 168
 
-// Upload notices are reported in the Image section, but the flow that produces
-// them (selecting a new image, importing a shared file) reloads the page, so
-// they cross that reload in sessionStorage.
-const UPLOAD_ERRORS_KEY = 'upload-errors'
-
-export function takeUploadErrors(): string {
-  try {
-    const stored = sessionStorage.getItem(UPLOAD_ERRORS_KEY) ?? ''
-    if (stored) sessionStorage.removeItem(UPLOAD_ERRORS_KEY)
-    return stored
-  } catch {
-    return ''
-  }
-}
-
-export function keepUploadErrors(message: string): void {
-  try {
-    if (message) sessionStorage.setItem(UPLOAD_ERRORS_KEY, message)
-  } catch {
-    // A storage failure only loses the notice.
-  }
-}
-
 export type UploadedImage = {
   id: string
   name: string

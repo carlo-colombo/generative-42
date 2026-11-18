@@ -1,9 +1,8 @@
 import { signal } from '@preact/signals'
 
-import { reloadGeneration } from './generation-state'
+import type { GenerationModel } from './generation-state'
 import { appUrl } from './paths'
-import { addUploads, keepUploadErrors, uploadRef } from './uploads'
-import type { Generation } from './types'
+import { addUploads, uploadRef } from './uploads'
 
 // Android delivers a shared image as a multipart POST to the manifest's
 // share_target action. public/sw.js parks the files in the shares cache and
@@ -68,7 +67,7 @@ async function readShared(ids: string[]): Promise<File[]> {
   return files
 }
 
-export async function importShare(request: ShareRequest, base: Generation): Promise<void> {
+export async function importShare(request: ShareRequest, model: GenerationModel): Promise<void> {
   if (request.kind === 'none') {
     shareNotice.value = 'Only images can be shared into the app.'
     return
@@ -89,7 +88,7 @@ export async function importShare(request: ShareRequest, base: Generation): Prom
     shareNotice.value = result.errors.join(' · ') || 'The shared image could not be stored.'
     return
   }
-  // The reload that commits the new image cannot show this load's notice.
-  if (result.errors.length > 0) keepUploadErrors(result.errors.join(' · '))
-  reloadGeneration({ ...base, image: uploadRef(first.id) })
+  shareNotice.value = result.errors.join(' · ')
+  model.setField('image', uploadRef(first.id))
+  model.commit()
 }

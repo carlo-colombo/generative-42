@@ -806,13 +806,6 @@ function persistGeneration(gen: Generation) {
   }
 }
 
-// A source-image swap cannot be rendered in place, so it navigates: the stage
-// bootstraps from scratch and the whole generation is persisted first.
-export function reloadGeneration(gen: Generation) {
-  persistGeneration(gen)
-  window.location.href = generationURL(gen).toString()
-}
-
 const HISTORY_LIMIT = 50
 // Slider drags and text typing emit one change per event; a run on the same
 // field becomes a single undo step instead of hundreds.
@@ -909,10 +902,6 @@ export function createGenerationModel(initial: Generation) {
     notifyPreview()
   }
 
-  function reload() {
-    reloadGeneration(draft.value)
-  }
-
   function nextSeed() {
     const next = draft.value.seed + 1
     setField('seed', next, `seed:${next}`)
@@ -947,7 +936,6 @@ export function createGenerationModel(initial: Generation) {
     nextSeed,
     randomSeed,
     commit,
-    reload,
   }
 }
 

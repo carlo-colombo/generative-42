@@ -7,7 +7,7 @@ import { MobileTabs } from './components/MobileTabs'
 import { Toast } from './components/Toast'
 import { announcement, createEditorModel } from './editor-state'
 import type { ContentRect } from './frame'
-import { createStage, type RenderResult, type StageStatus } from './stage'
+import { createStage, type RenderResult, type Stage, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration, syncGenerationURL } from './generation-state'
 import { refreshImageStates, warmImage } from './pwa/image-cache'
 import { notifyStageFailed, notifyStageReady, registerServiceWorker } from './pwa/register'
@@ -57,6 +57,10 @@ let previewTimer = 0
 let pendingPreview: Generation | null = null
 let stageReadySent = false
 let retriedImage = false
+let renderedImage = ''
+let stageHandle: Stage | undefined
+let previewSeq = 0
+let imageInFlight: { ref: string; promise: Promise<boolean> } | null = null
 
 type LoadingStatus = StageStatus | 'loading'
 const stageStatus = signal<LoadingStatus>('loading')
@@ -255,11 +259,34 @@ function updateEditorArea(content: ContentRect) {
   editor.canvasSize.value = { width: content.width, height: content.height }
 }
 
-function applyPreview(generation: Generation) {
-  if (!renderComposition) return
+async function ensureImage(ref: string): Promise<boolean> {
+  if (ref === renderedImage) return true
+  const handle = stageHandle
+  if (!handle) return false
+  if (imageInFlight?.ref === ref) return imageInFlight.promise
+  const promise = handle.setImage(ref).catch(() => false)
+  imageInFlight = { ref, promise }
+  const ok = await promise
+  if (imageInFlight?.promise === promise) imageInFlight = null
+  if (ok) renderedImage = ref
+  return ok
+}
+
+async function applyPreview(generation: Generation) {
+  if (!renderComposition || !stageHandle) return
+  const seq = ++previewSeq
+  if (generation.image !== renderedImage) {
+    const ok = await ensureImage(generation.image)
+    if (seq !== previewSeq) return
+    if (!ok) {
+      renderedImage = generation.image
+      drawnSignature = ''
+      renderEditor()
+      return
+    }
+  }
+  if (seq !== previewSeq) return
   const result = renderComposition(generation)
-  // A source-image swap cannot be rendered in place, so do not claim the drawn
-  // signature matches one.
   drawnSignature = result.imageChanged ? '' : compositionSignature(generation)
   if (result.resized && baseCanvas) {
     updateEditorArea(result.content)
@@ -277,7 +304,7 @@ function schedulePreview(generation: Generation) {
     previewTimer = 0
     const next = pendingPreview
     pendingPreview = null
-    if (next) applyPreview(next)
+    if (next) void applyPreview(next)
   }, 150)
 }
 
@@ -288,7 +315,7 @@ const unsubscribeDraft = model.subscribeDraft((nextGeneration) => {
 })
 const unsubscribePreview = model.onPreview(() => {
   if (compositionSignature(model.draft.value) === drawnSignature) return
-  applyPreview(model.draft.value)
+  void applyPreview(model.draft.value)
 })
 
 // The address bar trails the draft so reloading restores the current edits.
@@ -377,7 +404,7 @@ window.addEventListener('online', () => {
   location.reload()
 })
 
-const stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm, content) => {
+stageHandle = createStage(stage, generation, (base, seed, renderLayer, wasm, content) => {
   baseCanvas = base
   seedCanvas = seed
   wasmKernels = wasm
@@ -385,14 +412,9 @@ const stageHandle = createStage(stage, generation, (base, seed, renderLayer, was
   aspectRatio = base.width / base.height
   updateEditorArea(content)
   fitStage()
-  drawnSignature = compositionSignature(generation)
+  drawnSignature = ''
   renderEditor()
-  if (model.livePreview.value && compositionSignature(model.draft.value) !== drawnSignature) {
-    schedulePreview(model.draft.value)
-  } else if (compositionSignature(model.committed.value) !== drawnSignature) {
-    // A commit made before the stage was ready must still be what renders.
-    schedulePreview(model.committed.value)
-  }
+  void applyPreview(model.draft.value)
 }, handleStageStatus)
 
 function renderEditor() {
@@ -471,11 +493,11 @@ window.addEventListener('paste', handlePaste)
 // offer the update prompt and the rollback of the build before it.
 void registerServiceWorker()
 
-if (shareRequest) void importShare(shareRequest, generation)
+if (shareRequest) void importShare(shareRequest, model)
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    stageHandle.remove()
+    stageHandle?.remove()
     unsubscribeDraft()
     unsubscribePreview()
     unsubscribeWarm()
