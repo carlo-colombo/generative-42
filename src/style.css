@@ -776,55 +776,14 @@ body {
   text-transform: uppercase;
 }
 
-body.is-dragging .toast-root {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  z-index: 35;
-  transform: translateX(-50%);
-  max-width: min(92vw, 420px);
-}
-
-.undo-toast {
+body.is-dragging .drop-overlay {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #1d1d1d;
-  color: var(--text);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 55%);
-  font-size: 11px;
 }
 
-.undo-toast button {
-  flex: 0 0 auto;
-  width: auto;
-  min-height: 28px;
-  padding: 4px 9px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: #2d2d2d;
-  color: var(--text);
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.undo-toast button:hover {
-  background: #3a3a3a;
-}
-
-.undo-toast .toast-close {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.drop-overlay {
-  display: flex;
+@media (pointer: coarse) {
+  body.is-dragging .drop-overlay {
+    display: none;
+  }
 }
 
 .stage-loading-spinner {

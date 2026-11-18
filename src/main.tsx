@@ -139,9 +139,10 @@ function StageLoading() {
           : status === 'no-image'
             ? 'NO IMAGE'
             : 'LOADING'
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches
   const hint =
     status === 'no-image'
-      ? 'Upload, drop, or paste an image to start'
+      ? coarsePointer ? 'Upload an image to start' : 'Upload, drop, or paste an image to start'
       : offline
         ? 'Reconnect, or upload a different image'
         : imageFailed
