@@ -11,6 +11,15 @@ export { clamp01, clampShape } from './areas'
 
 export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'curve'
 export type MobileTab = 'image' | 'layers'
+
+export const announcement = signal('')
+let announcementTimer = 0
+
+export function announce(message: string) {
+  announcement.value = ''
+  if (announcementTimer) window.clearTimeout(announcementTimer)
+  announcementTimer = window.setTimeout(() => { announcement.value = message }, 40)
+}
 export type TextField = 'text' | 'align' | 'vAlign' | 'x' | 'y' | 'size' | 'font' | 'opacity'
 
 export function createEditorModel() {

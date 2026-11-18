@@ -55,7 +55,7 @@ function commitOnEnter(model: GenerationModel) {
 
 export function LeftPanel({ model }: { model: GenerationModel }) {
   const { images, manifestState } = useImages(model)
-  return <aside className="panel panel-left" onKeyDown={commitOnEnter(model)}>
+  return <aside className="panel panel-left" aria-label="Image and frame" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
       <h1>Generative 42</h1>
       {manifestState === 'loading' && <p>Loading images...</p>}
@@ -88,9 +88,9 @@ export function RightPanel({ model, editor }: { model: GenerationModel; editor: 
     if (addLayer(model, layer)) editor.selectedLayerId.value = layer.id
   }
 
-  return <aside className="panel panel-right" onKeyDown={commitOnEnter(model)}>
+  return <aside className="panel panel-right" aria-label="Layers and presets" onKeyDown={commitOnEnter(model)}>
     <header className="panel-header">
-      <h1>Layers</h1>
+      <h2>Layers</h2>
     </header>
     <div className="panel-scroll">
       <LayerList model={model} editor={editor} />

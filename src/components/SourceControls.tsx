@@ -240,7 +240,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
         onChange={handleArchiveFile}
       />
     </div>
-    {error && <p className="text-hint">{error}</p>}
+    {error && <p className="text-hint error-text" role="alert">{error}</p>}
     {archiveStatus && <p className="text-hint" role="status">{archiveStatus}</p>}
     {notice && <p className="text-hint">{notice}</p>}
     {uploaded.length > 0 && <div className="upload-grid">

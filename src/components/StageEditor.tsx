@@ -1045,8 +1045,9 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
       <canvas
         ref={canvasRef}
         className="editor-canvas"
-        role="img"
+        role="group"
         aria-label="Layer editing surface: draw and adjust effect layers over the artwork"
+        aria-describedby="stage-editor-help"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -1056,6 +1057,7 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
           if (tool === 'polygon' && polygonRef.current.length >= 3) closePolygon()
         }}
       />
+      <p id="stage-editor-help" className="sr-only">Drawing on the stage uses a pointer. Select a layer in the Layers panel to nudge it with the arrow keys; its menu moves and deletes it.</p>
       {baseCanvas && (
         <button
           type="button"

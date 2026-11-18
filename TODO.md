@@ -26,5 +26,6 @@
 - [x] Mobile Image/Layers tabs with the stage and tabs sticky; footer no longer overlays the panel
 - [x] Collapse the Offline panel and keep the inspector reachable in long stacks
 - [x] Seed/layer label collision and contrast
-- [ ] Canvas semantics and help-popover dismissal
-- [ ] Accessibility pass (landmarks, announcements, headings) and validation
+- [x] Canvas semantics and help-popover dismissal
+- [x] Landmarks, heading hierarchy, announcements and help-popover keyboard handling
+- [ ] Screen-reader/axe validation and remaining form/checkbox target sizes

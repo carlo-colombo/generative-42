@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import type { EditorModel } from '../editor-state'
-import { duplicateLayer, moveLayer, removeLayer, updateLayer } from '../editor-state'
+import { announce, duplicateLayer, moveLayer, removeLayer, updateLayer, type EditorModel } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
 import { effectLabel } from '../effects'
 import type { Layer } from '../types'
@@ -36,6 +35,13 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
     window.addEventListener('pointerdown', close)
     return () => window.removeEventListener('pointerdown', close)
   }, [menuFor])
+
+  const previousCount = useRef(layers.length)
+  useEffect(() => {
+    if (layers.length > previousCount.current) announce('Layer added')
+    else if (layers.length < previousCount.current) announce('Layer deleted')
+    previousCount.current = layers.length
+  }, [layers.length])
 
   useEffect(() => {
     const list = listRef.current
@@ -76,8 +82,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
     moveLayer(model, display[fromDisplay].id, layers.length - 1 - toDisplay)
   }
 
-  return <section className="panel-section">
-    <h2 className="section-title">Layers</h2>
+  return <section className="panel-section" aria-label="Layer stack">
     {display.length === 0
       ? <p className="hint-text">Empty stack: only the cropped source renders. Add an effect or a text layer.</p>
       : <ul className="layer-list" ref={listRef}>
@@ -110,9 +115,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
               <span
                 className="layer-grip"
                 draggable
-                role="button"
-                tabIndex={-1}
-                aria-label={`Drag ${name}`}
+                aria-hidden="true"
                 title="Drag to reorder"
                 onDragStart={(event) => {
                   setDragIndex(displayIndex)
@@ -126,7 +129,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
                   setDropIndex(null)
                 }}
               >⠿</span>
-              <button type="button" className="layer-select" aria-pressed={selected} onClick={() => select(layer.id)} title={name}>
+              <button type="button" className="layer-select" aria-current={selected ? 'true' : undefined} onClick={() => select(layer.id)} title={name}>
                 {layer.kind === 'effect'
                   ? <span className="layer-chip" style={{ background: layer.color }} />
                   : <span className="layer-chip layer-chip-text">T</span>}
@@ -146,7 +149,10 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
                   aria-label={layer.visible ? `Hide ${name}` : `Show ${name}`}
                   aria-pressed={layer.visible}
                   title={layer.visible ? 'Hide layer' : 'Show layer'}
-                  onClick={() => updateLayer(model, layer.id, (current) => ({ ...current, visible: !current.visible }))}
+                  onClick={() => {
+                    updateLayer(model, layer.id, (current) => ({ ...current, visible: !current.visible }))
+                    announce(layer.visible ? 'Layer hidden' : 'Layer shown')
+                  }}
                 >
                   {layer.visible ? '◉' : '◌'}
                 </button>
@@ -172,6 +178,7 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
               <button type="button" onClick={() => {
                 setMenuFor(null)
                 model.setField('soloLayerId', solo ? '' : layer.id)
+                announce(solo ? 'Solo off' : 'Layer soloed')
               }}>
                 <span className="layer-menu-icon" aria-hidden="true">S</span>{solo ? 'Stop solo' : 'Solo'}
               </button>
@@ -184,12 +191,14 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
               <button type="button" disabled={displayIndex === 0} onClick={() => {
                 setMenuFor(null)
                 moveBy(displayIndex, -1)
+                announce('Layer moved up')
               }}>
                 <span className="layer-menu-icon" aria-hidden="true">↑</span>Move up
               </button>
               <button type="button" disabled={displayIndex === display.length - 1} onClick={() => {
                 setMenuFor(null)
                 moveBy(displayIndex, 1)
+                announce('Layer moved down')
               }}>
                 <span className="layer-menu-icon" aria-hidden="true">↓</span>Move down
               </button>

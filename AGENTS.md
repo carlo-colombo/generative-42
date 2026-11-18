@@ -31,6 +31,8 @@ on a device that already has the app.
 
 ## Architecture
 
+- `index.html` — the app shell: a skip link to the `<main id="app" aria-label="Artwork">`
+  stage landmark.
 - `src/paths.ts` — the deployment base. `BASE` is `import.meta.env.BASE_URL`
   (from `vite.config.ts` `base`, set by `VITE_BASE`), `appUrl` prefixes a
   logical app path, `logicalPath` strips the base from a URL pathname. Deployed
@@ -51,7 +53,8 @@ on a device that already has the app.
   so native text undo still works. It also owns the global image ingest
   (drag/drop/paste), the stage empty-state actions and the stage notice. Below
   940 px it renders the Image/Layers tab bar inside the sticky stage, sizes the
-  stage around the tabs, and persists the chosen tab in sessionStorage.
+  stage around the tabs, and persists the chosen tab in sessionStorage. It also
+  mounts the live announcer used for layer changes.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -116,7 +119,8 @@ on a device that already has the app.
   `Actions` holds the seed, Generate (a new random seed), Undo/Redo, live
   preview, copy-link, Web Share (the PNG when files are supported, the URL
   otherwise) and download. Upload and preset deletion confirm before removing
-  browser-local data.
+  browser-local data. `HelpPopover` focuses its note, closes on Escape, an
+  outside click or focus leaving, and links the toggle with `aria-controls`.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; below 940px it stacks, keeps the stage and Image/Layers tabs
   sticky, shows one panel at a time, and makes the panel footer static.
@@ -181,7 +185,8 @@ on a device that already has the app.
   a word longer than the limit and keeping blank lines; it does not change case.
   The limit is ephemeral UI state, not part of the generation.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
-  `maskPreview`, `showMasks`, `canvasSize`, `newEffect`, `mobileTab`) and the unified layer
+  `maskPreview`, `showMasks`, `canvasSize`, `newEffect`, `mobileTab`), the
+  `announcement` signal/`announce` helper behind the live announcer, and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
   duplicate/move), plus the shape clamp/translate/copy helpers. `newEffect` is
   the effect a newly drawn shape creates.
@@ -204,7 +209,8 @@ on a device that already has the app.
   Only effect layers are outlined and editable; it owns the drawing tools and canvas
   gestures, plus the outlines on/off toggle pinned to the top-right corner of the
   stage once a base canvas exists (so it stays reachable while the panels
-  scroll, but is absent on the empty stage). Shapes are stored
+  scroll, but is absent on the empty stage). The canvas is a labelled group with
+  hidden keyboard instructions. Shapes are stored
   normalised 0..1 against the content area (the frame offset is removed from
   pointer positions and added back when drawing, and the frame margin is not
   editable: a click there only clears the selection). Sort chevrons appear only
@@ -215,6 +221,8 @@ on a device that already has the app.
   in-flow panel below the row, so it is never clipped by the scrolling list. On
   desktop the list is capped at 40vh and scrolls the selected row into view;
   `LayerControls.tsx` scrolls the inspector into view when the selection changes.
+  Layer add/delete/duplicate, visibility, solo and move are announced through a
+  shared live region; rows expose the current layer with `aria-current`.
   It dispatches on layer kind; the effect
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge

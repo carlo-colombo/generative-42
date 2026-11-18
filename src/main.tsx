@@ -4,7 +4,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { MobileTabs } from './components/MobileTabs'
-import { createEditorModel } from './editor-state'
+import { announcement, createEditorModel } from './editor-state'
 import type { ContentRect } from './frame'
 import { createStage, type RenderResult, type StageStatus } from './stage'
 import { createGenerationModel, getGeneration, syncGenerationURL } from './generation-state'
@@ -111,6 +111,10 @@ function StageNotice() {
   return <div className="stage-notice" role="status" aria-live="polite">{notice}</div>
 }
 
+function LiveAnnouncer() {
+  return <span className="sr-only" role="status" aria-live="polite">{announcement.value}</span>
+}
+
 function StageLoading() {
   const status = stageStatus.value
   const [sampleBusy, setSampleBusy] = useState(false)
@@ -190,7 +194,7 @@ stage.appendChild(editorRoot)
 const loadingRoot = document.createElement('div')
 loadingRoot.className = 'stage-loading-root'
 stage.appendChild(loadingRoot)
-render(<><StageLoading /><StageNotice /></>, loadingRoot)
+render(<><StageLoading /><StageNotice /><LiveAnnouncer /></>, loadingRoot)
 
 const tabsRoot = document.createElement('div')
 tabsRoot.className = 'mobile-tabs-root'
