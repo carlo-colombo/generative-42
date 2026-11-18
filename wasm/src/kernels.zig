@@ -240,14 +240,6 @@ fn cellAverage(src: []const u8, width: usize, x0: usize, y0: usize, x1: usize, y
     };
 }
 
-fn blendBorder(color: [3]u8) [3]u8 {
-    return .{
-        @intFromFloat(util.roundF(@as(f64, @floatFromInt(color[0])) * 0.3 + 178.5)),
-        @intFromFloat(util.roundF(@as(f64, @floatFromInt(color[1])) * 0.3 + 178.5)),
-        @intFromFloat(util.roundF(@as(f64, @floatFromInt(color[2])) * 0.3 + 178.5)),
-    };
-}
-
 // Fused grid render + curtain filter. Source and output are tightly packed RGBA.
 export fn curtainGrid(
     src_ptr: [*]const u8,
@@ -358,10 +350,8 @@ export fn curtainGrid(
             const x1: i64 = @intCast(@min(width, @as(usize, @intFromFloat(util.roundF(@as(f64, @floatFromInt(col + 1)) * cell)))));
             const index = row * cols + col;
             const avg = averages[index];
-            const border = blendBorder(avg);
             const sx0 = x0 + margin;
-            fillRect(out, width, height, sx0, y0 + margin, x1, y1, border);
-            fillRect(out, width, height, sx0 + 1, y0 + margin + 1, x1 - 1, y1 - 1, avg);
+            fillRect(out, width, height, sx0, y0 + margin, x1, y1, avg);
 
             if (has_curtain and curtain[index] != 0) {
                 const filtered_gap = filters.apply(gap[0], gap[1], gap[2], switch (effect_id) {
@@ -376,15 +366,6 @@ export fn curtainGrid(
                     filtered_gap[2],
                     gap[3],
                 });
-                var color = border;
-                if (effect_id == 1) {
-                    color = filters.apply(border[0], border[1], border[2], .inverse);
-                } else if (effect_id == 2) {
-                    color = filters.apply(border[0], border[1], border[2], .posterize);
-                } else if (effect_id == 3) {
-                    color = filters.apply(border[0], border[1], border[2], .grayscale);
-                }
-                fillRect(out, width, height, sx0, y0 + margin, x1, y1, color);
                 var face = avg;
                 if (effect_id == 1) {
                     face = filters.apply(avg[0], avg[1], avg[2], .inverse);
@@ -393,7 +374,7 @@ export fn curtainGrid(
                 } else if (effect_id == 3) {
                     face = filters.apply(avg[0], avg[1], avg[2], .grayscale);
                 }
-                fillRect(out, width, height, sx0 + 1, y0 + margin + 1, x1 - 1, y1 - 1, face);
+                fillRect(out, width, height, sx0, y0 + margin, x1, y1, face);
             }
         }
     }
