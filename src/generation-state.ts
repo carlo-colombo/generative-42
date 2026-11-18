@@ -389,6 +389,8 @@ function compactParams(params: EffectParams): EffectParams {
     gridCurtainVariation: quantize(params.gridCurtainVariation),
     gridCurtainEffect: params.gridCurtainEffect,
     gridCurtainAxis: params.gridCurtainAxis,
+    gridGap: params.gridGap,
+    gridGapColor: params.gridGapColor,
   }
 }
 

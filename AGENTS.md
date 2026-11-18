@@ -144,7 +144,9 @@ on a device that already has the app.
   pixel-filter kernel. `curtain-grid` is fully fused in WASM: it averages the
   source into the configured grid, paints the curtains, and applies inverse,
   posterize, or grayscale without a second canvas buffer or a second filter
-  pass.
+  pass. `params.gridGap` picks what shows between the squares — the source
+  average (default), `params.gridGapColor`, or transparent, which leaves the
+  layers below visible through a gap the compositor skips.
 - `src/compose.ts` — the composition engine. Starts from the cropped source RGBA
   and walks visible layers bottom-to-top, rendering each into one clear
   Canvas 2D `Surface` scratch (pixel density 1, draw state reset), then

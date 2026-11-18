@@ -7,6 +7,7 @@ import type {
   ColorSortDirection,
   CurtainAxis,
   CurtainEffect,
+  CurtainGap,
   DetailNoiseMode,
   EffectId,
   EffectParams,
@@ -29,10 +30,14 @@ export type EffectRenderContext = {
   wasm: WasmKernels
 }
 
-export type EffectControl =
+export type EffectControl = ({
+  when?: (params: EffectParams) => boolean
+} & (
   | { type: 'range'; key: keyof EffectParams; label: string; min: number; max: number; step: number; fallback?: number }
   | { type: 'select'; key: keyof EffectParams; label: string; options: { value: string; label: string }[] }
-  | { type: 'toggle'; key: keyof EffectParams; label: string };
+  | { type: 'toggle'; key: keyof EffectParams; label: string }
+  | { type: 'color'; key: keyof EffectParams; label: string }
+));
 
 export type EffectDefinition = {
   id: EffectId;
@@ -130,6 +135,12 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     gridCurtainAxis: (record.gridCurtainAxis === 'columns' || record.gridCurtainAxis === 'rows'
       ? record.gridCurtainAxis
       : base.gridCurtainAxis) as CurtainAxis,
+    gridGap: (record.gridGap === 'colour' || record.gridGap === 'transparent' || record.gridGap === 'average'
+      ? record.gridGap
+      : base.gridGap) as CurtainGap,
+    gridGapColor: typeof record.gridGapColor === 'string' && /^#[0-9a-f]{6}$/i.test(record.gridGapColor)
+      ? record.gridGapColor
+      : base.gridGapColor,
   };
 }
 
@@ -623,6 +634,12 @@ function detailNoise({ ctx, width, height, source, seed, params, wasm }: EffectR
   drawPixelBuffer(ctx, width, height, outputPtr, byteLength, wasm)
 }
 
+function hexChannels(value: string): [number, number, number] {
+  const match = /^#?([0-9a-f]{6})$/i.exec(value.trim())
+  const parsed = match ? parseInt(match[1], 16) : 0xffffff
+  return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255]
+}
+
 function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
   const byteLength = width * height * 4
   wasm.pfree()
@@ -630,6 +647,8 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
   const outputPtr = wasm.palloc(byteLength) >>> 0
   new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source.data)
   const effect = params.gridCurtainEffect === 'inverse' ? 1 : params.gridCurtainEffect === 'rasterize' ? 2 : 3
+  const gap = params.gridGap === 'colour' ? 1 : params.gridGap === 'transparent' ? 2 : 0
+  const [gapR, gapG, gapB] = hexChannels(params.gridGapColor)
   measureWasm('curtainGrid', () => wasm.curtainGrid(
     sourcePtr,
     outputPtr,
@@ -644,6 +663,8 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
     params.gridCurtainVariation,
     params.gridCurtainAxis === 'columns' ? 1 : 0,
     effect,
+    gap,
+    (gapR << 16) | (gapG << 8) | gapB,
     seed >>> 0,
   ))
   drawPixelBuffer(ctx, width, height, outputPtr, byteLength, wasm)
@@ -730,10 +751,18 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       gridCurtainVariation: 35,
       gridCurtainEffect: 'inverse',
       gridCurtainAxis: 'rows',
+      gridGap: 'average',
+      gridGapColor: '#ffffff',
     },
     controls: [
       { type: 'range', key: 'gridSize', label: 'Squares', min: 2, max: MAX_GRID_SQUARES, step: 1 },
       { type: 'range', key: 'gridMargin', label: 'Gap', min: 0, max: 40, step: 1 },
+      { type: 'select', key: 'gridGap', label: 'Gap fill', options: [
+        { value: 'average', label: 'Source average' },
+        { value: 'colour', label: 'Colour' },
+        { value: 'transparent', label: 'Transparent' },
+      ] },
+      { type: 'color', key: 'gridGapColor', label: 'Gap colour', when: (params) => params.gridGap === 'colour' },
       { type: 'range', key: 'gridCurtainExtension', label: 'Extension', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainBalance', label: 'Balance', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'gridCurtainVariation', label: 'Variation', min: 0, max: 100, step: 1 },

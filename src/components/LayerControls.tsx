@@ -64,6 +64,18 @@ function EffectParamControl({ control, params, onChange }: {
       </select>
     </ControlField>
   }
+  if (control.type === 'color') {
+    return <ControlField label={control.label} value={String(params[control.key])}>
+      <div className="color-row">
+        <input
+          aria-label={control.label}
+          type="color"
+          value={String(params[control.key])}
+          onInput={(event) => onChange(control.key, event.currentTarget.value)}
+        />
+      </div>
+    </ControlField>
+  }
   return <button
     type="button"
     className={params[control.key] ? 'toggle-button active' : 'toggle-button'}
@@ -122,13 +134,14 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
       </select>
     </ControlField>
 
-    {definition.controls.map((control) => <EffectParamControl
+    {definition.controls.filter((control) => !control.when || control.when(layer.params)).map((control) => <EffectParamControl
       key={control.key}
       control={control}
       params={layer.params}
       onChange={(key, value) => updateEffectParams(model, layer.id, key, value)}
     />)}
     {layer.effect === 'curtain-grid' && <p className="hint-text">0% top/left · 50% balanced · 100% bottom/right</p>}
+    {layer.effect === 'curtain-grid' && <p className="hint-text">Gap fill is the space between squares; transparent shows the layers below.</p>}
     {layer.effect === 'rotate' && <p className="hint-text">0% no shift · 100% half a turn; pixels wrap at the area edge</p>}
 
     <ControlField label="Label">

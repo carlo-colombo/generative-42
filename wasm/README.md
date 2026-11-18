@@ -16,7 +16,7 @@ is `fast`.
 `wasm/src/kernels.zig` currently provides:
 
 - `maskWeight`: rect/ellipse distance masks and path scanline fill with edge-distance work restricted to a feather/jitter band.
-- `curtainGrid`: cell averaging, band generation, fill, and inverse/posterize/grayscale in one pass. It writes one RGBA output buffer rather than building and filtering a second canvas.
+- `curtainGrid`: cell averaging, band generation, fill, and inverse/posterize/grayscale in one pass. It writes one RGBA output buffer rather than building and filtering a second canvas. The gap fill is either the source average, a packed RGB colour, or alpha 0, so a layer can leave the composite below visible between the squares.
 - `sampleQuads`: one batched call for all of an effect's sample quadrilaterals, reading a single downscaled source image.
 - `pixelFilter`: in-place inverse, posterize, and grayscale filters, also used for the `sections` effect.
 - `pixelSort`, `poissonSites`, `voronoiCells`, `detailNoise`, and chunked `compositeLayer`.

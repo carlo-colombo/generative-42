@@ -6,6 +6,7 @@ export type SectionDirection = "vertical" | "horizontal";
 export type DetailNoiseMode = "bw" | "color";
 export type CurtainEffect = "inverse" | "rasterize" | "greyscale";
 export type CurtainAxis = "rows" | "columns";
+export type CurtainGap = "average" | "colour" | "transparent";
 
 export type Pt = { x: number; y: number };
 
@@ -68,6 +69,10 @@ export interface EffectParams {
   gridCurtainVariation: number;
   gridCurtainEffect: CurtainEffect;
   gridCurtainAxis: CurtainAxis;
+  // Gap between curtain-grid squares: the source average, a fixed colour, or
+  // empty, leaving the layers below visible through it.
+  gridGap: CurtainGap;
+  gridGapColor: string;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -92,6 +97,8 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   gridCurtainVariation: 35,
   gridCurtainEffect: "inverse",
   gridCurtainAxis: "rows",
+  gridGap: "average",
+  gridGapColor: "#ffffff",
 };
 
 export type LayerBase = {

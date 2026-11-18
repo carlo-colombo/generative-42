@@ -171,7 +171,7 @@ export fn pixelFilter(pixels_ptr: [*]u8, pixel_count: u32, filter_id: u32, level
     }
 }
 
-fn fillRect(
+fn fillRectRgba(
     out: []u8,
     width: usize,
     height: usize,
@@ -179,7 +179,7 @@ fn fillRect(
     y0_in: i64,
     x1_in: i64,
     y1_in: i64,
-    color: [3]u8,
+    color: [4]u8,
 ) void {
     const max_x: i64 = @intCast(width);
     const max_y: i64 = @intCast(height);
@@ -196,10 +196,23 @@ fn fillRect(
             out[i] = color[0];
             out[i + 1] = color[1];
             out[i + 2] = color[2];
-            out[i + 3] = 255;
+            out[i + 3] = color[3];
             i += 4;
         }
     }
+}
+
+fn fillRect(
+    out: []u8,
+    width: usize,
+    height: usize,
+    x0_in: i64,
+    y0_in: i64,
+    x1_in: i64,
+    y1_in: i64,
+    color: [3]u8,
+) void {
+    fillRectRgba(out, width, height, x0_in, y0_in, x1_in, y1_in, .{ color[0], color[1], color[2], 255 });
 }
 
 fn cellAverage(src: []const u8, width: usize, x0: usize, y0: usize, x1: usize, y1: usize) [3]u8 {
@@ -250,6 +263,8 @@ export fn curtainGrid(
     _edge_jitter_percent: f32,
     axis: u32,
     effect_id: u32,
+    gap_mode: u32,
+    gap_rgb: u32,
     seed: u32,
 ) void {
     util.resetScratch();
@@ -324,8 +339,15 @@ export fn curtainGrid(
     }
 
     const margin: i64 = util.roundI(cell * util.clampF(margin_percent, 0, 40) / 100);
-    // The base background is opaque white-lerped source average.
-    fillRect(out, width, height, 0, 0, @intCast(width), @intCast(height), bg);
+    // The gap is the source average by default, an explicit colour, or empty.
+    const gap_word = gap_rgb & 0xffffff;
+    const gap: [4]u8 = .{
+        if (gap_mode == 0) bg[0] else @intCast((gap_word >> 16) & 0xff),
+        if (gap_mode == 0) bg[1] else @intCast((gap_word >> 8) & 0xff),
+        if (gap_mode == 0) bg[2] else @intCast(gap_word & 0xff),
+        if (gap_mode == 2) 0 else 255,
+    };
+    fillRectRgba(out, width, height, 0, 0, @intCast(width), @intCast(height), gap);
     row = 0;
     while (row < rows) : (row += 1) {
         const y0: i64 = util.roundI(@as(f64, @floatFromInt(row)) * cell);
@@ -342,13 +364,18 @@ export fn curtainGrid(
             fillRect(out, width, height, sx0 + 1, y0 + margin + 1, x1 - 1, y1 - 1, avg);
 
             if (has_curtain and curtain[index] != 0) {
-                const filtered_bg = filters.apply(bg[0], bg[1], bg[2], switch (effect_id) {
+                const filtered_gap = filters.apply(gap[0], gap[1], gap[2], switch (effect_id) {
                     1 => .inverse,
                     2 => .posterize,
                     3 => .grayscale,
                     else => .none,
                 });
-                fillRect(out, width, height, x0, y0, x1, y1, filtered_bg);
+                fillRectRgba(out, width, height, x0, y0, x1, y1, .{
+                    filtered_gap[0],
+                    filtered_gap[1],
+                    filtered_gap[2],
+                    gap[3],
+                });
                 var color = border;
                 if (effect_id == 1) {
                     color = filters.apply(border[0], border[1], border[2], .inverse);

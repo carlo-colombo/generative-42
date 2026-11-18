@@ -18,6 +18,8 @@ export type WasmKernels = {
     edgeJitter: number,
     axis: number,
     effect: number,
+    gapMode: number,
+    gapRgb: number,
     seed: number,
   ) => void
   maskWeight: (

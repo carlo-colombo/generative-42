@@ -23,12 +23,12 @@ for (let i = 0; i < bytes; i += 4) {
   source[i + 3] = 255
 }
 
-function render() {
+function render({ extension = 35, gapMode = 0, gapRgb = 0 } = {}) {
   wasm.pfree()
   const src = wasm.palloc(bytes) >>> 0
   const out = wasm.palloc(bytes) >>> 0
   new Uint8Array(wasm.memory.buffer, src, bytes).set(source)
-  wasm.curtainGrid(src, out, width, height, 16, 8, 2, 35, 50, 40, 40, 0, 2, 123)
+  wasm.curtainGrid(src, out, width, height, 16, 12, 2, extension, 50, 40, 40, 0, 2, gapMode, gapRgb, 123)
   return new Uint8Array(wasm.memory.buffer, out, bytes).slice()
 }
 
@@ -37,6 +37,14 @@ const second = render()
 assert.deepEqual(first, second, 'curtain output should be deterministic for a seed')
 assert.equal(first.length, bytes)
 assert.ok(first.some((v, i) => i % 4 === 3 && v === 255), 'curtain render should write opaque pixels')
+
+const transparentGap = render({ extension: 0, gapMode: 2 })
+assert.equal(transparentGap[3], 0, 'a transparent gap should leave the cell margin empty')
+assert.equal(transparentGap[(1 * width + 1) * 4 + 3], 255, 'the square face should stay opaque')
+
+const colouredGap = render({ extension: 0, gapMode: 1, gapRgb: 0x3366cc })
+assert.deepEqual([...colouredGap.slice(0, 4)], [0x33, 0x66, 0xcc, 255], 'a fixed gap colour should fill the margin')
+assert.equal(colouredGap[(1 * width + 1) * 4 + 3], 255, 'the square face should stay opaque')
 
 wasm.pfree()
 const testPixels = wasm.palloc(8) >>> 0
