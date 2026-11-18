@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { announce, duplicateLayer, moveLayer, removeLayer, updateLayer, type EditorModel } from '../editor-state'
+import { announce, duplicateLayer, moveLayer, removeLayer, showToast, updateLayer, type EditorModel } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
 import { effectLabel } from '../effects'
 import type { Layer } from '../types'
@@ -59,11 +59,26 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
 
   const remove = (id: string, displayIndex: number) => {
     setMenuFor(null)
+    const removed = display[displayIndex]
+    const storageIndex = layers.length - 1 - displayIndex
+    const wasSolo = generation.soloLayerId === id
     removeLayer(model, id)
     if (editor.selectedLayerId.value === id) {
       const next = display[displayIndex + 1] ?? display[displayIndex - 1] ?? null
       editor.selectedLayerId.value = next?.id ?? null
     }
+    showToast({
+      message: 'Layer deleted',
+      actionLabel: 'Undo',
+      action: () => {
+        if (model.draft.value.layers.some((layer) => layer.id === id)) return
+        const next = [...model.draft.value.layers]
+        next.splice(Math.min(storageIndex, next.length), 0, removed)
+        model.setField('layers', next, `restore:${id}`)
+        if (wasSolo) model.setField('soloLayerId', id, `restore:${id}`)
+        editor.selectedLayerId.value = id
+      },
+    })
   }
 
   const duplicate = (id: string) => {

@@ -54,7 +54,7 @@ on a device that already has the app.
   (drag/drop/paste), the stage empty-state actions and the stage notice. Below
   940 px it renders the Image/Layers tab bar inside the sticky stage, sizes the
   stage around the tabs, and persists the chosen tab in sessionStorage. It also
-  mounts the live announcer used for layer changes.
+  mounts the live announcer used for layer changes and the undo toast.
 - `src/app.tsx` — `LeftPanel` (image and crop) and `RightPanel` (the layer list,
   the add-layer controls, the selected layer inspector, the layer presets, the
   mask preview toggle, and the Offline panel), plus the image manifest fetch.
@@ -112,7 +112,7 @@ on a device that already has the app.
   and `wasmProfile`) and reports when the stack is stored in this browser's
   localStorage.
 - `src/components/*.tsx` — panel controls (`SourceControls`, `CropControls`,
-  `LayerList`, `LayerControls`, `Presets`, `Actions`, `MobileTabs`, `ToolButtons`,
+  `LayerList`, `LayerControls`, `Presets`, `Actions`, `MobileTabs`, `Toast`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
   with upload/select/rename/remove; rename edits the name inline in the tile.
@@ -186,7 +186,8 @@ on a device that already has the app.
   The limit is ephemeral UI state, not part of the generation.
 - `src/editor-state.ts` — editor signals (`selectedLayerId`, `tool`,
   `maskPreview`, `showMasks`, `canvasSize`, `newEffect`, `mobileTab`), the
-  `announcement` signal/`announce` helper behind the live announcer, and the unified layer
+  `announcement` signal/`announce` helper behind the live announcer, the
+  `toast`/`showToast`/`hideToast` store behind the undo toast, and the unified layer
   CRUD helpers (`createEffectLayer`, `createTextLayer`, add/update/remove/
   duplicate/move), plus the shape clamp/translate/copy helpers. `newEffect` is
   the effect a newly drawn shape creates.
@@ -222,7 +223,8 @@ on a device that already has the app.
   desktop the list is capped at 40vh and scrolls the selected row into view;
   `LayerControls.tsx` scrolls the inspector into view when the selection changes.
   Layer add/delete/duplicate, visibility, solo and move are announced through a
-  shared live region; rows expose the current layer with `aria-current`.
+  shared live region; rows expose the current layer with `aria-current`. A
+  delete also opens an undo toast that restores the layer at its old index.
   It dispatches on layer kind; the effect
   inspector includes the effect dropdown (resetting params to that effect's
   defaults while keeping shape/edge/opacity), generated effect controls, edge

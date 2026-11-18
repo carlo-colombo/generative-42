@@ -15,7 +15,7 @@
 
 ### UX review follow-ups
 
-- [ ] Undo toast for layer deletes; undo or two-step confirm for upload/preset deletes
+- [x] Undo toast for layer deletes; two-step confirm for upload/preset deletes
 - [x] Commit Generate/Next/seed edits in place; Generate picks a new random seed
 - [ ] Swap the source image in place (image select and share still reload)
 - [x] Copy-link / Web Share for the current generation

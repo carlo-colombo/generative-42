@@ -4,6 +4,7 @@ import { useEffect, useState } from 'preact/hooks'
 import { LeftPanel, RightPanel } from './app'
 import { StageEditor } from './components/StageEditor'
 import { MobileTabs } from './components/MobileTabs'
+import { Toast } from './components/Toast'
 import { announcement, createEditorModel } from './editor-state'
 import type { ContentRect } from './frame'
 import { createStage, type RenderResult, type StageStatus } from './stage'
@@ -195,6 +196,11 @@ const loadingRoot = document.createElement('div')
 loadingRoot.className = 'stage-loading-root'
 stage.appendChild(loadingRoot)
 render(<><StageLoading /><StageNotice /><LiveAnnouncer /></>, loadingRoot)
+
+const toastRoot = document.createElement('div')
+toastRoot.className = 'toast-root'
+document.body.appendChild(toastRoot)
+render(<Toast />, toastRoot)
 
 const tabsRoot = document.createElement('div')
 tabsRoot.className = 'mobile-tabs-root'

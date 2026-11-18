@@ -13,6 +13,21 @@ export type ShapeTool = 'select' | 'rect' | 'ellipse' | 'polygon' | 'lasso' | 'c
 export type MobileTab = 'image' | 'layers'
 
 export const announcement = signal('')
+export type ToastMessage = { message: string; actionLabel: string; action: () => void }
+export const toast = signal<ToastMessage | null>(null)
+let toastTimer = 0
+
+export function showToast(next: ToastMessage) {
+  toast.value = next
+  if (toastTimer) window.clearTimeout(toastTimer)
+  toastTimer = window.setTimeout(() => { toast.value = null }, 6000)
+}
+
+export function hideToast() {
+  if (toastTimer) window.clearTimeout(toastTimer)
+  toast.value = null
+}
+
 let announcementTimer = 0
 
 export function announce(message: string) {
