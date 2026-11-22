@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { announce, duplicateLayer, moveLayer, removeLayer, showToast, updateLayer, type EditorModel } from '../editor-state'
+import { announce, clearLayers, duplicateLayer, moveLayer, removeLayer, showToast, updateLayer, type EditorModel } from '../editor-state'
 import { MAX_LAYERS, type GenerationModel } from '../generation-state'
 import { effectLabel } from '../effects'
 import type { Layer } from '../types'
@@ -97,7 +97,18 @@ export function LayerList({ model, editor }: { model: GenerationModel; editor: E
     moveLayer(model, display[fromDisplay].id, layers.length - 1 - toDisplay)
   }
 
+  const clear = () => {
+    if (!layers.length || !window.confirm('Clear all layers?')) return
+    clearLayers(model)
+    editor.selectedLayerId.value = null
+    setMenuFor(null)
+  }
+
   return <section className="panel-section" aria-label="Layer stack">
+    <div className="section-heading">
+      <h2 className="section-title">Layers</h2>
+      <button type="button" className="clear-layers-button" disabled={layers.length === 0} onClick={clear}>Clear</button>
+    </div>
     {display.length === 0
       ? <p className="hint-text">Empty stack: only the cropped source renders. Add an effect or a text layer.</p>
       : <ul className="layer-list" ref={listRef}>

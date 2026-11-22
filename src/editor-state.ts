@@ -133,6 +133,11 @@ export function removeLayer(model: GenerationModel, id: string) {
   if (generation.soloLayerId === id) model.setField('soloLayerId', '', group)
 }
 
+export function clearLayers(model: GenerationModel) {
+  model.setField('layers', [], 'clear-layers')
+  model.setField('soloLayerId', '', 'clear-layers')
+}
+
 function copyLayer(layer: Layer, id: string): Layer {
   if (layer.kind === 'text') return { ...layer, id }
   return { ...layer, id, shape: copyShape(layer.shape), edge: { ...layer.edge }, params: { ...layer.params } }

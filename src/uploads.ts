@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals'
 import { useEffect, useState } from 'preact/hooks'
 
+import { extractExif } from './image-metadata'
 import { appUrl } from './paths'
 
 export const UPLOAD_PREFIX = 'upload:'
@@ -22,6 +23,7 @@ export type UploadedImage = {
   thumb: string
   createdAt: number
   bytes: number
+  hasExif?: boolean
 }
 
 export type UploadStatus = 'idle' | 'ready' | 'unavailable'
@@ -147,12 +149,13 @@ async function prepareUpload(file: File): Promise<PreparedUpload> {
   }
 }
 
-async function storeUpload(image: UploadedImage, blob: Blob): Promise<void> {
+async function storeUpload(image: UploadedImage, blob: Blob, exif: Uint8Array | null): Promise<void> {
   const db = await openDb()
   try {
     const tx = db.transaction([META_STORE, FILE_STORE], 'readwrite')
     tx.objectStore(META_STORE).put(image)
-    tx.objectStore(FILE_STORE).put({ id: image.id, blob })
+    const exifBuffer = exif?.buffer.slice(exif.byteOffset, exif.byteOffset + exif.byteLength) as ArrayBuffer | undefined
+    tx.objectStore(FILE_STORE).put({ id: image.id, blob, exif: exifBuffer ? new Blob([exifBuffer]) : undefined })
     await transactionDone(tx)
   } finally {
     db.close()
@@ -163,12 +166,35 @@ export async function loadUploads(): Promise<void> {
   try {
     const db = await openDb()
     let records: UploadedImage[]
+    let stored: { id: string; blob?: Blob; exif?: Blob }[]
     try {
       records = await requestResult(db.transaction(META_STORE).objectStore(META_STORE).getAll()) as UploadedImage[]
+      stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).getAll()) as { id: string; blob?: Blob; exif?: Blob }[]
     } finally {
       db.close()
     }
-    uploads.value = records
+    const files = new Map(stored.map((record) => [record.id, record]))
+    const images = await Promise.all(records.map(async (record) => {
+      if (typeof record.hasExif === 'boolean') return record
+      const file = files.get(record.id)
+      const hasExif = file?.exif ? file.exif.size > 0 : file?.blob ? Boolean(await extractExif(file.blob)) : false
+      return { ...record, hasExif }
+    }))
+    if (images.some((image) => records.find((record) => record.id === image.id)?.hasExif === undefined)) {
+      try {
+        const updateDb = await openDb()
+        try {
+          const tx = updateDb.transaction(META_STORE, 'readwrite')
+          for (const image of images) tx.objectStore(META_STORE).put(image)
+          await transactionDone(tx)
+        } finally {
+          updateDb.close()
+        }
+      } catch {
+        // The marker still works for this session if a metadata migration fails.
+      }
+    }
+    uploads.value = images
       .map((record) => ({ ...record, bytes: typeof record.bytes === 'number' && record.bytes > 0 ? record.bytes : 0 }))
       .sort((a, b) => b.createdAt - a.createdAt)
     uploadsStatus.value = 'ready'
@@ -177,7 +203,7 @@ export async function loadUploads(): Promise<void> {
   }
 }
 
-export async function addUploads(files: File[]): Promise<{ added: UploadedImage[]; errors: string[] }> {
+export async function addUploads(files: File[], preservedExif: (Blob | undefined)[] = []): Promise<{ added: UploadedImage[]; errors: string[] }> {
   const errors: string[] = []
   const added: UploadedImage[] = []
   // The share import runs before the panel has loaded the store, so the count
@@ -186,12 +212,15 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
   const room = Math.max(0, MAX_UPLOADS - uploads.value.length)
   if (room === 0) return { added, errors: [`Limit of ${MAX_UPLOADS} uploaded images`] }
   await persistStorage()
-  for (const file of files.slice(0, room)) {
+  for (const [index, file] of files.slice(0, room).entries()) {
     if (!file.type.startsWith('image/')) {
       errors.push(`${file.name} is not an image`)
       continue
     }
     try {
+      const exif = preservedExif[index]
+        ? new Uint8Array(await preservedExif[index]!.arrayBuffer())
+        : await extractExif(file)
       const prepared = await prepareUpload(file)
       const image: UploadedImage = {
         id: newId(),
@@ -201,8 +230,9 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
         thumb: prepared.thumb,
         createdAt: Date.now(),
         bytes: prepared.blob.size,
+        hasExif: Boolean(exif?.length),
       }
-      await storeUpload(image, prepared.blob)
+      await storeUpload(image, prepared.blob, exif)
       added.push(image)
     } catch {
       errors.push(`${file.name} could not be read`)
@@ -216,30 +246,33 @@ export async function addUploads(files: File[]): Promise<{ added: UploadedImage[
   return { added, errors }
 }
 
-export async function exportUploads(): Promise<{ image: UploadedImage; blob: Blob }[]> {
+export async function exportUploads(): Promise<{ image: UploadedImage; blob: Blob; exif?: Blob }[]> {
   const db = await openDb()
   let records: UploadedImage[]
-  let stored: { id: string; blob?: Blob }[]
+  let stored: { id: string; blob?: Blob; exif?: Blob }[]
   try {
     records = await requestResult(db.transaction(META_STORE).objectStore(META_STORE).getAll()) as UploadedImage[]
-    stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).getAll()) as { id: string; blob?: Blob }[]
+    stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).getAll()) as { id: string; blob?: Blob; exif?: Blob }[]
   } finally {
     db.close()
   }
-  const blobs = new Map(stored.map((record) => [record.id, record.blob]))
+  const files = new Map(stored.map((record) => [record.id, record]))
   return records
     .sort((a, b) => b.createdAt - a.createdAt)
     .flatMap((image) => {
-      const blob = blobs.get(image.id)
-      return blob ? [{ image, blob }] : []
+      const stored = files.get(image.id)
+      return stored?.blob ? [{ image, blob: stored.blob, exif: stored.exif }] : []
     })
 }
 
-export async function importUploadsBlobs(entries: { name: string; type: string; blob: Blob }[]): Promise<{ added: UploadedImage[]; errors: string[] }> {
+export async function importUploadsBlobs(entries: { name: string; type: string; blob: Blob; exif?: Blob }[]): Promise<{ added: UploadedImage[]; errors: string[] }> {
   // Archive payloads are already encoded images, so the normal add path only
   // decodes them to measure and thumbnail; it keeps the bytes untouched when
   // the image is within MAX_UPLOAD_DIMENSION.
-  return addUploads(entries.map((entry) => new File([entry.blob], entry.name, { type: entry.type })))
+  return addUploads(
+    entries.map((entry) => new File([entry.blob], entry.name, { type: entry.type })),
+    entries.map((entry) => entry.exif),
+  )
 }
 
 export async function deleteUpload(id: string): Promise<void> {
@@ -282,15 +315,14 @@ export async function uploadBytes(): Promise<number> {
   const db = await openDb()
   try {
     const records = await requestResult(db.transaction(META_STORE).objectStore(META_STORE).getAll()) as UploadedImage[]
+    const stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).getAll()) as { id: string; blob?: Blob; exif?: Blob }[]
+    const files = new Map(stored.map((record) => [record.id, record]))
     let total = 0
     for (const record of records) {
-      if (typeof record.bytes === 'number' && record.bytes > 0) {
-        total += record.bytes
-        continue
-      }
-      // Rows written before sizes were recorded still count against the budget.
-      const stored = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).get(record.id)) as { blob?: Blob } | undefined
-      total += stored?.blob?.size ?? 0
+      const file = files.get(record.id)
+      // Older rows without a recorded size still count their stored image bytes.
+      total += typeof record.bytes === 'number' && record.bytes > 0 ? record.bytes : file?.blob?.size ?? 0
+      total += file?.exif?.size ?? 0
     }
     return total
   } finally {
@@ -311,6 +343,25 @@ export async function clearUploads(): Promise<void> {
     db.close()
   }
   uploads.value = []
+}
+
+export async function sourceExif(ref: string): Promise<Uint8Array | null> {
+  if (!ref) return null
+  const id = uploadId(ref)
+  if (id !== null) {
+    const db = await openDb()
+    let record: { blob?: Blob; exif?: Blob } | undefined
+    try {
+      record = await requestResult(db.transaction(FILE_STORE).objectStore(FILE_STORE).get(id)) as { blob?: Blob; exif?: Blob } | undefined
+    } finally {
+      db.close()
+    }
+    if (record?.exif) return new Uint8Array(await record.exif.arrayBuffer())
+    return record?.blob ? extractExif(record.blob) : null
+  }
+  const response = await fetch(appUrl(ref))
+  if (!response.ok) throw new Error(`Could not read metadata from ${ref}`)
+  return extractExif(await response.blob())
 }
 
 export async function imageSource(ref: string): Promise<string> {

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { shareLink, type GenerationModel } from '../generation-state'
 import type { Generation } from '../types'
-import { downloadImage } from '../surface'
-import { imageLabel } from '../uploads'
+import { downloadImage, encodePng } from '../surface'
+import { imageLabel, sourceExif } from '../uploads'
 import { ControlField } from './ControlField'
 
 function fallbackCopy(text: string): boolean {
@@ -33,6 +33,8 @@ export function Actions({ model }: { model: GenerationModel }) {
   const [copied, setCopied] = useState(false)
   const [localOnly, setLocalOnly] = useState(false)
   const [message, setMessage] = useState('')
+  const [downloading, setDownloading] = useState(false)
+  const [downloadStatus, setDownloadStatus] = useState('')
   const copyTimer = useRef<number | undefined>(undefined)
   const canShare = typeof navigator.share === 'function'
   const localHint = 'Uploads and large stacks stay in this browser, so the link opens only here.'
@@ -79,7 +81,16 @@ export function Actions({ model }: { model: GenerationModel }) {
     setMessage('')
     const canvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
     if (canvas && canvas.dataset.hasSource === 'true' && typeof navigator.canShare === 'function') {
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+      let blob: Blob | null = null
+      try {
+        blob = await encodePng(canvas, await sourceExif(generation.image))
+      } catch {
+        try {
+          blob = await encodePng(canvas)
+        } catch {
+          blob = null
+        }
+      }
       if (blob) {
         const file = new File([blob], generationFileName(generation), { type: 'image/png' })
         let fileShare = false
@@ -108,10 +119,28 @@ export function Actions({ model }: { model: GenerationModel }) {
     }
   }
 
-  const download = () => {
+  const download = async () => {
     const baseCanvas = document.querySelector<HTMLCanvasElement>('canvas.base-layer')
     if (!baseCanvas || baseCanvas.dataset.hasSource !== 'true') return
-    downloadImage(baseCanvas, generationFileName(generation))
+    setDownloading(true)
+    setDownloadStatus('')
+    let exif: Uint8Array | null = null
+    let metadataError = false
+    try {
+      exif = await sourceExif(generation.image)
+    } catch {
+      metadataError = true
+    }
+    try {
+      await downloadImage(baseCanvas, generationFileName(generation), exif)
+      setDownloadStatus(metadataError
+        ? 'Downloaded without source EXIF; metadata could not be read.'
+        : exif ? 'Downloaded with source EXIF metadata.' : 'Downloaded; the source has no EXIF metadata.')
+    } catch {
+      setDownloadStatus('PNG export failed.')
+    } finally {
+      setDownloading(false)
+    }
   }
 
   return <footer className="panel-footer">
@@ -140,10 +169,11 @@ export function Actions({ model }: { model: GenerationModel }) {
     <div className="action-row">
       <button type="button" title="Copy a link to this generation" onClick={() => { void copy() }}>{copied ? 'Copied' : 'Copy link'}</button>
       {canShare && <button type="button" title="Share this generation" onClick={() => { void share() }}>Share</button>}
-      <button type="button" aria-label="Download PNG" title="Download PNG" onClick={download}>Download</button>
+      <button type="button" aria-label="Download PNG" title="Download PNG" onClick={() => { void download() }} disabled={downloading}>{downloading ? 'Preparing…' : 'Download'}</button>
     </div>
     {copied && localOnly && <p className="text-hint">Copied. {localHint}</p>}
     {message && <p className="text-hint" role="status">{message}</p>}
+    {downloadStatus && <p className="text-hint" role="status">{downloadStatus}</p>}
     <span className="sr-only" role="status">{copied ? `Link copied.${localOnly ? ` ${localHint}` : ''}` : ''}</span>
   </footer>
 }

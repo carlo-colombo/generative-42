@@ -73,7 +73,10 @@ on a device that already has the app.
   its object URL and drops both records.
   `MAX_UPLOADS` caps the store at 24; the UI reports quota/read failures.
   `addUploads` loads the store first when it has not been read yet, so an import
-  that runs before the panel mounts still counts against the cap.
+  that runs before the panel mounts still counts against the cap. Original EXIF
+  is extracted before any downscale and stored as a sidecar so PNG exports can
+  retain it; orientation and pixel dimensions are updated for the generated
+  canvas. JPEG, PNG, and WebP EXIF are supported.
   `exportUploads` reads the stored bytes; `importUploadsBlobs` feeds archive
   payloads back through `addUploads`, which keeps an already-sized image's bytes
   instead of re-encoding it.
@@ -83,12 +86,13 @@ on a device that already has the app.
 - `src/sample.ts` — deterministic generated sample for the empty stage.
 - `src/upload-archive.ts` — the `.g42images` upload archive: 8 ASCII magic bytes
   `G42IMG01`, a little-endian uint32 header length, a UTF-8 JSON header
-  (`{ kind: 'generative42-images', version: 1, exportedAt, images: [{ name,
-  width, height, type, createdAt, size }] }`, `size` being the blob byte
-  length), then the image blobs in header order, uncompressed. `parseArchive`
-  rejects a wrong magic, an implausible header length, bad JSON/kind/version, a
-  zero `size`, and any byte total that is not exactly consumed. The Image
-  section exports every upload as
+  (`{ kind: 'generative42-images', version: 2, exportedAt, images: [{ name,
+  width, height, type, createdAt, size, exifSize? }] }`, `size` and `exifSize`
+  being byte lengths), then the image blobs followed by their optional EXIF
+  sidecars, uncompressed. `parseArchive` also accepts version 1 and rejects a
+  wrong magic, an implausible header length, bad JSON/kind/version, invalid
+  sizes, and any byte total that is not exactly consumed. The Image section
+  exports every upload as
   `generative42-images-<YYYYMMDD-HHmm>.g42images` and imports one back as a
   merge: fresh ids, duplicate names kept, `MAX_UPLOADS` still the cap, and the
   selected source image never changes.
@@ -114,12 +118,14 @@ on a device that already has the app.
   `LayerList`, `LayerControls`, `Presets`, `Actions`, `MobileTabs`, `Toast`, `ToolButtons`,
   `ControlField`, `Segmented`, `HelpPopover`). `SourceControls` holds the source
   dropdown (built-in assets plus uploads) and the uploaded-image thumbnail grid
-  with upload/select/rename/remove; rename edits the name inline in the tile.
-  `Actions` holds the seed, Generate (a new random seed), Undo/Redo, live
-  preview, copy-link, Web Share (the PNG when files are supported, the URL
-  otherwise) and download. Upload and preset deletion confirm before removing
-  browser-local data. `HelpPopover` focuses its note, closes on Escape, an
-  outside click or focus leaving, and links the toggle with `aria-controls`.
+  with upload/select/rename/remove; EXIF-bearing uploads have an `EXIF` badge,
+  and the selected built-in image is checked for EXIF. Rename edits the name
+  inline in the tile. `Actions` holds the seed, Generate (a new random seed),
+  Undo/Redo, live preview, copy-link, Web Share (the PNG when files are
+  supported, the URL otherwise) and download. Upload and preset deletion
+  confirm before removing browser-local data. `HelpPopover` focuses its note,
+  closes on Escape, an outside click or focus leaving, and links the toggle with
+  `aria-controls`.
 - `src/style.css` — three-column layout: left controls, centered stage, right
   layer controls; below 940px it stacks, keeps the stage and Image/Layers tabs
   sticky, shows one panel at a time, and makes the panel footer static.
@@ -262,7 +268,8 @@ on a device that already has the app.
 - `src/color.ts` — scales source `ImageData` and batches quadrilateral color
   samples through WASM.
 - `src/surface.ts` — Canvas 2D `Surface` creation, resize/reset, pixel access,
-  image loading/cropping, and PNG download helpers.
+  image loading/cropping, and PNG download helpers. Downloads copy source EXIF
+  into a PNG `eXIf` chunk through `src/image-metadata.ts`.
 - `src/random.ts` — the `Random` interface and `createRandom(seed)`, used by
   every randomized effect for deterministic output across runs.
 - `src/fonts.ts` — `FONTS` list (`label` + `path`), `DEFAULT_FONT`, and the

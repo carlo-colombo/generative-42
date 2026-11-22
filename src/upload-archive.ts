@@ -1,7 +1,7 @@
 // The upload archive is one binary file: the magic bytes, a little-endian
-// uint32 header length, a UTF-8 JSON header, then the image blobs in header
-// order. Nothing here needs a dependency, and the payloads stay byte-identical
-// so an export/import round trip does not re-encode the images.
+// uint32 header length, a UTF-8 JSON header, then image blobs and optional EXIF
+// sidecars. Nothing here needs a dependency, and payloads stay byte-identical so
+// an export/import round trip does not re-encode images or metadata.
 export type ArchiveEntry = {
   name: string
   width: number
@@ -9,6 +9,7 @@ export type ArchiveEntry = {
   type: string
   createdAt: number
   blob: Blob
+  exif?: Blob
 }
 
 type ArchiveHeaderImage = {
@@ -18,6 +19,7 @@ type ArchiveHeaderImage = {
   type: string
   createdAt: number
   size: number
+  exifSize?: number
 }
 
 type ArchiveHeader = {
@@ -31,7 +33,7 @@ export const ARCHIVE_EXTENSION = '.g42images'
 
 const MAGIC = 'G42IMG01'
 const KIND = 'generative42-images'
-const VERSION = 1
+const VERSION = 2
 const MAGIC_BYTES = 8
 const LENGTH_BYTES = 4
 const PREFIX_BYTES = MAGIC_BYTES + LENGTH_BYTES
@@ -59,13 +61,19 @@ export function buildArchive(entries: ArchiveEntry[]): Blob {
       type: entry.type,
       createdAt: entry.createdAt,
       size: entry.blob.size,
+      ...(entry.exif?.size ? { exifSize: entry.exif.size } : {}),
     })),
   }
   const headerBytes = new TextEncoder().encode(JSON.stringify(header))
   const prefix = new Uint8Array(PREFIX_BYTES)
   prefix.set(new TextEncoder().encode(MAGIC), 0)
   new DataView(prefix.buffer).setUint32(MAGIC_BYTES, headerBytes.byteLength, true)
-  return new Blob([prefix, headerBytes, ...entries.map((entry) => entry.blob)], { type: 'application/octet-stream' })
+  return new Blob([
+    prefix,
+    headerBytes,
+    ...entries.map((entry) => entry.blob),
+    ...entries.flatMap((entry) => entry.exif?.size ? [entry.exif] : []),
+  ], { type: 'application/octet-stream' })
 }
 
 function archiveError(reason: string): Error {
@@ -80,7 +88,7 @@ function headerImages(value: unknown): ArchiveHeaderImage[] {
   if (typeof value !== 'object' || value === null) throw archiveError('the header is not a generative42 image list')
   const header = value as Partial<ArchiveHeader>
   if (header.kind !== KIND) throw archiveError('the header kind is unknown')
-  if (header.version !== VERSION) throw archiveError(`version ${String(header.version)} is not supported`)
+  if (header.version !== 1 && header.version !== VERSION) throw archiveError(`version ${String(header.version)} is not supported`)
   if (!Array.isArray(header.images)) throw archiveError('the header lists no images')
   return header.images.map((value, index) => {
     const image = value as Partial<ArchiveHeaderImage> | null
@@ -90,6 +98,7 @@ function headerImages(value: unknown): ArchiveHeaderImage[] {
     if (typeof image.type !== 'string') throw archiveError(`entry ${index + 1} has no image type`)
     if (typeof image.createdAt !== 'number' || !Number.isFinite(image.createdAt)) throw archiveError(`entry ${index + 1} has no timestamp`)
     if (!isWhole(image.size) || image.size === 0) throw archiveError(`entry ${index + 1} has no image data`)
+    if (image.exifSize !== undefined && (!isWhole(image.exifSize) || image.exifSize === 0)) throw archiveError(`entry ${index + 1} has invalid EXIF data`)
     return {
       name: image.name,
       width: image.width,
@@ -97,6 +106,7 @@ function headerImages(value: unknown): ArchiveHeaderImage[] {
       type: image.type,
       createdAt: image.createdAt,
       size: image.size,
+      exifSize: image.exifSize,
     }
   })
 }
@@ -115,7 +125,7 @@ export async function parseArchive(file: File | Blob): Promise<ArchiveEntry[]> {
     throw archiveError('the header is not valid JSON')
   }
   const images = headerImages(parsed)
-  const total = images.reduce((sum, image) => sum + image.size, 0)
+  const total = images.reduce((sum, image) => sum + image.size + (image.exifSize ?? 0), 0)
   if (PREFIX_BYTES + headerLength + total !== file.size) throw archiveError('the image data does not match the header')
   const entries: ArchiveEntry[] = []
   let offset = PREFIX_BYTES + headerLength
@@ -131,6 +141,12 @@ export async function parseArchive(file: File | Blob): Promise<ArchiveEntry[]> {
       blob: sliced.type === image.type ? sliced : new Blob([sliced], { type: image.type }),
     })
     offset += image.size
+  }
+  for (let index = 0; index < images.length; index++) {
+    const exifSize = images[index].exifSize ?? 0
+    if (!exifSize) continue
+    entries[index].exif = file.slice(offset, offset + exifSize)
+    offset += exifSize
   }
   return entries
 }

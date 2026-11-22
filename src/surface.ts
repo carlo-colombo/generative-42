@@ -1,3 +1,5 @@
+import { addExifToPng } from './image-metadata'
+
 export type Surface = {
   canvas: HTMLCanvasElement
   ctx: CanvasRenderingContext2D
@@ -106,9 +108,22 @@ export function cropSurface(source: Surface, rect: { x: number; y: number; width
   return surface
 }
 
-export function downloadImage(canvas: HTMLCanvasElement, filename: string): void {
+export async function encodePng(canvas: HTMLCanvasElement, exif: Uint8Array | null = null): Promise<Blob> {
+  const png = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error('Could not encode the PNG'))
+    }, 'image/png')
+  })
+  return addExifToPng(png, exif, canvas.width, canvas.height)
+}
+
+export async function downloadImage(canvas: HTMLCanvasElement, filename: string, exif: Uint8Array | null = null): Promise<void> {
+  const output = await encodePng(canvas, exif)
+  const url = URL.createObjectURL(output)
   const link = document.createElement('a')
   link.download = filename
-  link.href = canvas.toDataURL('image/png', 1.0)
+  link.href = url
   link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

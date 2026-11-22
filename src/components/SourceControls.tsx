@@ -14,6 +14,7 @@ import {
   loadUploads,
   MAX_UPLOADS,
   renameUpload,
+  sourceExif,
   uploadRef,
   uploads,
   uploadsStatus,
@@ -32,6 +33,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   const [busy, setBusy] = useState(false)
   const [archiveBusy, setArchiveBusy] = useState<'export' | 'import' | ''>('')
   const [archiveStatus, setArchiveStatus] = useState('')
+  const [selectedBuiltinHasExif, setSelectedBuiltinHasExif] = useState(false)
   const [error, setError] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -47,6 +49,16 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
   useEffect(() => {
     void loadUploads()
   }, [])
+
+  useEffect(() => {
+    let active = true
+    setSelectedBuiltinHasExif(false)
+    if (!generation.image.startsWith('/assets/')) return () => { active = false }
+    sourceExif(generation.image)
+      .then((metadata) => { if (active) setSelectedBuiltinHasExif(Boolean(metadata?.length)) })
+      .catch(() => { if (active) setSelectedBuiltinHasExif(false) })
+    return () => { active = false }
+  }, [generation.image])
 
   const selectImage = (ref: string) => {
     shareNotice.value = ''
@@ -87,13 +99,14 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
         setError('No uploaded images to export')
         return
       }
-      const archive = buildArchive(entries.map(({ image, blob }) => ({
+      const archive = buildArchive(entries.map(({ image, blob, exif }) => ({
         name: image.name,
         width: image.width,
         height: image.height,
         type: blob.type,
         createdAt: image.createdAt,
         blob,
+        exif,
       })))
       downloadBlob(archive, archiveFileName())
       setArchiveStatus(`Exported ${entries.length} image${entries.length === 1 ? '' : 's'}`)
@@ -112,7 +125,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
     const room = Math.max(0, MAX_UPLOADS - uploads.value.length)
     try {
       const entries = await parseArchive(file)
-      const result = await importUploadsBlobs(entries.map((entry) => ({ name: entry.name, type: entry.type, blob: entry.blob })))
+      const result = await importUploadsBlobs(entries.map((entry) => ({ name: entry.name, type: entry.type, blob: entry.blob, exif: entry.exif })))
       setError(result.errors.join(' · '))
       if (result.added.length === 0) return
       const skipped = Math.max(0, entries.length - Math.min(entries.length, room))
@@ -195,11 +208,12 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
           })}
         </optgroup>
         {uploaded.length > 0 && <optgroup label="Uploaded · local">
-          {uploaded.map((image) => <option value={uploadRef(image.id)}>{image.name}</option>)}
+          {uploaded.map((image) => <option value={uploadRef(image.id)}>{image.hasExif ? `${image.name} · EXIF` : image.name}</option>)}
         </optgroup>}
         {!known.includes(generation.image) && generation.image !== '' && <option value={generation.image}>{isUploadRef(generation.image) ? 'Missing upload (not in this browser)' : generation.image}</option>}
       </select>
     </ControlField>
+    {selectedBuiltinHasExif && <p className="upload-exif-legend" role="status" title="PNG downloads keep source EXIF, including GPS data">EXIF · included in PNG downloads</p>}
     {images.length > 0 && <p className="hint-text">{availabilityHint(images.length, cachedCount, isOnline)}</p>}
     <div className="upload-row">
       <button type="button" onClick={() => fileInput.current?.click()} disabled={busy || archiveBusy !== '' || unavailable}>
@@ -277,6 +291,7 @@ export function SourceControls({ model, images }: { model: GenerationModel; imag
               </button>
               <button type="button" className="upload-rename" aria-label={`Rename ${image.name}`} title="Rename" onClick={() => startRename(image)}>✎</button>
               <button type="button" className="upload-remove" aria-label={`Remove ${image.name}`} title="Remove" onClick={() => { void removeUpload(image.id) }}>×</button>
+              {image.hasExif && <span className="upload-exif-badge" aria-label="EXIF metadata available" title="Source EXIF, including GPS data, is kept in PNG downloads">EXIF</span>}
             </>}
         </div>
       })}
