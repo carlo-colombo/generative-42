@@ -143,7 +143,7 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
       ? record.gridGapColor
       : base.gridGapColor,
     rectCount: Math.round(clampNumber(record.rectCount, 100, 50000, base.rectCount)),
-    rectProportion: clampNumber(record.rectProportion, 10, 400, base.rectProportion),
+    rectProportion: clampNumber(record.rectProportion, 1, 400, base.rectProportion),
     rectRandomness: clampNumber(record.rectRandomness, 0, 100, base.rectRandomness),
     rectRotation: clampNumber(record.rectRotation, -180, 180, base.rectRotation),
     rectRotationRandomness: clampNumber(record.rectRotationRandomness, 0, 180, base.rectRotationRandomness),
@@ -769,7 +769,7 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
     defaults: {},
     controls: [
       { type: 'range', key: 'rectCount', label: 'Number of rectangles', min: 100, max: 50000, step: 100 },
-      { type: 'range', key: 'rectProportion', label: 'Width / height', min: 10, max: 400, step: 1 },
+      { type: 'range', key: 'rectProportion', label: 'Width / height', min: 1, max: 400, step: 1 },
       { type: 'range', key: 'rectRandomness', label: 'Size randomness', min: 0, max: 100, step: 1 },
       { type: 'range', key: 'rectRotation', label: 'Rotation', min: -180, max: 180, step: 1 },
       { type: 'range', key: 'rectRotationRandomness', label: 'Rotation randomness', min: 0, max: 180, step: 1 },

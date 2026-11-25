@@ -110,7 +110,7 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   gridCurtainAxis: "rows",
   gridGap: "average",
   gridGapColor: "#ffffff",
-  rectCount: 20000,
+  rectCount: 3000,
   rectProportion: 100,
   rectRandomness: 100,
   rectRotation: 0,
