@@ -7,6 +7,7 @@ export type DetailNoiseMode = "bw" | "color";
 export type CurtainEffect = "inverse" | "rasterize" | "greyscale";
 export type CurtainAxis = "rows" | "columns";
 export type CurtainGap = "average" | "colour" | "transparent";
+export type RectBorderTone = 'same' | 'darker' | 'lighter';
 
 export type Pt = { x: number; y: number };
 
@@ -73,6 +74,16 @@ export interface EffectParams {
   // empty, leaving the layers below visible through it.
   gridGap: CurtainGap;
   gridGapColor: string;
+  rectCount: number;
+  rectProportion: number;
+  rectRandomness: number;
+  rectRotation: number;
+  rectRotationRandomness: number;
+  rectOpacity: number;
+  rectOpacityRandomness: number;
+  rectBorder: boolean;
+  rectBorderThickness: number;
+  rectBorderTone: RectBorderTone;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -99,6 +110,16 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   gridCurtainAxis: "rows",
   gridGap: "average",
   gridGapColor: "#ffffff",
+  rectCount: 20000,
+  rectProportion: 100,
+  rectRandomness: 100,
+  rectRotation: 0,
+  rectRotationRandomness: 0,
+  rectOpacity: 100,
+  rectOpacityRandomness: 0,
+  rectBorder: false,
+  rectBorderThickness: 1,
+  rectBorderTone: 'same',
 };
 
 export type LayerBase = {

@@ -391,6 +391,16 @@ function compactParams(params: EffectParams): EffectParams {
     gridCurtainAxis: params.gridCurtainAxis,
     gridGap: params.gridGap,
     gridGapColor: params.gridGapColor,
+    rectCount: params.rectCount,
+    rectProportion: quantize(params.rectProportion),
+    rectRandomness: quantize(params.rectRandomness),
+    rectRotation: quantize(params.rectRotation),
+    rectRotationRandomness: quantize(params.rectRotationRandomness),
+    rectOpacity: quantize(params.rectOpacity),
+    rectOpacityRandomness: quantize(params.rectOpacityRandomness),
+    rectBorder: params.rectBorder,
+    rectBorderThickness: quantize(params.rectBorderThickness),
+    rectBorderTone: params.rectBorderTone,
   }
 }
 

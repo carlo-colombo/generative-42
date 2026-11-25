@@ -13,6 +13,7 @@ import type {
   EffectParams,
   Generation,
   LayerEdge,
+  RectBorderTone,
   SectionDirection,
 } from './types'
 
@@ -141,6 +142,18 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     gridGapColor: typeof record.gridGapColor === 'string' && /^#[0-9a-f]{6}$/i.test(record.gridGapColor)
       ? record.gridGapColor
       : base.gridGapColor,
+    rectCount: Math.round(clampNumber(record.rectCount, 100, 50000, base.rectCount)),
+    rectProportion: clampNumber(record.rectProportion, 10, 400, base.rectProportion),
+    rectRandomness: clampNumber(record.rectRandomness, 0, 100, base.rectRandomness),
+    rectRotation: clampNumber(record.rectRotation, -180, 180, base.rectRotation),
+    rectRotationRandomness: clampNumber(record.rectRotationRandomness, 0, 180, base.rectRotationRandomness),
+    rectOpacity: clampNumber(record.rectOpacity, 0, 100, base.rectOpacity),
+    rectOpacityRandomness: clampNumber(record.rectOpacityRandomness, 0, 100, base.rectOpacityRandomness),
+    rectBorder: typeof record.rectBorder === 'boolean' ? record.rectBorder : base.rectBorder,
+    rectBorderThickness: clampNumber(record.rectBorderThickness, 0.1, 20, base.rectBorderThickness),
+    rectBorderTone: (record.rectBorderTone === 'darker' || record.rectBorderTone === 'lighter' || record.rectBorderTone === 'same'
+      ? record.rectBorderTone
+      : base.rectBorderTone) as RectBorderTone,
   };
 }
 
@@ -189,39 +202,85 @@ function putQuad(
   }
 }
 
-function batchedRect({ ctx, width, height, source, random, wasm }: EffectRenderContext) {
-  const count = 20000
+function rectBorderColor(r: number, g: number, b: number, tone: RectBorderTone): string {
+  if (tone === 'same') return rgba(r, g, b)
+  const red = r / 255
+  const green = g / 255
+  const blue = b / 255
+  const min = Math.min(red, green, blue)
+  const max = Math.max(red, green, blue)
+  const delta = max - min
+  let hue = 0
+  const lightness = (max + min) / 2
+  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1))
+  if (delta > 0) {
+    if (max === red) hue = ((green - blue) / delta) % 6
+    else if (max === green) hue = (blue - red) / delta + 2
+    else hue = (red - green) / delta + 4
+    hue *= 60
+    if (hue < 0) hue += 360
+  }
+  const adjustedLightness = Math.max(0, Math.min(1, lightness + (tone === 'lighter' ? 0.2 : -0.2)))
+  const chroma = (1 - Math.abs(2 * adjustedLightness - 1)) * saturation
+  const x = chroma * (1 - Math.abs((hue / 60) % 2 - 1))
+  const offset = adjustedLightness - chroma / 2
+  const [outR, outG, outB] = hue < 60 ? [chroma, x, 0]
+    : hue < 120 ? [x, chroma, 0]
+      : hue < 180 ? [0, chroma, x]
+        : hue < 240 ? [0, x, chroma]
+          : hue < 300 ? [x, 0, chroma]
+            : [chroma, 0, x]
+  return rgba((outR + offset) * 255, (outG + offset) * 255, (outB + offset) * 255)
+}
+
+function rect({ ctx, width, height, source, params, random, wasm }: EffectRenderContext) {
+  const count = params.rectCount
   const coords = new Float32Array(count * 8)
-  const shapes = new Float32Array(count * 5)
+  const shapes = new Float32Array(count * 6)
+  const shortSide = Math.min(width, height)
+  const ratio = params.rectProportion / 100
+  const ratioRoot = Math.sqrt(ratio)
+  const sizeVariation = params.rectRandomness / 100
+  const rotation = params.rectRotation * Math.PI / 180
+  const rotationVariation = params.rectRotationRandomness * Math.PI / 180
+  const opacity = params.rectOpacity
+  const opacityVariation = params.rectOpacityRandomness
+
   for (let i = 0; i < count; i++) {
     const x = random.random(width)
     const y = random.random(height)
-    const w = random.random(width / 20) / 2
-    const h = random.random(height / 20) / 2
-    putQuad(coords, i, x - w, y - h, x + w, y + h)
-    shapes.set([x, y, w, h, random.random() * 255], i * 5)
+    const scale = random.random(Math.max(0.1, 1 - sizeVariation), 1 + sizeVariation)
+    const halfWidth = shortSide / 40 * ratioRoot * scale
+    const halfHeight = shortSide / 40 / ratioRoot * scale
+    const angle = rotation + random.random(-rotationVariation, rotationVariation)
+    const cosine = Math.cos(angle)
+    const sine = Math.sin(angle)
+    const offset = i * 8
+    for (const [corner, [dx, dy]] of [[0, [-1, -1]], [1, [1, -1]], [2, [1, 1]], [3, [-1, 1]]] as const) {
+      coords[offset + corner * 2] = x + dx * halfWidth * cosine - dy * halfHeight * sine
+      coords[offset + corner * 2 + 1] = y + dx * halfWidth * sine + dy * halfHeight * cosine
+    }
+    const alpha = random.random(Math.max(0, opacity - opacityVariation), Math.min(100, opacity + opacityVariation)) / 100
+    shapes.set([x, y, halfWidth, halfHeight, angle, alpha], i * 6)
   }
-  const colors = sampleQuads(source, coords, wasm)
-  ctx.lineWidth = 1
-  for (let i = 0; i < count; i++) {
-    const shape = i * 5
-    const color = i * 3
-    ctx.fillStyle = rgba(colors[color], colors[color + 1], colors[color + 2], shapes[shape + 4])
-    ctx.strokeStyle = rgba(colors[color], colors[color + 1], colors[color + 2])
-    ctx.beginPath()
-    ctx.rect(
-      shapes[shape] - shapes[shape + 2],
-      shapes[shape + 1] - shapes[shape + 3],
-      shapes[shape + 2] * 2,
-      shapes[shape + 3] * 2,
-    )
-    ctx.fill()
-    ctx.stroke()
-  }
-}
 
-function rect(context: EffectRenderContext) {
-  batchedRect(context)
+  const colors = sampleQuads(source, coords, wasm)
+  if (params.rectBorder) ctx.lineWidth = params.rectBorderThickness
+  for (let i = 0; i < count; i++) {
+    const shape = i * 6
+    const color = i * 3
+    ctx.save()
+    ctx.globalAlpha = shapes[shape + 5]
+    ctx.translate(shapes[shape], shapes[shape + 1])
+    ctx.rotate(shapes[shape + 4])
+    ctx.fillStyle = rgba(colors[color], colors[color + 1], colors[color + 2])
+    if (params.rectBorder) ctx.strokeStyle = rectBorderColor(colors[color], colors[color + 1], colors[color + 2], params.rectBorderTone)
+    ctx.beginPath()
+    ctx.rect(-shapes[shape + 2], -shapes[shape + 3], shapes[shape + 2] * 2, shapes[shape + 3] * 2)
+    ctx.fill()
+    if (params.rectBorder) ctx.stroke()
+    ctx.restore()
+  }
 }
 
 function batchedCircles({ ctx, width, height, source, random, wasm }: EffectRenderContext) {
@@ -704,7 +763,28 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
     ],
     render: pixelSort,
   },
-  'rect': { id: 'rect', label: 'Rect', defaults: {}, controls: [], render: rect },
+  'rect': {
+    id: 'rect',
+    label: 'Rectangles',
+    defaults: {},
+    controls: [
+      { type: 'range', key: 'rectCount', label: 'Number of rectangles', min: 100, max: 50000, step: 100 },
+      { type: 'range', key: 'rectProportion', label: 'Width / height', min: 10, max: 400, step: 1 },
+      { type: 'range', key: 'rectRandomness', label: 'Size randomness', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'rectRotation', label: 'Rotation', min: -180, max: 180, step: 1 },
+      { type: 'range', key: 'rectRotationRandomness', label: 'Rotation randomness', min: 0, max: 180, step: 1 },
+      { type: 'range', key: 'rectOpacity', label: 'Opacity', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'rectOpacityRandomness', label: 'Opacity randomness', min: 0, max: 100, step: 1 },
+      { type: 'toggle', key: 'rectBorder', label: 'Border' },
+      { type: 'range', key: 'rectBorderThickness', label: 'Border thickness', min: 0.1, max: 20, step: 0.1, when: (params) => params.rectBorder },
+      { type: 'select', key: 'rectBorderTone', label: 'Border tone', options: [
+        { value: 'same', label: 'Same hue' },
+        { value: 'darker', label: 'Darker' },
+        { value: 'lighter', label: 'Lighter' },
+      ], when: (params) => params.rectBorder },
+    ],
+    render: rect,
+  },
   'circles': { id: 'circles', label: 'Circles', defaults: {}, controls: [], render: circles },
   'grey-squares': {
     id: 'grey-squares',
