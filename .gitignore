@@ -19,3 +19,4 @@ dist
 # Zig build cache (build.zig compiles the WASM kernels).
 /.zig-cache
 /zig-out
+output
