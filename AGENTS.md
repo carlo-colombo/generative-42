@@ -138,8 +138,9 @@ on a device that already has the app.
   `{ label, defaults, controls, render }`. Controls are range/select/toggle
   descriptors over `EffectParams`, and `LayerControls` renders them
   automatically. Effects: `pixel-sort`, `galaxy`, `voronoi`, `sections`,
-  `detail-noise`, `curtain-grid`, `grey-squares`, `rect`, `circles`, `lines`,
-  `vertical-lines`, `horizontal-lines`. `normalizeEffectId` aliases the legacy
+  `detail-noise`, `curtain-grid`, `halftone`, `dither`, `edge-map`,
+  `glitch-bands`, `kaleidoscope`, `duotone`, `ripple`, `grey-squares`, `rect`,
+  `circles`, `lines`, `vertical-lines`, `horizontal-lines`. `normalizeEffectId` aliases the legacy
   `color-sorting` and `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is
   the share of each run a pixel-sort layer sorts (control, shown as 100 when a
   migrated layer still carries null); only pixel-sort reads it, and switching a
@@ -147,7 +148,9 @@ on a device that already has the app.
   the target site count for `voronoi`, the only effect that reads it.
   The seven sampled drawing effects batch their source quadrilaterals through
   WASM; Canvas 2D rasterizes the generated shapes. `sections` uses the WASM
-  pixel-filter kernel. `curtain-grid` is fully fused in WASM: it averages the
+  pixel-filter kernel. `halftone`, `dither`, `edge-map`, `glitch-bands`,
+  `kaleidoscope`, `duotone`, and `ripple` are implemented in the Zig/WASM
+  artistic filter kernel. `curtain-grid` is fully fused in WASM: it averages the
   source into the configured grid, paints the curtains, and applies inverse,
   posterize, or grayscale without a second canvas buffer or a second filter
   pass. `params.gridGap` picks what shows between the squares — the source
@@ -179,7 +182,7 @@ on a device that already has the app.
   constructs pixel-space rings with `shapePolygon` and calls this kernel for both
   composition and the stage mask preview.
 - `wasm/src/kernels.zig` — also contains batched quad sampling, filters, fused
-  curtain-grid rendering, and chunked RGBA compositing. `public/wasm/kernels.wasm`
+  curtain-grid and artistic-filter rendering, and chunked RGBA compositing. `public/wasm/kernels.wasm`
   is required before the stage renders; there is no TypeScript fallback if it
   fails. Add `?wasmProfile=1` to record named User Timing entries around kernels.
 - `src/areas.ts` — shape math and the seeded PRNG: `hashString`, `mulberry32`,

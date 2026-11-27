@@ -406,6 +406,19 @@ function compactParams(params: EffectParams): EffectParams {
     rectBorder: params.rectBorder,
     rectBorderThickness: quantize(params.rectBorderThickness),
     rectBorderTone: params.rectBorderTone,
+    halftoneCell: params.halftoneCell,
+    halftoneAngle: quantize(params.halftoneAngle),
+    ditherLevels: params.ditherLevels,
+    ditherStrength: quantize(params.ditherStrength),
+    edgeThreshold: quantize(params.edgeThreshold),
+    glitchBandHeight: params.glitchBandHeight,
+    glitchStrength: quantize(params.glitchStrength),
+    kaleidoscopeSegments: params.kaleidoscopeSegments,
+    kaleidoscopeRotation: quantize(params.kaleidoscopeRotation),
+    duotoneShadow: params.duotoneShadow,
+    duotoneHighlight: params.duotoneHighlight,
+    rippleFrequency: params.rippleFrequency,
+    rippleStrength: quantize(params.rippleStrength),
   }
 }
 

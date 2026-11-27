@@ -34,7 +34,14 @@ export type EffectId =
   | 'voronoi'
   | 'sections'
   | 'detail-noise'
-  | 'curtain-grid';
+  | 'curtain-grid'
+  | 'halftone'
+  | 'dither'
+  | 'edge-map'
+  | 'glitch-bands'
+  | 'kaleidoscope'
+  | 'duotone'
+  | 'ripple';
 
 // Spans are measured in source pixels along the sort axis; past this width a
 // typical run collapses into a handful of sortable units.
@@ -90,6 +97,19 @@ export interface EffectParams {
   rectBorder: boolean;
   rectBorderThickness: number;
   rectBorderTone: RectBorderTone;
+  halftoneCell: number;
+  halftoneAngle: number;
+  ditherLevels: number;
+  ditherStrength: number;
+  edgeThreshold: number;
+  glitchBandHeight: number;
+  glitchStrength: number;
+  kaleidoscopeSegments: number;
+  kaleidoscopeRotation: number;
+  duotoneShadow: string;
+  duotoneHighlight: string;
+  rippleFrequency: number;
+  rippleStrength: number;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -131,6 +151,19 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   rectBorder: false,
   rectBorderThickness: 1,
   rectBorderTone: 'same',
+  halftoneCell: 8,
+  halftoneAngle: 0,
+  ditherLevels: 4,
+  ditherStrength: 100,
+  edgeThreshold: 32,
+  glitchBandHeight: 8,
+  glitchStrength: 20,
+  kaleidoscopeSegments: 8,
+  kaleidoscopeRotation: 0,
+  duotoneShadow: '#172554',
+  duotoneHighlight: '#fef3c7',
+  rippleFrequency: 8,
+  rippleStrength: 35,
 };
 
 export type LayerBase = {

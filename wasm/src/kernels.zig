@@ -6,6 +6,7 @@ const sort_kernel = @import("sort_kernel.zig");
 const detail_kernel = @import("detail_kernel.zig");
 const voronoi_sites = @import("voronoi_sites.zig");
 const mask_kernel = @import("mask_kernel.zig");
+const artistic_filters = @import("artistic_filters.zig");
 
 const Filter = filters.Effect;
 
@@ -133,6 +134,21 @@ export fn detailNoise(
     seed: u32,
 ) void {
     detail_kernel.detailNoise(source_ptr, output_ptr, width, height, color_mode, seed);
+}
+
+export fn artisticFilter(
+    source_ptr: [*]const u8,
+    target_ptr: [*]u8,
+    width: u32,
+    height: u32,
+    filter: u32,
+    param1: f32,
+    param2: f32,
+    color_a: u32,
+    color_b: u32,
+    seed: u32,
+) void {
+    artistic_filters.apply(source_ptr, target_ptr, width, height, filter, param1, param2, color_a, color_b, seed);
 }
 
 export fn pixelFilter(pixels_ptr: [*]u8, pixel_count: u32, filter_id: u32, level: u32) void {

@@ -59,6 +59,13 @@ const EFFECT_IDS: EffectId[] = [
   'sections',
   'detail-noise',
   'curtain-grid',
+  'halftone',
+  'dither',
+  'edge-map',
+  'glitch-bands',
+  'kaleidoscope',
+  'duotone',
+  'ripple',
   'grey-squares',
   'rect',
   'circles',
@@ -160,6 +167,23 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     rectBorderTone: (record.rectBorderTone === 'darker' || record.rectBorderTone === 'lighter' || record.rectBorderTone === 'same'
       ? record.rectBorderTone
       : base.rectBorderTone) as RectBorderTone,
+    halftoneCell: Math.round(clampNumber(record.halftoneCell, 2, 64, base.halftoneCell)),
+    halftoneAngle: clampNumber(record.halftoneAngle, -180, 180, base.halftoneAngle),
+    ditherLevels: Math.round(clampNumber(record.ditherLevels, 2, 16, base.ditherLevels)),
+    ditherStrength: clampNumber(record.ditherStrength, 0, 100, base.ditherStrength),
+    edgeThreshold: clampNumber(record.edgeThreshold, 0, 100, base.edgeThreshold),
+    glitchBandHeight: Math.round(clampNumber(record.glitchBandHeight, 1, 128, base.glitchBandHeight)),
+    glitchStrength: clampNumber(record.glitchStrength, 0, 100, base.glitchStrength),
+    kaleidoscopeSegments: Math.round(clampNumber(record.kaleidoscopeSegments, 2, 32, base.kaleidoscopeSegments)),
+    kaleidoscopeRotation: clampNumber(record.kaleidoscopeRotation, -180, 180, base.kaleidoscopeRotation),
+    duotoneShadow: typeof record.duotoneShadow === 'string' && /^#[0-9a-f]{6}$/i.test(record.duotoneShadow)
+      ? record.duotoneShadow
+      : base.duotoneShadow,
+    duotoneHighlight: typeof record.duotoneHighlight === 'string' && /^#[0-9a-f]{6}$/i.test(record.duotoneHighlight)
+      ? record.duotoneHighlight
+      : base.duotoneHighlight,
+    rippleFrequency: Math.round(clampNumber(record.rippleFrequency, 1, 32, base.rippleFrequency)),
+    rippleStrength: clampNumber(record.rippleStrength, 0, 100, base.rippleStrength),
   };
 }
 
@@ -749,6 +773,69 @@ function curtainGrid({ ctx, width, height, source, seed, params, wasm }: EffectR
   drawPixelBuffer(ctx, width, height, outputPtr, byteLength, wasm)
 }
 
+function artisticFilter(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  source: ImageData,
+  seed: number,
+  wasm: WasmKernels,
+  filter: number,
+  param1: number,
+  param2: number,
+  colorA = '#000000',
+  colorB = '#ffffff',
+) {
+  const byteLength = width * height * 4
+  wasm.pfree()
+  const sourcePtr = wasm.palloc(byteLength) >>> 0
+  const outputPtr = wasm.palloc(byteLength) >>> 0
+  new Uint8Array(wasm.memory.buffer, sourcePtr, byteLength).set(source.data)
+  const [aR, aG, aB] = hexChannels(colorA)
+  const [bR, bG, bB] = hexChannels(colorB)
+  measureWasm('artisticFilter', () => wasm.artisticFilter(
+    sourcePtr,
+    outputPtr,
+    width,
+    height,
+    filter,
+    param1,
+    param2,
+    (aR << 16) | (aG << 8) | aB,
+    (bR << 16) | (bG << 8) | bB,
+    seed >>> 0,
+  ))
+  drawPixelBuffer(ctx, width, height, outputPtr, byteLength, wasm)
+}
+
+function halftone({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 1, params.halftoneCell, params.halftoneAngle)
+}
+
+function dither({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 2, params.ditherLevels, params.ditherStrength)
+}
+
+function edgeMap({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 3, params.edgeThreshold, 0, params.duotoneShadow, params.duotoneHighlight)
+}
+
+function glitchBands({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 4, params.glitchBandHeight, params.glitchStrength)
+}
+
+function kaleidoscope({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 5, params.kaleidoscopeSegments, params.kaleidoscopeRotation)
+}
+
+function duotone({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 6, 0, 0, params.duotoneShadow, params.duotoneHighlight)
+}
+
+function ripple({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
+  artisticFilter(ctx, width, height, source, seed, wasm, 7, params.rippleFrequency, params.rippleStrength)
+}
+
 export const EFFECTS: Record<EffectId, EffectDefinition> = {
   'rotate': {
     id: 'rotate',
@@ -908,6 +995,63 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { value: 'color', label: 'Original color' },
     ] }],
     render: detailNoise,
+  },
+  'halftone': {
+    id: 'halftone', label: 'Halftone', defaults: {},
+    controls: [
+      { type: 'range', key: 'halftoneCell', label: 'Dot size', min: 2, max: 64, step: 1 },
+      { type: 'range', key: 'halftoneAngle', label: 'Screen angle', min: -180, max: 180, step: 1 },
+    ],
+    render: halftone,
+  },
+  'dither': {
+    id: 'dither', label: 'Dither', defaults: {},
+    controls: [
+      { type: 'range', key: 'ditherLevels', label: 'Levels', min: 2, max: 16, step: 1 },
+      { type: 'range', key: 'ditherStrength', label: 'Strength', min: 0, max: 100, step: 1 },
+    ],
+    render: dither,
+  },
+  'edge-map': {
+    id: 'edge-map', label: 'Edge map', defaults: {},
+    controls: [
+      { type: 'range', key: 'edgeThreshold', label: 'Threshold', min: 0, max: 100, step: 1 },
+      { type: 'color', key: 'duotoneShadow', label: 'Edge colour' },
+      { type: 'color', key: 'duotoneHighlight', label: 'Background colour' },
+    ],
+    render: edgeMap,
+  },
+  'glitch-bands': {
+    id: 'glitch-bands', label: 'Glitch bands', defaults: {},
+    controls: [
+      { type: 'range', key: 'glitchBandHeight', label: 'Band height', min: 1, max: 128, step: 1 },
+      { type: 'range', key: 'glitchStrength', label: 'Displacement', min: 0, max: 100, step: 1 },
+    ],
+    render: glitchBands,
+  },
+  'kaleidoscope': {
+    id: 'kaleidoscope', label: 'Kaleidoscope', defaults: {},
+    controls: [
+      { type: 'range', key: 'kaleidoscopeSegments', label: 'Segments', min: 2, max: 32, step: 1 },
+      { type: 'range', key: 'kaleidoscopeRotation', label: 'Rotation', min: -180, max: 180, step: 1 },
+    ],
+    render: kaleidoscope,
+  },
+  'duotone': {
+    id: 'duotone', label: 'Duotone', defaults: {},
+    controls: [
+      { type: 'color', key: 'duotoneShadow', label: 'Shadows' },
+      { type: 'color', key: 'duotoneHighlight', label: 'Highlights' },
+    ],
+    render: duotone,
+  },
+  'ripple': {
+    id: 'ripple', label: 'Ripple warp', defaults: {},
+    controls: [
+      { type: 'range', key: 'rippleFrequency', label: 'Frequency', min: 1, max: 32, step: 1 },
+      { type: 'range', key: 'rippleStrength', label: 'Strength', min: 0, max: 100, step: 1 },
+    ],
+    render: ripple,
   },
 };
 

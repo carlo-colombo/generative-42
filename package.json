@@ -7,7 +7,7 @@
     "dev": "pnpm build:wasm && vite",
     "build": "pnpm build:wasm && tsc && vite build",
     "build:wasm": "zig build && chmod 644 public/wasm/kernels.wasm",
-    "test:wasm": "pnpm build:wasm && node wasm/test.mjs && tsx wasm/test-sort.ts && tsx wasm/test-pixel-sort-v2.ts && tsx wasm/test-detail.ts && tsx wasm/test-voronoi.ts && tsx wasm/test-mask.ts",
+    "test:wasm": "pnpm build:wasm && node wasm/test.mjs && tsx wasm/test-sort.ts && tsx wasm/test-pixel-sort-v2.ts && tsx wasm/test-detail.ts && tsx wasm/test-voronoi.ts && tsx wasm/test-mask.ts && tsx wasm/test-artistic-filters.ts",
     "preview": "vite preview"
   },
   "dependencies": {

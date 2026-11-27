@@ -98,6 +98,18 @@ export type WasmKernels = {
     out: number,
   ) => void
   pixelFilter: (pixels: number, pixelCount: number, filter: number, level: number) => void
+  artisticFilter: (
+    source: number,
+    target: number,
+    width: number,
+    height: number,
+    filter: number,
+    param1: number,
+    param2: number,
+    colorA: number,
+    colorB: number,
+    seed: number,
+  ) => void
 }
 
 export async function loadWasmKernels(): Promise<WasmKernels> {
