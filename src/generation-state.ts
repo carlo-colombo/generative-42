@@ -754,7 +754,12 @@ function generationScalars(record: Record<string, unknown>): Omit<Generation, 'l
 
 export function getGeneration(): Generation {
   if (window.location.search) return getGenerationFromURL()
-  const stored = localStorage.getItem('generation')
+  let stored: string | null
+  try {
+    stored = localStorage.getItem('generation')
+  } catch {
+    return DEFAULT_GENERATION
+  }
   if (stored) {
     try {
       const saved = JSON.parse(stored) as Record<string, unknown>

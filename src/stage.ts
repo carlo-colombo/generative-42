@@ -122,6 +122,7 @@ export function createStage(
       const replaced = cropped
       cropped = cropImage(image, next)
       cropKey = nextCrop
+      composition.reset()
       // The padded size follows the crop size, so the frame has to be laid out again.
       frameKey = ''
       if (replaced) releaseSurface(replaced)
