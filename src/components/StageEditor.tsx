@@ -332,7 +332,7 @@ export function StageEditor({ model, editor, baseCanvas, wasm }: { model: Genera
     }
     context.setLineDash([])
 
-    if (layer.effect === 'pixel-sort') drawChevrons(context, layer, size, scale)
+    if (layer.effect === 'pixel-sort' || layer.effect === 'pixel-sort-v2') drawChevrons(context, layer, size, scale)
     drawLabel(context, layer, size, isSelected, scale)
     if (isSelected) drawHandles(context, layer.shape, size, scale)
     context.restore()

@@ -11,7 +11,7 @@ function layerName(layer: Layer) {
 
 function layerHint(layer: Layer) {
   if (layer.kind === 'text') return layer.label
-  const arrow = layer.effect === 'pixel-sort' ? (layer.params.direction === 'vertical' ? ' ↕' : ' ↔') : ''
+  const arrow = layer.effect === 'pixel-sort' || layer.effect === 'pixel-sort-v2' ? (layer.params.direction === 'vertical' ? ' ↕' : ' ↔') : ''
   return `${effectLabel(layer.effect)} · ${layer.shape.kind}${arrow}`
 }
 

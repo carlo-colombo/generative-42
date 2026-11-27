@@ -2,6 +2,7 @@ import { hashString, maskKey } from './areas'
 import { EFFECTS } from './effects'
 import type { LoadedFont } from './fonts'
 import { maskWeightWasm } from './masks'
+import { pixelSortV2Mask } from './pixel-sort-v2'
 import { createRandom } from './random'
 import { createSurface, resetSurface, resizeSurface, surfacePixels, type Surface } from './surface'
 import { drawTextLayer } from './text'
@@ -34,6 +35,9 @@ function coversCanvas(shape: AreaShape): boolean {
 }
 
 function usesMask(layer: EffectLayer): boolean {
+  if (layer.effect === 'pixel-sort-v2') {
+    return !coversCanvas(layer.shape) || layer.params.pixelSortV2LeftRandomness > 0 || layer.params.pixelSortV2RightRandomness > 0
+  }
   return !(coversCanvas(layer.shape) && layer.edge.feather <= 0 && layer.edge.jitter <= 0)
 }
 
@@ -79,9 +83,26 @@ export function createCompositionEngine(base: Surface, wasm: WasmKernels): Compo
 
   function maskFor(layer: EffectLayer, generation: Generation, seed: number): Float32Array | null {
     if (!usesMask(layer)) return null
-    const key = maskKey(layer.shape, layer.edge, width, height, seed, layer.id)
+    const hardEdge = layer.effect === 'pixel-sort-v2'
+      ? { ...layer.edge, feather: 0, jitter: 0, mode: 'ragged' as const }
+      : layer.edge
+    const key = `${maskKey(layer.shape, hardEdge, width, height, seed, layer.id)}:${layer.effect === 'pixel-sort-v2' ? JSON.stringify(layer.params) : ''}`
     if (maskCache.has(key)) return maskCache.get(key) ?? null
-    const weights = maskWeightWasm(wasm, layer.shape, layer.edge, width, height, generation.seed, layer.id)
+    let weights = maskWeightWasm(wasm, layer.shape, hardEdge, width, height, generation.seed, layer.id)
+    if (layer.effect === 'pixel-sort-v2') {
+      weights = pixelSortV2Mask(
+        weights,
+        width,
+        height,
+        layer.params.direction,
+        layer.params.pixelSortV2LeftRandomness,
+        layer.params.pixelSortV2RightRandomness,
+        layer.params.pixelSortV2Size,
+        layer.params.pixelSortV2NoiseSmoothness,
+        layer.params.pixelSortV2Noise,
+        seed,
+      )
+    }
     maskCache.set(key, weights)
     if (maskCache.size * width * height * 4 > MASK_CACHE_BYTES) maskCache.clear()
     return weights
@@ -124,7 +145,7 @@ export function createCompositionEngine(base: Surface, wasm: WasmKernels): Compo
     if (opacity <= 0) return
     const masked = layer.kind === 'effect' && usesMask(layer)
     const mask = masked && layer.kind === 'effect' ? maskFor(layer, generation, generation.seed) : null
-    const ragged = masked && layer.kind === 'effect' && layer.edge.mode === 'ragged'
+    const ragged = masked && layer.kind === 'effect' && (layer.effect === 'pixel-sort-v2' || layer.edge.mode === 'ragged')
     const chunkPixels = Math.min(width * height, 1 << 20)
     const rgbaBytes = chunkPixels * 4
     wasm.pfree()

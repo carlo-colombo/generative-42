@@ -142,6 +142,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
     />)}
     {layer.effect === 'curtain-grid' && <p className="hint-text">0% top/left · 50% balanced · 100% bottom/right</p>}
     {layer.effect === 'curtain-grid' && <p className="hint-text">Gap fill is the space between squares; transparent shows the layers below.</p>}
+    {layer.effect === 'pixel-sort-v2' && <p className="hint-text">Each side chooses a start or end within its percentage of the run. Higher 1D smoothness makes changes across lines more gradual.</p>}
     {layer.effect === 'rotate' && <p className="hint-text">0% no shift · 100% half a turn; pixels wrap at the area edge</p>}
 
     <ControlField label="Label">
@@ -169,6 +170,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
 
     <SliderField label="Opacity" value={layer.opacity} min={0} max={100} step={1} unit="%" onChange={(opacity) => update((current) => ({ ...current, opacity }))} />
 
+    {layer.effect !== 'pixel-sort-v2' && <>
     <Segmented
       label="Edge"
       value={layer.edge.mode}
@@ -208,6 +210,7 @@ function EffectInspector({ model, editor, layer }: { model: GenerationModel; edi
     {layer.edge.mode === 'ragged' && <p className="hint-text">Feather applies to blend edges only.</p>}
     {layer.edge.mode !== 'ragged' && featherPixels > 0 && <p className="hint-text">Fades in from the whole border, {featherPixels}px inward.</p>}
     <p className="hint-text">Feather and jitter are percentages of the shorter canvas side{minSide > 0 ? ` (${minSide}px)` : ''}.</p>
+    </>}
 
     {layer.shape.kind === 'path' && !layer.shape.closed && <Segmented<'a' | 'b'>
       label="Open side"

@@ -52,6 +52,7 @@ const MAX_GRID_SQUARES = 200
 
 const EFFECT_IDS: EffectId[] = [
   'pixel-sort',
+  'pixel-sort-v2',
   'rotate',
   'galaxy',
   'voronoi',
@@ -103,6 +104,11 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     randomness: clampNumber(record.randomness, 0, 100, base.randomness),
     spanWidth: Math.round(clampNumber(record.spanWidth, 1, MAX_SPAN_WIDTH, base.spanWidth)),
     containedBlocks: typeof record.containedBlocks === 'boolean' ? record.containedBlocks : base.containedBlocks,
+    pixelSortV2LeftRandomness: clampNumber(record.pixelSortV2LeftRandomness, 0, 100, base.pixelSortV2LeftRandomness),
+    pixelSortV2RightRandomness: clampNumber(record.pixelSortV2RightRandomness, 0, 100, base.pixelSortV2RightRandomness),
+    pixelSortV2Noise: record.pixelSortV2Noise === '1d' ? '1d' : 'random',
+    pixelSortV2NoiseSmoothness: clampNumber(record.pixelSortV2NoiseSmoothness, 1, 100, base.pixelSortV2NoiseSmoothness),
+    pixelSortV2Size: Math.round(clampNumber(record.pixelSortV2Size, 1, MAX_SPAN_WIDTH, base.pixelSortV2Size)),
     amount: amount === null ? null : amount === undefined ? base.amount : clampNumber(amount, 0, 100, base.amount ?? 100),
     sectionCount: Math.round(clampNumber(record.sectionCount, 1, 20, base.sectionCount)),
     sectionOffset: clampNumber(record.sectionOffset, 0, 100, base.sectionOffset),
@@ -523,6 +529,20 @@ function pixelSort({ ctx, width, height, source, mask, seed, params, edge, wasm 
   drawPixelBuffer(ctx, width, height, targetPtr, byteLength, wasm);
 }
 
+function pixelSortV2(context: EffectRenderContext) {
+  pixelSort({
+    ...context,
+    params: {
+      ...context.params,
+      randomness: 0,
+      spanWidth: context.params.pixelSortV2Size,
+      containedBlocks: false,
+      amount: null,
+    },
+    edge: { ...context.edge, mode: 'blend', jitter: 0 },
+  })
+}
+
 function drawStar(ctx: CanvasRenderingContext2D, x: number, y: number, outer: number, inner: number, points: number) {
   ctx.beginPath();
   for (let i = 0; i < points * 2; i++) {
@@ -762,6 +782,27 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { type: 'range', key: 'spanWidth', label: 'Span width', min: 1, max: MAX_SPAN_WIDTH, step: 1 },
     ],
     render: pixelSort,
+  },
+  'pixel-sort-v2': {
+    id: 'pixel-sort-v2',
+    label: 'Pixel sorting v2',
+    defaults: {},
+    controls: [
+      { type: 'select', key: 'direction', label: 'Direction', options: [
+        { value: 'horizontal', label: 'Horizontal' },
+        { value: 'vertical', label: 'Vertical' },
+      ] },
+      { type: 'toggle', key: 'reverse', label: '⇄ Reverse' },
+      { type: 'range', key: 'pixelSortV2LeftRandomness', label: 'Start randomness', min: 0, max: 100, step: 1 },
+      { type: 'range', key: 'pixelSortV2RightRandomness', label: 'End randomness', min: 0, max: 100, step: 1 },
+      { type: 'select', key: 'pixelSortV2Noise', label: 'Border noise', options: [
+        { value: 'random', label: 'Random' },
+        { value: '1d', label: '1D noise' },
+      ] },
+      { type: 'range', key: 'pixelSortV2NoiseSmoothness', label: 'Noise smoothness', min: 1, max: 100, step: 1, when: (params) => params.pixelSortV2Noise === '1d' },
+      { type: 'range', key: 'pixelSortV2Size', label: 'Pixel size', min: 1, max: MAX_SPAN_WIDTH, step: 1 },
+    ],
+    render: pixelSortV2,
   },
   'rect': {
     id: 'rect',
