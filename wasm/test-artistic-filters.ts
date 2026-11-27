@@ -51,6 +51,44 @@ for (const [filter, param1, param2] of cases) {
   } else {
     for (let i = 3; i < bytes; i += 4) assert.equal(first[i], source[i], `filter ${filter} should preserve alpha`)
   }
+  if (filter === 5 || filter === 7) {
+    const expected = new Uint8Array(bytes)
+    const centerX = (width - 1) / 2
+    const centerY = (height - 1) / 2
+    const sample = (x: number, y: number) => {
+      const sx = Math.max(0, Math.min(width - 1, x))
+      const sy = Math.max(0, Math.min(height - 1, y))
+      const offset = (sy * width + sx) * 4
+      return source.subarray(offset, offset + 4)
+    }
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const dx = x - centerX
+        const dy = y - centerY
+        let pixel: Uint8Array
+        if (filter === 5) {
+          const radius = Math.sqrt(dx * dx + dy * dy)
+          const sector = 2 * Math.PI / param1
+          const rotation = param2 * Math.PI / 180
+          const angle = Math.atan2(dy, dx) + rotation
+          let folded = angle - Math.floor(angle / sector) * sector
+          if (folded > sector / 2) folded = sector - folded
+          pixel = sample(
+            Math.floor(centerX + radius * Math.cos(folded - rotation) + 0.5),
+            Math.floor(centerY + radius * Math.sin(folded - rotation) + 0.5),
+          )
+        } else {
+          const radius = Math.sqrt(dx * dx + dy * dy)
+          const displacement = Math.sin(radius / Math.min(width, height) * param1 * 2 * Math.PI)
+            * Math.min(width, height) * 0.08 * param2 / 100
+          const scale = radius > 0 ? (radius + displacement) / radius : 1
+          pixel = sample(Math.floor(centerX + dx * scale + 0.5), Math.floor(centerY + dy * scale + 0.5))
+        }
+        expected.set(pixel, (y * width + x) * 4)
+      }
+    }
+    assert.deepEqual(first, expected, `filter ${filter} should match its reference mapping`)
+  }
 }
 
 console.log('WASM artistic filters are deterministic and preserve alpha')

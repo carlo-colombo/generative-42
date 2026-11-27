@@ -123,22 +123,59 @@ fn glitch(src: []const u8, out: []u8, width: usize, height: usize, band_in: f32,
 }
 
 fn kaleidoscope(src: []const u8, out: []u8, width: usize, height: usize, segments_in: f32, rotation_in: f32) void {
+    // shortcut: 4096-step angle lookup, increase its resolution if large-canvas seams appear.
+    const ratio_count: usize = 4096;
+    const atan = util.salloc(f32, ratio_count + 1);
+    for (0..ratio_count + 1) |i| atan[i] = @floatCast(std.math.atan(@as(f64, @floatFromInt(i)) / @as(f64, @floatFromInt(ratio_count))));
+
     const segments = @max(2, @min(32, @as(u32, @intFromFloat(segments_in))));
     const sector = 2 * std.math.pi / @as(f64, @floatFromInt(segments));
     const rotation = @as(f64, rotation_in) * std.math.pi / @as(f64, 180);
+    const tau = 2 * std.math.pi;
+    var rotate_cos: [32]f64 = undefined;
+    var rotate_sin: [32]f64 = undefined;
+    var reflect_cos: [32]f64 = undefined;
+    var reflect_sin: [32]f64 = undefined;
+    for (0..segments) |k| {
+        const boundary = @as(f64, @floatFromInt(k)) * sector;
+        rotate_cos[k] = @cos(boundary);
+        rotate_sin[k] = @sin(boundary);
+        const reflection = boundary + sector - 2 * rotation;
+        reflect_cos[k] = @cos(reflection);
+        reflect_sin[k] = @sin(reflection);
+    }
+
     const cx = (@as(f64, @floatFromInt(width)) - 1) / 2;
     const cy = (@as(f64, @floatFromInt(height)) - 1) / 2;
     for (0..height) |y| {
         for (0..width) |x| {
             const dx = @as(f64, @floatFromInt(x)) - cx;
             const dy = @as(f64, @floatFromInt(y)) - cy;
-            const radius = @sqrt(dx * dx + dy * dy);
-            const angle = std.math.atan2(dy, dx) + rotation;
-            var folded = angle - @floor(angle / sector) * sector;
-            if (folded > sector / 2) folded = sector - folded;
-            const sx: i64 = @intFromFloat(@floor(cx + radius * @cos(folded - rotation) + 0.5));
-            const sy: i64 = @intFromFloat(@floor(cy + radius * @sin(folded - rotation) + 0.5));
-            const pixel = sample(src, width, height, sx, sy);
+            const ax = @abs(dx);
+            const ay = @abs(dy);
+            const largest = @max(ax, ay);
+            const ratio = if (largest == 0) 0 else @min(ax, ay) / largest;
+            const ratio_index: usize = @intFromFloat(util.roundF(ratio * @as(f64, @floatFromInt(ratio_count))));
+            const base_angle = if (ax >= ay) @as(f64, atan[ratio_index]) else std.math.pi / 2.0 - @as(f64, atan[ratio_index]);
+            const angle = if (dx >= 0)
+                (if (dy >= 0) base_angle else tau - base_angle)
+            else
+                (if (dy >= 0) std.math.pi - base_angle else std.math.pi + base_angle);
+            const rotated = angle + rotation;
+            const normalized = rotated - @floor(rotated / tau) * tau;
+            const sector_position = normalized / sector;
+            const k: usize = @min(segments - 1, @as(u32, @intFromFloat(@floor(sector_position))));
+            const reflected = sector_position - @as(f64, @floatFromInt(k)) > 0.5;
+            // Apply each sector transform as a matrix instead of per-pixel trigonometry.
+            const sx = if (reflected)
+                dx * reflect_cos[k] + dy * reflect_sin[k]
+            else
+                dx * rotate_cos[k] + dy * rotate_sin[k];
+            const sy = if (reflected)
+                dx * reflect_sin[k] - dy * reflect_cos[k]
+            else
+                -dx * rotate_sin[k] + dy * rotate_cos[k];
+            const pixel = sample(src, width, height, @intFromFloat(@floor(cx + sx + 0.5)), @intFromFloat(@floor(cy + sy + 0.5)));
             write(out, (y * width + x) * 4, pixel[0..3].*, pixel[3]);
         }
     }
@@ -168,7 +205,8 @@ fn ripple(src: []const u8, out: []u8, width: usize, height: usize, frequency_in:
             const dx = @as(f64, @floatFromInt(x)) - cx;
             const dy = @as(f64, @floatFromInt(y)) - cy;
             const radius = @sqrt(dx * dx + dy * dy);
-            const displacement = @sin(radius / min_side * frequency * 2 * std.math.pi) * amplitude;
+            const phase = radius / min_side * frequency * 2 * std.math.pi;
+            const displacement = @sin(phase) * amplitude;
             const scale = if (radius > 0) (radius + displacement) / radius else 1;
             const pixel = sample(src, width, height, @intFromFloat(@floor(cx + dx * scale + 0.5)), @intFromFloat(@floor(cy + dy * scale + 0.5)));
             write(out, (y * width + x) * 4, pixel[0..3].*, pixel[3]);
@@ -192,6 +230,7 @@ pub fn apply(
     const height: usize = @intCast(height_in);
     if (width == 0 or height == 0) return;
     const len = width * height * 4;
+    util.resetScratch();
     const src = source_ptr[0..len];
     const out = target_ptr[0..len];
     switch (filter) {
