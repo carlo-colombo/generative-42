@@ -417,8 +417,6 @@ function compactParams(params: EffectParams): EffectParams {
     kaleidoscopeRotation: quantize(params.kaleidoscopeRotation),
     duotoneShadow: params.duotoneShadow,
     duotoneHighlight: params.duotoneHighlight,
-    rippleFrequency: params.rippleFrequency,
-    rippleStrength: quantize(params.rippleStrength),
   }
 }
 

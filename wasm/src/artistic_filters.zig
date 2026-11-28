@@ -194,26 +194,6 @@ fn duotone(src: []const u8, out: []u8, width: usize, height: usize, shadow: [3]u
     }
 }
 
-fn ripple(src: []const u8, out: []u8, width: usize, height: usize, frequency_in: f32, strength_in: f32) void {
-    const cx = (@as(f64, @floatFromInt(width)) - 1) / 2;
-    const cy = (@as(f64, @floatFromInt(height)) - 1) / 2;
-    const min_side = @as(f64, @floatFromInt(@min(width, height)));
-    const frequency = @max(1, frequency_in);
-    const amplitude = min_side * 0.08 * util.clampF(strength_in, 0, 100) / 100;
-    for (0..height) |y| {
-        for (0..width) |x| {
-            const dx = @as(f64, @floatFromInt(x)) - cx;
-            const dy = @as(f64, @floatFromInt(y)) - cy;
-            const radius = @sqrt(dx * dx + dy * dy);
-            const phase = radius / min_side * frequency * 2 * std.math.pi;
-            const displacement = @sin(phase) * amplitude;
-            const scale = if (radius > 0) (radius + displacement) / radius else 1;
-            const pixel = sample(src, width, height, @intFromFloat(@floor(cx + dx * scale + 0.5)), @intFromFloat(@floor(cy + dy * scale + 0.5)));
-            write(out, (y * width + x) * 4, pixel[0..3].*, pixel[3]);
-        }
-    }
-}
-
 pub fn apply(
     source_ptr: [*]const u8,
     target_ptr: [*]u8,
@@ -240,7 +220,6 @@ pub fn apply(
         4 => glitch(src, out, width, height, param1, param2, seed),
         5 => kaleidoscope(src, out, width, height, param1, param2),
         6 => duotone(src, out, width, height, packedColor(color_a), packedColor(color_b)),
-        7 => ripple(src, out, width, height, param1, param2),
         else => @memcpy(out, src),
     }
 }

@@ -65,7 +65,6 @@ const EFFECT_IDS: EffectId[] = [
   'glitch-bands',
   'kaleidoscope',
   'duotone',
-  'ripple',
   'grey-squares',
   'rect',
   'circles',
@@ -182,8 +181,6 @@ export function sanitizeParams(effect: EffectId, value: unknown): EffectParams {
     duotoneHighlight: typeof record.duotoneHighlight === 'string' && /^#[0-9a-f]{6}$/i.test(record.duotoneHighlight)
       ? record.duotoneHighlight
       : base.duotoneHighlight,
-    rippleFrequency: Math.round(clampNumber(record.rippleFrequency, 1, 32, base.rippleFrequency)),
-    rippleStrength: clampNumber(record.rippleStrength, 0, 100, base.rippleStrength),
   };
 }
 
@@ -832,10 +829,6 @@ function duotone({ ctx, width, height, source, seed, params, wasm }: EffectRende
   artisticFilter(ctx, width, height, source, seed, wasm, 6, 0, 0, params.duotoneShadow, params.duotoneHighlight)
 }
 
-function ripple({ ctx, width, height, source, seed, params, wasm }: EffectRenderContext) {
-  artisticFilter(ctx, width, height, source, seed, wasm, 7, params.rippleFrequency, params.rippleStrength)
-}
-
 export const EFFECTS: Record<EffectId, EffectDefinition> = {
   'rotate': {
     id: 'rotate',
@@ -1044,14 +1037,6 @@ export const EFFECTS: Record<EffectId, EffectDefinition> = {
       { type: 'color', key: 'duotoneHighlight', label: 'Highlights' },
     ],
     render: duotone,
-  },
-  'ripple': {
-    id: 'ripple', label: 'Ripple warp', defaults: {},
-    controls: [
-      { type: 'range', key: 'rippleFrequency', label: 'Frequency', min: 1, max: 32, step: 1 },
-      { type: 'range', key: 'rippleStrength', label: 'Strength', min: 0, max: 100, step: 1 },
-    ],
-    render: ripple,
   },
 };
 

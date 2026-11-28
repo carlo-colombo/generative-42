@@ -40,8 +40,7 @@ export type EffectId =
   | 'edge-map'
   | 'glitch-bands'
   | 'kaleidoscope'
-  | 'duotone'
-  | 'ripple';
+  | 'duotone';
 
 // Spans are measured in source pixels along the sort axis; past this width a
 // typical run collapses into a handful of sortable units.
@@ -108,8 +107,6 @@ export interface EffectParams {
   kaleidoscopeRotation: number;
   duotoneShadow: string;
   duotoneHighlight: string;
-  rippleFrequency: number;
-  rippleStrength: number;
 }
 
 export const DEFAULT_EFFECT_PARAMS: EffectParams = {
@@ -162,8 +159,6 @@ export const DEFAULT_EFFECT_PARAMS: EffectParams = {
   kaleidoscopeRotation: 0,
   duotoneShadow: '#172554',
   duotoneHighlight: '#fef3c7',
-  rippleFrequency: 8,
-  rippleStrength: 35,
 };
 
 export type LayerBase = {

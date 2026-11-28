@@ -19,7 +19,7 @@ is `fast`.
 - `curtainGrid`: cell averaging, band generation, fill, and inverse/posterize/grayscale in one pass. It writes one RGBA output buffer rather than building and filtering a second canvas. The gap fill is either the source average, a packed RGB colour, or alpha 0, so a layer can leave the composite below visible between the squares.
 - `sampleQuads`: one batched call for all of an effect's sample quadrilaterals, reading a single downscaled source image.
 - `pixelFilter`: in-place inverse, posterize, and grayscale filters, also used for the `sections` effect.
-- `artisticFilter`: halftone, ordered dithering, Sobel edge map, seeded glitch bands, kaleidoscope mapping, duotone, and ripple warping.
+- `artisticFilter`: halftone, ordered dithering, Sobel edge map, seeded glitch bands, kaleidoscope mapping, and duotone.
 - `pixelSort`, `poissonSites`, `voronoiCells`, `detailNoise`, and chunked `compositeLayer`.
 
 Buffers are passed as pointers into exported WASM memory. `palloc` allocates until `pfree`; kernels use temporary storage from the same linear heap and reset its scratch mark before each call. Keep calls synchronous and do not retain a WASM memory view across a call that might grow memory.

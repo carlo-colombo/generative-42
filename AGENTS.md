@@ -139,7 +139,7 @@ on a device that already has the app.
   descriptors over `EffectParams`, and `LayerControls` renders them
   automatically. Effects: `pixel-sort`, `galaxy`, `voronoi`, `sections`,
   `detail-noise`, `curtain-grid`, `halftone`, `dither`, `edge-map`,
-  `glitch-bands`, `kaleidoscope`, `duotone`, `ripple`, `grey-squares`, `rect`,
+  `glitch-bands`, `kaleidoscope`, `duotone`, `grey-squares`, `rect`,
   `circles`, `lines`, `vertical-lines`, `horizontal-lines`. `normalizeEffectId` aliases the legacy
   `color-sorting` and `pixel-sort-areas` ids to `pixel-sort`. `params.amount` is
   the share of each run a pixel-sort layer sorts (control, shown as 100 when a
@@ -149,7 +149,7 @@ on a device that already has the app.
   The seven sampled drawing effects batch their source quadrilaterals through
   WASM; Canvas 2D rasterizes the generated shapes. `sections` uses the WASM
   pixel-filter kernel. `halftone`, `dither`, `edge-map`, `glitch-bands`,
-  `kaleidoscope`, `duotone`, and `ripple` are implemented in the Zig/WASM
+  `kaleidoscope` and `duotone` are implemented in the Zig/WASM
   artistic filter kernel. `curtain-grid` is fully fused in WASM: it averages the
   source into the configured grid, paints the curtains, and applies inverse,
   posterize, or grayscale without a second canvas buffer or a second filter
